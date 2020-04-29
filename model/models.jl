@@ -168,14 +168,15 @@ function best_first_value(m, b, sat_thresh, prune_thresh)
             nv[i] = max(nv[i], v)
         end
     end
+    term_r = maximum(nv)
     for i in eachindex(nv)
         if !isnan(b[i])  # already observed
             nv[i] = -Inf
         elseif nv[i] < prune_thresh
-            nv[i] = -1e10
+            nv[i] = -1e20
         end
     end
-    term_value = (maximum(nv) >= sat_thresh ? 1e5 : -1e5)
+    term_value = (term_r >= sat_thresh ? 1e15 : -1e15)
     [term_value; nv]
 end
 

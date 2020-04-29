@@ -41,22 +41,35 @@ end
     mdp_ids = readdir("$base_path/mdps/")
     V_tbl = asyncmap(mdp_ids) do i
         V = deserialize("$base_path/mdps/$i/V")
-        (V.m.graph, V.m.cost) => V
+        (identify(V.m), V.m.cost) => V
     end |> Dict
 end
 
-function get_V(graph, cost)
+function get_V(t::Trial, cost)
     tbl = get_V_tbl()
-    tbl[graph, cost]
+    tbl[identify(t), cost]
 end
 
 function preferences(model::Optimal, t::Trial, b::Belief)
-    V = get_V(t.graph, model.cost)
+    V = get_V(t, model.cost)
     Q(V, b)
 end
 
 function simulate(fits, t::Trial)
     pol = Simulator(fits[t.wid], t)
+    bs = Belief[]
+    cs = Int[]
+    rollout(pol) do b, c
+        push!(bs, deepcopy(b)); push!(cs, c)
+    end
+    mutate(t, bs=bs, cs=cs)
+end
+
+function simulate(sim::Simulator)
+    simulate(sim, sim.t)
+end
+
+function simulate(pol::Policy)
     bs = Belief[]
     cs = Int[]
     rollout(pol) do b, c
@@ -74,6 +87,7 @@ function write_sim(model_id)
         end
     end
     path = "$base_path/sims/" * model_id
+    mkpath("$base_path/sims/")
     serialize(path, sims)
     println("Wrote $path ($(round(t)) seconds)")
     return sims

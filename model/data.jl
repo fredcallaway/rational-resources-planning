@@ -46,6 +46,24 @@ function parse_graph(t)
     end
 end
 
+# These functions are used to link a trial with the
+# corresponding MetaMDP
+function identify(m::MetaMDP)
+    rs = m.rewards
+    r2 = maximum(rs[2])
+    r3 = maximum(rs[3])
+    structure = r2 < r3 ? "increasing" : (r2 > r3 ? "decreasing" : "constant")
+    m.graph, structure
+end
+
+function identify(t::Trial)
+    structure = if startswith(t.map, "fantasy")
+        "constant"
+    else
+        split(t.map, "-")[2]
+    end
+    t.graph, structure
+end
 
 @memoize function reward_distributions(reward_structure, graph)
     if reward_structure == "cogsci-constant"

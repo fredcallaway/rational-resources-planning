@@ -9,7 +9,7 @@ function sbatch_script(n)
     #SBATCH --job-name=solve
     #SBATCH --output=out/%A_%a
     #SBATCH --array=1-$n
-    #SBATCH --time=60
+    #SBATCH --time=30
     #SBATCH --mem-per-cpu=1000
     #SBATCH --cpus-per-task=1
     #SBATCH --mail-type=end

@@ -1,5 +1,6 @@
 using Distributed
-isempty(ARGS) && push!(ARGS, "cogsci-1")
+isempty(ARGS) && push!(ARGS, "cogsci-2")
+include("conf.jl")
 @everywhere begin
     using Glob
     using Serialization
@@ -8,10 +9,10 @@ isempty(ARGS) && push!(ARGS, "cogsci-1")
     include("base.jl")
     include("models.jl")
     include("simulation.jl")
-    results_path = "results/$EXPERIMENT"
 end
 
-
+@everywhere results_path = "$results/$EXPERIMENT"
+mkpath(results_path)
 # %% ==================== Load data ====================
 
 all_trials = load_trials(EXPERIMENT);
@@ -49,9 +50,6 @@ end
 models = [Optimal, MetaGreedy, BestFirst, Random]
 fits = get_fits(models)
 
-for mid in readdir("$base_path/fits")
-    @spawn write_sim(mid)
-end
 
 
 # %% ==================== Likelihood ====================
@@ -74,25 +72,6 @@ let
         end
     end
 end
-
-using TypedTables
-using CSV
-
-like_tbl = map(all_data) do d
-    map(collect(fits)) do ((mc, k), pfits)
-        (
-            model=string(mc),
-            biased=(k==:biased),
-            logp=logp(pfits[d.t.wid], d),
-            map=d.t.map,
-            wid=d.t.wid,
-            n_revealed=sum(observed(d.b)) - 1,
-            c=d.c,
-        )
-    end
-end |> flatten |> Table;
-
-like_tbl |> CSV.write("$results_path/likelihoods.csv")
 
 
 # %% ==================== Features ====================
@@ -126,7 +105,7 @@ map(descrybe, all_data) |> CSV.write("$results_path/features/Human.csv")
     map(get_data(flatten(sims))) do d
         descrybe(d; skip_logp=true)
     end |> CSV.write(path)
-    println("Wrote $results_path/features/$model_id.csv")
+    println("Wrote $path")
 end
 
 pmap(write_features, readdir("$base_path/fits"));
