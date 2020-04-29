@@ -1,5 +1,5 @@
 using Distributed
-isempty(ARGS) && push!(ARGS, "cogsci-2")
+isempty(ARGS) && push!(ARGS, "cogsci-1")
 include("conf.jl")
 @everywhere begin
     using Glob
@@ -121,5 +121,20 @@ map(first(values(all_trials))) do t
         n_node=length(initial_belief(m)) - 1,
     )
 end |> unique |> CSV.write("$results_path/maps.csv")
+
+# %% ==================== Expansion rate ====================
+
+map(all_data) do d
+    d.c == TERM && return missing
+    observed(d.b, d.c) && error("Nope")
+    has_observed_parent(d.t.graph, d.b, d.c)
+end |> skipmissing |> collect |> mean
+
+
+
+
+
+
+
 
 
