@@ -22,11 +22,12 @@ Belief = Vector{Value}
     rewards::Vector{Distribution}
     cost::Float64
     min_reward::Float64 = -Inf
+    expand_only::Bool = false
 end
 
-function MetaMDP(g::Graph, rdist::Distribution, cost::Float64; min_reward::Float64=-Inf)
+function MetaMDP(g::Graph, rdist::Distribution, cost::Float64; kws...)
     rewards = repeat([rdist], length(g))
-    MetaMDP(g, rewards, cost, min_reward)
+    MetaMDP(graph=g, rewards=rewards, cost=cost; kws...)
 end
 
 Base.:(==)(x1::MetaMDP, x2::MetaMDP) = struct_equal(x1, x2)
@@ -118,7 +119,21 @@ end
 
 # %% ====================  ====================
 
+function has_observed_parent(graph, b, c)
+    any(enumerate(graph)) do (i, children)
+        c in children && observed(b, i)
+    end
+end
+
+function allowed(m::MetaMDP, b::Belief, c::Int)
+    c == TERM && return true
+    !isnan(b[c]) && return false
+    !m.expand_only || has_observed_parent(m.graph, b, c)
+end
+
+
 function results(m::MetaMDP, b::Belief, c::Int)
+    @assert allowed(m, b, c)
     res = Tuple{Float64,Belief,Float64}[]
     if c == TERM
         b1 = copy(b)
@@ -126,10 +141,10 @@ function results(m::MetaMDP, b::Belief, c::Int)
         push!(res, (1., b1, term_reward(m, b)))
         return res
     end
-    if !isnan(b[c])
-        push!(res, (1., b, -Inf))
-        return res
-    end
+    # if !isnan(b[c])
+    #     push!(res, (1., b, -Inf))
+    #     return res
+    # end
     for v in support(m.rewards[c])
         b1 = copy(b)
         b1[c] = v
@@ -140,7 +155,7 @@ function results(m::MetaMDP, b::Belief, c::Int)
 end
 
 function observe!(m::MetaMDP, b::Belief, c::Int)
-    @assert isnan(b[c])
+    @assert allowed(m, b, c)
     b[c] = rand(m.rewards[c])
 end
 
@@ -163,7 +178,8 @@ ValueFunction(m::MetaMDP) = ValueFunction(m, default_hash)
 
 function Q(V::ValueFunction, b::Belief, c::Int)::Float64
     c == 0 && return term_reward(V.m, b)
-    !isnan(b[c]) && return -Inf  # already observed
+    !allowed(V.m, b, c) && return -Inf 
+    # !isnan(b[c]) && return -Inf  # already observed
     sum(p * (r + V(s1)) for (p, s1, r) in results(V.m, b, c))
 end
 
@@ -198,7 +214,7 @@ struct RandomPolicy <: Policy
     m::MetaMDP
 end
 
-(pol::RandomPolicy)(b) = rand(findall(isnan.(b)))
+(pol::RandomPolicy)(b) = rand(findall(allowed.(m, b, c)))
 
 # struct MetaGreedy <: Policy
 #     m::MetaMDP
