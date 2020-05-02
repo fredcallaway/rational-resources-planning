@@ -13,6 +13,8 @@ const N_SAMPLE = 10000
 const N_FEATURE = 5
 
 Graph = Vector{Vector{Int}}
+Value = Float64
+Belief = Vector{Value}
 
 "Parameters defining a class of problems."
 @with_kw struct MetaMDP
@@ -20,16 +22,8 @@ Graph = Vector{Vector{Int}}
     rewards::Vector{Distribution}
     cost::Float64
     min_reward::Float64 = -Inf
-    expand_only::Bool = true
+    expand_only::Bool = false
 end
-
-struct Belief
-    rewards::Vector{Float64}
-    frontier::BitVector
-end
-Base.eachindex(b::Belief) = eachindex(b.rewards)
-Base.length(b::Belief) = length(b.rewards)
-Base.copy(b::Belief) = Belief(copy(b.rewards), copy(b.frontier))
 
 function MetaMDP(g::Graph, rdist::Distribution, cost::Float64; kws...)
     rewards = repeat([rdist], length(g))
@@ -40,17 +34,10 @@ Base.:(==)(x1::MetaMDP, x2::MetaMDP) = struct_equal(x1, x2)
 Base.hash(m::MetaMDP, h::UInt64) = hash_struct(m, h)
 Base.length(m::MetaMDP) = length(m.graph)
 
-function initial_belief(m::MetaMDP)
-    rewards = [0; fill(NaN, length(m)-1)]
-    frontier = falses(length(m))
-    for i in m.graph[1]
-        frontier[i] = true
-    end
-    Belief(rewards, frontier)
-end
-observed(b::Belief) = @. !isnan(b.rewards)
-observed(b::Belief, c::Int) = !isnan(b.rewards[c])
-unobserved(b::Belief) = [c for c in eachindex(b) if isnan(b.rewards[c])]
+initial_belief(m::MetaMDP) = [0; fill(NaN, length(m)-1)]
+observed(b::Belief) = @. !isnan(b)
+observed(b::Belief, c::Int) = !isnan(b[c])
+unobserved(b::Belief) = [c for c in eachindex(b) if isnan(b[c])]
 
 function tree(branching::Vector{Int})
     t = Vector{Int}[]
@@ -99,7 +86,7 @@ end
 function easy_path_value(m::MetaMDP, b::Belief, path)
     d = 0.
     for i in path
-        d += (observed(b, i) ? b.rewards[i] : mean(m.rewards[i]))
+        d += (observed(b, i) ? b[i] : mean(m.rewards[i]))
     end
     d
 end
@@ -111,7 +98,7 @@ function path_value(m::MetaMDP, b::Belief, path)
     end
     for i in path
         if observed(b, i)
-            d += b.rewards[i]
+            d += b[i]
         else
             d += m.rewards[i]
         end
@@ -132,16 +119,16 @@ end
 
 # %% ====================  ====================
 
-# function has_observed_parent(graph, b, c)
-#     any(enumerate(graph)) do (i, children)
-#         c in children && observed(b, i)
-#     end
-# end
+function has_observed_parent(graph, b, c)
+    any(enumerate(graph)) do (i, children)
+        c in children && observed(b, i)
+    end
+end
 
 function allowed(m::MetaMDP, b::Belief, c::Int)
     c == TERM && return true
-    !isnan(b.rewards[c]) && return false
-    !m.expand_only || b.frontier[c]
+    !isnan(b[c]) && return false
+    !m.expand_only || has_observed_parent(m.graph, b, c)
 end
 
 
@@ -150,6 +137,7 @@ function results(m::MetaMDP, b::Belief, c::Int)
     res = Tuple{Float64,Belief,Float64}[]
     if c == TERM
         b1 = copy(b)
+        b1[isnan.(b1)] .= 0
         push!(res, (1., b1, term_reward(m, b)))
         return res
     end
@@ -159,11 +147,7 @@ function results(m::MetaMDP, b::Belief, c::Int)
     # end
     for v in support(m.rewards[c])
         b1 = copy(b)
-        b1.rewards[c] = v
-        b1.frontier[c] = false
-        for i in m.graph[c]
-            b1.frontier[i] = true
-        end
+        b1[c] = v
         p = pdf(m.rewards[c], v)
         push!(res, (p, b1, -m.cost))
     end
