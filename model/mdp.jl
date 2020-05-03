@@ -16,6 +16,9 @@ Graph = Vector{Vector{Int}}
 Value = Float64
 Belief = Vector{Value}
 
+using DataStructures
+COUNTS = DefaultDict(0)
+
 "Parameters defining a class of problems."
 @with_kw struct MetaMDP
     graph::Graph
@@ -113,7 +116,8 @@ function path_values(m::MetaMDP, b::Belief)
     [path_value(m, b, path) for path in paths(m)]
 end
 
-function term_reward(m::MetaMDP, b::Belief)    
+function term_reward(m::MetaMDP, b::Belief)
+    COUNTS[:term_reward] += 1
     maximum(path_values(m, b))
 end
 
@@ -132,26 +136,25 @@ function allowed(m::MetaMDP, b::Belief, c::Int)
 end
 
 
+# const RES = Array{Tuple{Float64,Belief,Float64}}(undef, 2)
+
 function results(m::MetaMDP, b::Belief, c::Int)
+    COUNTS[:results] += 1
     @assert allowed(m, b, c)
-    res = Tuple{Float64,Belief,Float64}[]
     if c == TERM
         b1 = copy(b)
-        b1[isnan.(b1)] .= 0
-        push!(res, (1., b1, term_reward(m, b)))
-        return res
+        b1[isnan.(b1)] .= Inf  # marks state as terminal
+        return [(1., b1, term_reward(m, b))]
     end
-    # if !isnan(b[c])
-    #     push!(res, (1., b, -Inf))
-    #     return res
-    # end
+
+    res = Tuple{Float64,Belief,Float64}[]
     for v in support(m.rewards[c])
         b1 = copy(b)
         b1[c] = v
         p = pdf(m.rewards[c], v)
         push!(res, (p, b1, -m.cost))
     end
-    res
+    return res
 end
 
 function observe!(m::MetaMDP, b::Belief, c::Int)
@@ -168,9 +171,24 @@ struct ValueFunction{F}
 end
 
 function symmetry_breaking_hash(m::MetaMDP, b::Belief)
-    lp = length(paths(m))
-    hash(sum(hash(b[pth]) >> 3 for pth in paths(m)))
+    the_paths = paths(m)
+    lp = length(the_paths)
+    sum(hash(b[pth]) >> 3 for pth in the_paths)
 end
+
+function hash_312(m::MetaMDP, b::Belief)
+    hash(hash(b[2]) + hash(b[3]), hash(b[4]) + hash(b[5])) +
+    hash(hash(b[6]) + hash(b[7]), hash(b[8]) + hash(b[9])) +
+    hash(hash(b[10]) + hash(b[11]), hash(b[12]) + hash(b[13]))
+end
+
+function hash_412(m::MetaMDP, b::Belief)
+    hash(hash(b[2]) + hash(b[3]), hash(b[4]) + hash(b[5])) +
+    hash(hash(b[6]) + hash(b[7]), hash(b[8]) + hash(b[9])) +
+    hash(hash(b[10]) + hash(b[11]), hash(b[12]) + hash(b[13])) +
+    hash(hash(b[14]) + hash(b[15]), hash(b[16]) + hash(b[17]))
+end
+
 default_hash(m::MetaMDP, b::Belief) = hash(b)
 
 ValueFunction(m::MetaMDP, h) = ValueFunction(m, h, Dict{UInt64, Float64}())
@@ -179,6 +197,7 @@ ValueFunction(m::MetaMDP) = ValueFunction(m, default_hash)
 function Q(V::ValueFunction, b::Belief, c::Int)::Float64
     c == 0 && return term_reward(V.m, b)
     !allowed(V.m, b, c) && return -Inf 
+    COUNTS[:Q] += 1
     # !isnan(b[c]) && return -Inf  # already observed
     sum(p * (r + V(s1)) for (p, s1, r) in results(V.m, b, c))
 end
@@ -186,8 +205,10 @@ end
 Q(V::ValueFunction, b::Belief) = [Q(V,b,c) for c in 0:length(b)]
 
 function (V::ValueFunction)(b::Belief)::Float64
+    COUNTS[:V] += 1
     key = V.hasher(V.m, b)
     haskey(V.cache, key) && return V.cache[key]
+    # return V.cache[key] = maximum(Q(V, b, c) for c in 0:length(b))
     return V.cache[key] = maximum(Q(V, b))
 end
 
