@@ -30,7 +30,11 @@ Base.hash(t::Datum, h::UInt64) = hash_struct(t, h)
 
 function parse_graph(t)
     if haskey(t, "graph")
-        return map(t["graph"]) do children
+        g = t["graph"]
+        if g isa String
+            return tree(parse.(Int, collect(g)))
+        end
+        return map(ga) do children
             Int.(children .+ 1)
         end
     else
@@ -66,10 +70,10 @@ function identify(t::Trial)
 end
 
 @memoize function reward_distributions(reward_structure, graph)
-    if reward_structure == "cogsci-constant"
+    if reward_structure == "constant"
         d = DiscreteNonParametric([-10., -5, 5, 10])
         return repeat([d], length(graph))
-    elseif reward_structure == "cogsci-decreasing"
+    elseif reward_structure == "decreasing"
         dists = [
             [0.],
             [-48, -24, 24, 48],
@@ -86,7 +90,7 @@ end
             [-4.0, -2.0, 2.0, 4.0]
         ]
         DiscreteNonParametric.(dists)
-    elseif reward_structure == "cogsci-increasing"
+    elseif reward_structure == "increasing"
         dists = [
             [0.],
             [-4.0, -2.0, 2.0, 4.0],
@@ -115,13 +119,13 @@ end
 end
 
 # get_experiment(map) = startswith(map, "fantasy") ? "roadtrip" : "cogsci"
-get_reward_structure(map) = startswith(map, "fantasy") ? "roadtrip" : map
+get_reward_structure(map) = startswith(map, "fantasy") ? "roadtrip" : split(map, "-")[end]
 
 # mapkind(map) = map == "mouselab-mdp" ? "mouselab-constant" : "roadtrip"
 
 function MetaMDP(t::Trial, cost)
     min_reward = get_reward_structure(t.map) == "roadtrip" ? -300 : -Inf
-    MetaMDP(t.graph, reward_distributions(get_reward_structure(t.map), t.graph), cost, min_reward)
+    MetaMDP(t.graph, reward_distributions(get_reward_structure(t.map), t.graph), cost, min_reward, EXPAND_ONLY)
 end
 
 function Trial(wid::String, t::Dict{String,Any})

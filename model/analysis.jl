@@ -1,5 +1,5 @@
 using Distributed
-isempty(ARGS) && push!(ARGS, "cogsci-1")
+isempty(ARGS) && push!(ARGS, "web")
 include("conf.jl")
 @everywhere begin
     using Glob
@@ -13,6 +13,9 @@ end
 
 @everywhere results_path = "$results/$EXPERIMENT"
 mkpath(results_path)
+mkpath("$base_path/fits")
+mkpath("$base_path/sims")
+
 # %% ==================== Load data ====================
 
 all_trials = load_trials(EXPERIMENT);
@@ -22,34 +25,31 @@ all_data = all_trials |> values |> flatten |> get_data;
 
 # %% ==================== Fit models ====================
 
-mkpath("$base_path/fits")
-
-function write_fit(model, biased, path)
-    fits, t = @timed fit_model(model; biased=biased)
+function write_fit(model, biased, path; parallel=true)
+    fits, t = @timed fit_model(model; biased=biased, parallel=parallel)
     serialize(path, fits)
     println("Wrote $path ($(round(t)) seconds)")
     return fits
 end
 
-function get_fits(models)
-    combos = Iterators.product(models, [true, false])
+function get_fits(models; overwrite=false)
+    bias_opts = FIT_BIAS ? [false, true] : [false]
+    combos = Iterators.product(models, bias_opts)
     asyncmap(combos; ntasks=3) do (model, biased)
         k = biased ? :biased : :default
         path = "$base_path/fits/$model-$k"
-        if isfile(path)
+        if isfile(path) && !overwrite
             fits = deserialize(path)
         else
-            fits = write_fit(model, biased, path)
+            fits = write_fit(model, biased, path; parallel=(model != Optimal))
         end
         (model, k) => fits
     end |> Dict
 end
 
 
-
 models = [Optimal, MetaGreedy, BestFirst, Random]
-fits = get_fits(models)
-
+fits = get_fits(models; overwrite=true)
 
 
 # %% ==================== Likelihood ====================
@@ -62,7 +62,8 @@ end
 
 let
     println("---- Total likelihood ----")
-    for k in [:biased, :default]
+    bias_opts = FIT_BIAS ? [:default, :biased] : [:default]
+    for k in bias_opts
         println("  ",k)
         for m in models
             lp = mapreduce(+, values(fits[(m, k)])) do pf
@@ -81,7 +82,7 @@ end
     (
         map=d.t.map,
         wid=d.t.wid,
-        logp=skip_logp ? NaN : logp(fits[Optimal, :biased][d.t.wid], d),
+        logp=skip_logp ? NaN : logp(fits[Optimal, :default][d.t.wid], d),
         n_revealed=sum(observed(d.b)) - 1,
         is_term=d.c == TERM,
         term_reward=term_reward(m, d.b)
@@ -108,7 +109,7 @@ map(descrybe, all_data) |> CSV.write("$results_path/features/Human.csv")
     println("Wrote $path")
 end
 
-pmap(write_features, readdir("$base_path/fits"));
+map(write_features, readdir("$base_path/fits"));
 
 
 # %% ==================== Map info ====================
@@ -130,7 +131,14 @@ map(all_data) do d
     has_observed_parent(d.t.graph, d.b, d.c)
 end |> skipmissing |> collect |> mean
 
+# %% ====================  ====================
+skips = filter(all_data) do d
+    d.c == TERM && return false
+    !has_observed_parent(d.t.graph, d.b, d.c)
+end
 
+skips[1].b
+skips[1].c
 
 
 

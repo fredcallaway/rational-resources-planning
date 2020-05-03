@@ -1,5 +1,4 @@
 include("base.jl")
-
 save_path = "$base_path/mdps"
 
 
@@ -54,7 +53,12 @@ else  # solve an MDP
     m = deserialize("$save_path/$i/mdp")
 
     println("Begin solving MDP $i with cost ", round(m.cost; digits=1)); flush(stdout)
-    hasher = startswith(EXPERIMENT, "cogsci") ? symmetry_breaking_hash : default_hash
+    println("EXPAND ONLY")
+    hasher = hash_412
+    @assert m.expand_only
+
+    hasher = @isdefined(HASH_FUNCTION) ? eval(HASH_FUNCTION) : default_hash
+    println("hash function: ", hasher); flush(stdout)
     V = ValueFunction(m, hasher)
     @time v = V(initial_belief(m))
     println("Value of initial state is ", v)

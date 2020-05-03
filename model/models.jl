@@ -98,8 +98,9 @@ function fit_model(model_class::Type, trials; biased=false)
     return err_fits[best]
 end
 
-function fit_model(model_class; biased=false)
-    pmap(pairs(load_trials(EXPERIMENT))) do wid, trials
+function fit_model(model_class; biased=false, parallel=true)
+    mymap = parallel ? pmap : map
+    mymap(pairs(load_trials(EXPERIMENT))) do wid, trials
         wid => fit_model(model_class, trials; biased=biased)
     end |> OrderedDict
 end
@@ -133,6 +134,7 @@ end
 
 function voc1(m::MetaMDP, b::Belief, c::Int)
     c == TERM && return 0.
+    !allowed(m, b, c) && return -Inf
     q = mapreduce(+, results(m, b, c)) do (p, b1, r)
         p * (term_reward(m, b1) + r)
     end
@@ -170,7 +172,7 @@ function best_first_value(m, b, sat_thresh, prune_thresh)
     end
     term_r = maximum(nv)
     for i in eachindex(nv)
-        if !isnan(b[i])  # already observed
+        if !allowed(m, b, i)
             nv[i] = -Inf
         elseif nv[i] < prune_thresh
             nv[i] = -1e20
@@ -253,21 +255,39 @@ end
 
 instantiations(::Type{Optimal}) = map(Optimal, COSTS)
 
-@memoize function load_qs()
-    data = load_trials(EXPERIMENT) |> values |> flatten |> get_data;
-    check = checksum(data)
-    all_qs = map(eachindex(COSTS)) do i
-        qq = deserialize("$base_path/qs/$i")
-        @assert qq.checksum == check
-        @assert qq.cost == COSTS[i]
-        qdict = map(data, qq.qs) do d, q
-            hash(d) => q
-        end |> Dict
-        qq.cost => qdict
+@memoize function get_V_tbl()
+    mdp_ids = readdir("$base_path/mdps/")
+    V_tbl = asyncmap(mdp_ids) do i
+        V = deserialize("$base_path/mdps/$i/V")
+        (identify(V.m), V.m.cost) => V
     end |> Dict
 end
 
-
-function preferences(model::Optimal, d::Datum)
-    load_qs()[model.cost][hash(d)]
+function get_V(t::Trial, cost)
+    tbl = get_V_tbl()
+    tbl[identify(t), cost]
 end
+
+function preferences(model::Optimal, t::Trial, b::Belief)
+    V = get_V(t, model.cost)
+    Q(V, b)
+end
+
+# @memoize function load_qs()
+#     data = load_trials(EXPERIMENT) |> values |> flatten |> get_data;
+#     check = checksum(data)
+#     all_qs = map(eachindex(COSTS)) do i
+#         qq = deserialize("$base_path/qs/$i")
+#         @assert qq.checksum == check
+#         @assert qq.cost == COSTS[i]
+#         qdict = map(data, qq.qs) do d, q
+#             hash(d) => q
+#         end |> Dict
+#         qq.cost => qdict
+#     end |> Dict
+# end
+
+
+# function preferences(model::Optimal, d::Datum)
+#     load_qs()[model.cost][hash(d)]
+# end

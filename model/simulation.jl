@@ -37,23 +37,6 @@ end
 
 (pol::Simulator)(b::Belief) = rand(Categorical(probs(pol, b))) - 1
 
-@memoize function get_V_tbl()
-    mdp_ids = readdir("$base_path/mdps/")
-    V_tbl = asyncmap(mdp_ids) do i
-        V = deserialize("$base_path/mdps/$i/V")
-        (identify(V.m), V.m.cost) => V
-    end |> Dict
-end
-
-function get_V(t::Trial, cost)
-    tbl = get_V_tbl()
-    tbl[identify(t), cost]
-end
-
-function preferences(model::Optimal, t::Trial, b::Belief)
-    V = get_V(t, model.cost)
-    Q(V, b)
-end
 
 function simulate(fits, t::Trial)
     pol = Simulator(fits[t.wid], t)
