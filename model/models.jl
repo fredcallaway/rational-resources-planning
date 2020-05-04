@@ -25,8 +25,8 @@ function p_rand(q::Vector{Float64})
     1 / n_option
 end
 
-function logp(prefs::Vector{Float64}, c::Int, α, ε)
-    p_soft = mysoftmax(α .* prefs)[c+1]
+function logp(prefs::Vector{Float64}, c::Int, β, ε)
+    p_soft = mysoftmax(β .* prefs)[c+1]
     if !isfinite(p_soft)
         error("Bad prefs: $prefs")
     end
@@ -34,27 +34,21 @@ function logp(prefs::Vector{Float64}, c::Int, α, ε)
     log(p)
 end
 
-function c_probs(model::Model, d::Datum, α, ε)
+function c_probs(model::Model, d::Datum, β, ε)
     prefs = preferences(model, d)
-    p_soft = mysoftmax(α .* prefs)
+    p_soft = mysoftmax(β .* prefs)
     each_p_rand = ε * p_rand(prefs)
     @. each_p_rand * (prefs > -Inf) + (1-ε) * p_soft
 end
 
-function logp(model::Model, d::Datum, α::Float64, ε::Float64)
+function logp(model::Model, d::Datum, β::Float64, ε::Float64)
     prefs = preferences(model, d)
-    logp(prefs, d.c, α, ε)
+    logp(prefs, d.c, β, ε)
 end
 
-function logp(model::Model, data::Vector{Datum}, α::Float64, ε::Float64)
+function logp(model::Model, data::Vector{Datum}, β::Float64, ε::Float64)
     mapreduce(+, data) do d
-        logp(model, d, α, ε)
-    end
-end
-
-function map_logp(model::Model, data::Vector{Datum}, α::Float64, ε::Float64)
-    map(data) do d
-        logp(model, d, α, ε)
+        logp(model, d, β, ε)
     end
 end
 
@@ -63,12 +57,12 @@ function fit_error_model(model::Model, data::Vector{Datum}; x0 = [0.002, 0.1], b
     lower = [1e-3, 1e-3]; upper = [10., 1.]
     all_prefs = [preferences(model, d) for d in data]
     cs = [d.c for d in data]
-    opt = optimize(lower, upper, x0, Fminbox(LBFGS())) do (α, ε)
+    opt = optimize(lower, upper, x0, Fminbox(LBFGS())) do (β, ε)
         - mapreduce(+, all_prefs, cs) do prefs, c
-            logp(prefs, c, α, ε)
+            logp(prefs, c, β, ε)
         end
     end
-    (α=opt.minimizer[1], ε=opt.minimizer[2], logp=-opt.minimum)
+    (β=opt.minimizer[1], ε=opt.minimizer[2], logp=-opt.minimum)
 end
 
 
@@ -78,14 +72,14 @@ function fit_biased_error_model(model::Model, data::Vector{Datum}; x0 = [0.002, 
     expand_prefs = [preferences(Expanding(1., 0.), d) for d in data]
     last_prefs = [preferences(Expanding(0., 1.), d) for d in data]
     cs = [d.c for d in data]
-    opt = optimize(lower, upper, x0, Fminbox(LBFGS())) do (α, ε, expand_bonus, last_bonus)
+    opt = optimize(lower, upper, x0, Fminbox(LBFGS())) do (β, ε, expand_bonus, last_bonus)
         - mapreduce(+, eachindex(all_prefs), cs) do i, c
             prefs = all_prefs[i] + expand_bonus * expand_prefs[i] + last_bonus * last_prefs[i]
-            logp(prefs, c, α, ε)
+            logp(prefs, c, β, ε)
         end
     end
     x = opt.minimizer
-    (α=x[1], ε=x[2], expand_bonus=x[3], last_bonus=x[4], logp=-opt.minimum)
+    (β=x[1], ε=x[2], expand_bonus=x[3], last_bonus=x[4], logp=-opt.minimum)
 end
 
 function fit_model(model_class::Type, trials; biased=false)
@@ -105,18 +99,18 @@ function fit_model(model_class; biased=false, parallel=true)
     end |> OrderedDict
 end
 
-Fit = NamedTuple{(:model, :α, :ε, :logp)}
-BiasedFit = NamedTuple{(:model, :α, :ε, :expand_bonus, :last_bonus, :logp)}
+Fit = NamedTuple{(:model, :β, :ε, :logp)}
+BiasedFit = NamedTuple{(:model, :β, :ε, :expand_bonus, :last_bonus, :logp)}
 
 function logp(fit::Fit, d::Datum)
     prefs = preferences(fit.model, d)
-    logp(prefs, d.c, fit.α, fit.ε)
+    logp(prefs, d.c, fit.β, fit.ε)
 end
 
 function logp(fit::BiasedFit, d::Datum)
     bias = Expanding(fit.expand_bonus, fit.last_bonus)
     prefs = preferences(fit.model, d) .+ preferences(bias, d)
-    logp(prefs, d.c, fit.α, fit.ε)
+    logp(prefs, d.c, fit.β, fit.ε)
 end
 
 # %% ==================== Meta Greedy ====================
@@ -229,9 +223,10 @@ struct Random <: Model
 end
 
 function preferences(model::Random, t::Trial, b::Belief)
+    m = MetaMDP(t, NaN)
     x = zeros(length(b)+1)
     for i in eachindex(b)
-        if !isnan(b[i])
+        if !allowed(m, b, c)
             x[i+1] = -Inf
         end
     end
