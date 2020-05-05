@@ -64,19 +64,11 @@ function bounds(mp::MultiPref2)
     vcat(pbounds, wbounds)
 end
 
-
-# n_param(mp::MultiPref2) = sum(1 + n_param(model) for model in mp.prefs)
-
 function preferences(mp::MultiPref2, t::Trial, b::Belief)
     mapreduce(+, mp.prefs, mp.weights) do model, w
         w * preferences(model, t, b)
     end
 end
-
-map(mp.prefs, mp.weights) do model, w
-    preferences(model, t, b)
-end
-
 
 function set_params!(mp::MultiPref2, x)
     x = Iterators.Stateful(x)
@@ -100,7 +92,8 @@ function fit_model(model::MultiPref2, trials)
     opt = optimize(lower, upper, x0, Fminbox(LBFGS()), autodiff=:forward) do x
         set_params!(model, x[2:end])
         error_model = ErrorModel(model, β, x[1])
-        -logp(error_model, trials)
+        penalty = sum(model.weights) * 1e-3
+            -logp(error_model, trials) + penalty
     end
     x = opt.minimizer
     set_params!(model, x[2:end])
