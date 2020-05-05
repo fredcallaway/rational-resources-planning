@@ -115,6 +115,17 @@ function path_values(m::MetaMDP, b::Belief)
     [path_value(m, b, path) for path in paths(m)]
 end
 
+function node_values(m::MetaMDP, b::Belief)
+    nv = fill(-Inf, length(m))
+    for p in paths(m)
+        v = path_value(m, b, p)
+        for i in p
+            nv[i] = max(nv[i], v)
+        end
+    end
+    nv
+end
+
 function term_reward(m::MetaMDP, b::Belief)::Float64
     mapreduce(max, paths(m)) do path
         path_value(m, b, path)
