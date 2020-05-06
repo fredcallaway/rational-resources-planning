@@ -53,9 +53,6 @@ else  # solve an MDP
     m = deserialize("$save_path/$i/mdp")
 
     println("Begin solving MDP $i with cost ", round(m.cost; digits=1)); flush(stdout)
-    println("EXPAND ONLY")
-    hasher = hash_412
-    @assert m.expand_only
 
     hasher = @isdefined(HASH_FUNCTION) ? eval(HASH_FUNCTION) : default_hash
     println("hash function: ", hasher); flush(stdout)
