@@ -87,19 +87,6 @@ end
 
 likelihood(model::Model, d::Datum) = likelihood(model, d.t, d.b)
 logp(model::Model, d::Datum) = log(likelihood(model, d)[d.c+1])
-
-# function p_rand(h)
-#     n_option = sum(h .!= -1e20)
-#     1 / n_option
-# end
-# function logp(model::Model, d::Datum)
-#     h = preference(model, d)
-#     disprefer_impossible!(h, d.t, d.b)
-#     p_soft = mysoftmax(h)[c+1]
-#     p = ε * p_rand(h) + (1-ε) * p_soft
-#     log(p)
-# end
-
 logp(model::Model, data::Vector{Datum}) = mapreduce(d->logp(model, d), +, data)
 logp(model::Model, trial::Trial) = logp(model, get_data(trial))
 logp(model::Model, trials::Vector{Trial}) = logp(model, get_data(trials))

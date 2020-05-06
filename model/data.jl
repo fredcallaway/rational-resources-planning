@@ -1,5 +1,5 @@
 using JSON
-import DataFrames: DataFrame
+# import DataFrames: DataFrame
 using SplitApplyCombine
 using Memoize
 
@@ -125,7 +125,6 @@ function MetaMDP(t::Trial, cost)
 end
 
 @memoize Dict function make_meta_mdp(graph, rstruct, cost)
-    println("MAKE MDP")
     min_reward = rstruct == "roadtrip" ? -300 : -Inf
     rewards = reward_distributions(rstruct, graph)
     MetaMDP(graph, rewards, cost, min_reward, EXPAND_ONLY)
@@ -176,10 +175,10 @@ function Base.show(io::IO, t::Trial)
     print(io, "T")
 end
 
-function load_params(experiment)::DataFrame
-    x = open(JSON.parse, "../data/$experiment/params.json")
-    DataFrame(map(namedtuple, x))
-end
+# function load_params(experiment)::DataFrame
+#     x = open(JSON.parse, "../data/$experiment/params.json")
+#     DataFrame(map(namedtuple, x))
+# end
 
 @memoize function load_trials(experiment)::Dict{String,Vector{Trial}}
     data = open(JSON.parse, "../data/$experiment/trials.json")

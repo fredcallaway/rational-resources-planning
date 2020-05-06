@@ -14,10 +14,10 @@ all_trials = load_trials(EXPERIMENT);
 # %% ==================== Fit a model ====================
 # define model "class" as a model with all its parameters NaN
 base_model = Model(BestFirst, Satisficing)
-@assert isnan(logp(base_model, trials))
 
 # fit the model to data from one participant
-trials = first(values(all_trials))  # trials = all_trials["w1ebd161"]
+trials = first(values(all_trials))
+@assert isnan(logp(base_model, trials))  
 model = fit(base_model, trials)
 
 # total log likelihood
@@ -34,7 +34,7 @@ logp(model, datum)
 likelihood(model, datum)
 
 # likelihood of computation c. WARNING: note the +1 to account for TERM value in position 1
-log(likelihood(model, datum)[d.c+1]) ≈ logp(model, datum)
+log(likelihood(model, datum)[datum.c+1]) ≈ logp(model, datum)
 
 
 # %% ==================== Exammple: KL divergence between models ====================
