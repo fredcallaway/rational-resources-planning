@@ -34,7 +34,7 @@ function parse_graph(t)
         if g isa String
             return tree(parse.(Int, collect(g)))
         end
-        return map(ga) do children
+        return map(g) do children
             Int.(children .+ 1)
         end
     else
@@ -69,7 +69,7 @@ function identify(t::Trial)
     t.graph, structure
 end
 
-@memoize function reward_distributions(reward_structure, graph)
+function reward_distributions(reward_structure, graph)
     if reward_structure == "constant"
         d = DiscreteNonParametric([-10., -5, 5, 10])
         return repeat([d], length(graph))
@@ -118,14 +118,17 @@ end
     end
 end
 
-# get_experiment(map) = startswith(map, "fantasy") ? "roadtrip" : "cogsci"
 get_reward_structure(map) = startswith(map, "fantasy") ? "roadtrip" : split(map, "-")[end]
 
-# mapkind(map) = map == "mouselab-mdp" ? "mouselab-constant" : "roadtrip"
-
 function MetaMDP(t::Trial, cost)
-    min_reward = get_reward_structure(t.map) == "roadtrip" ? -300 : -Inf
-    MetaMDP(t.graph, reward_distributions(get_reward_structure(t.map), t.graph), cost, min_reward, EXPAND_ONLY)
+    make_meta_mdp(t.graph, get_reward_structure(t.map), cost)
+end
+
+@memoize Dict function make_meta_mdp(graph, rstruct, cost)
+    println("MAKE MDP")
+    min_reward = rstruct == "roadtrip" ? -300 : -Inf
+    rewards = reward_distributions(rstruct, graph)
+    MetaMDP(graph, rewards, cost, min_reward, EXPAND_ONLY)
 end
 
 function Trial(wid::String, t::Dict{String,Any})

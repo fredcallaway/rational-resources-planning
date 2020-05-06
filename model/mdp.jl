@@ -24,7 +24,7 @@ using DataStructures
     rewards::Vector{Distribution}
     cost::Float64
     min_reward::Float64 = -Inf
-    expand_only::Bool = true
+    expand_only::Bool
 end
 
 function MetaMDP(g::Graph, rdist::Distribution, cost::Float64; kws...)

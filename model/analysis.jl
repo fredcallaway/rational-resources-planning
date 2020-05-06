@@ -1,14 +1,13 @@
 using Distributed
-isempty(ARGS) && push!(ARGS, "web")
+isempty(ARGS) && push!(ARGS, "cogsci-1")
 include("conf.jl")
 @everywhere begin
     using Glob
     using Serialization
-    using Optim
     using CSV
     include("base.jl")
     include("models.jl")
-    include("simulation.jl")
+    # include("simulation.jl")
 end
 
 @everywhere results_path = "$results/$EXPERIMENT"
@@ -22,6 +21,42 @@ all_trials = load_trials(EXPERIMENT);
 flat_trials = flatten(values(all_trials));
 println(length(flat_trials), " trials")
 all_data = all_trials |> values |> flatten |> get_data;
+
+# %% ====================  ====================
+
+function define_model(prefs...)
+    Model(collect(prefs), fill(NaN, length(prefs)), NaN)
+end
+models = [
+    define_model(Optimal(NaN), Expansion()),
+    define_model(BestFirst(), Expansion(), Pruning(NaN), Satisficing(NaN)),
+    # define_model(Optimal(NaN), Expansion(), Pruning(NaN), Satisficing(NaN)),
+    # define_model(MetaGreedy(NaN), Expansion(), Pruning(NaN), Satisficing(NaN)),
+]
+
+fits = map(models) do model
+    # println(model)
+    @time fits = pmap(pairs(load_trials(EXPERIMENT))) do wid, trials
+        wid => fit(model, trials)
+    end |> OrderedDict
+    mapreduce(+, values(fits), values(all_trials)) do model, trials
+        logp(model, trials)
+    end |> println
+    fits
+end
+
+
+# %% ====================  ====================
+base = MultiPref2([BestFirst(), Pruning(NaN), Satisficing(NaN)], ones(3))
+fits = pmap(pairs(load_trials(EXPERIMENT))) do wid, trials
+    wid => fit_model(base, trials)
+end |> OrderedDict
+
+# %% ====================  ====================
+
+mapreduce(+, values(fits), values(all_trials)) do em, trials
+    logp(em, trials)
+end
 
 # %% ==================== Fit models ====================
 
@@ -49,7 +84,9 @@ end
 
 
 models = [Optimal, MetaGreedy, BestFirst, Random]
-fits = get_fits(models; overwrite=true)
+fits = get_fits(models)
+
+# get_fits([Random]; overwrite=true)
 
 
 # %% ==================== Likelihood ====================

@@ -7,7 +7,7 @@ using StatsBase
 
 struct Simulator <: Policy
     model::Model
-    α::Real
+    β::Real
     ε::Real
     expand_bonus::Real
     last_bonus::Real
@@ -16,21 +16,21 @@ struct Simulator <: Policy
 end
 
 function Simulator(fit::BiasedFit, t::Trial)
-    Simulator(fit.model, fit.α, fit.ε, fit.expand_bonus, fit.last_bonus, t, MetaMDP(t, NaN))
+    Simulator(fit.model, fit.β, fit.ε, fit.expand_bonus, fit.last_bonus, t, MetaMDP(t, NaN))
 end
 
 function Simulator(fit::Fit, t::Trial)
-    Simulator(fit.model, fit.α, fit.ε, 0., 0., t, MetaMDP(t, NaN))
+    Simulator(fit.model, fit.β, fit.ε, 0., 0., t, MetaMDP(t, NaN))
 end
 
 function sample_softmax(v)
-    p = softmax(α * preferences(fit.model, t, b))
+    p = softmax(β * preferences(fit.model, t, b))
     sample(eachindex(p), Weights(p))
 end
 
 function probs(pol::Simulator, b::Belief)
     prefs = preferences(pol.model, pol.t, b)
-    p_soft = softmax(pol.α .* prefs)
+    p_soft = softmax(pol.β .* prefs)
     each_p_rand = pol.ε * p_rand(prefs)
     @. each_p_rand * (prefs > -Inf) + (1-pol.ε) * p_soft
 end
