@@ -62,8 +62,6 @@ end
 tree(b::Int, d::Int) = tree(repeat([b], d))
 
 
-# %% ====================  ====================
-
 @memoize function paths(m::MetaMDP)::Vector{Vector{Int}}
     g = m.graph
     frontier = [[1]]
@@ -132,8 +130,6 @@ function term_reward(m::MetaMDP, b::Belief)::Float64
     end
 end
 
-# %% ====================  ====================
-
 function has_observed_parent(graph, b, c)
     any(enumerate(graph)) do (i, children)
         c in children && observed(b, i)
@@ -146,8 +142,6 @@ function allowed(m::MetaMDP, b::Belief, c::Int)
     !m.expand_only || has_observed_parent(m.graph, b, c)
 end
 
-
-# const RES = Array{Tuple{Float64,Belief,Float64}}(undef, 2)
 
 function results(m::MetaMDP, b::Belief, c::Int)
     @assert allowed(m, b, c)
@@ -172,7 +166,7 @@ function observe!(m::MetaMDP, b::Belief, c::Int)
     b[c] = rand(m.rewards[c])
 end
 
-# %% ==================== Solution ====================
+# ========== Solution ========== #
 
 struct ValueFunction{F}
     m::MetaMDP
@@ -250,7 +244,8 @@ function Base.show(io::IO, v::ValueFunction)
 end
 
 
-# # ========== Policy ========== #
+# ========== Policy ========== #
+
 noisy(x, ε=1e-10) = x .+ ε .* rand(length(x))
 
 abstract type Policy end
@@ -269,13 +264,6 @@ struct RandomPolicy <: Policy
 end
 
 (pol::RandomPolicy)(b) = rand(findall(allowed.(m, b, c)))
-
-# struct MetaGreedy <: Policy
-#     m::MetaMDP
-# end
-# (pol::MetaGreedy)(b::Belief) = begin
-#     argmax(noisy([voi1(pol.m, b, c) for c in 0:length(b.matrix)])) - 1
-# end
 
 "Runs a Policy on a Problem."
 function rollout(pol::Policy; initial=nothing, max_steps=100, callback=((b, c) -> nothing))

@@ -9,16 +9,6 @@ abstract type Preference end
 
 parameters(pref::Preference) = []
 
-function apply(pref::Preference, d::Datum)
-    apply(perf, d.t, d.b)
-end
-
-function apply(pref::Preference, t::Trial)
-    map(get_data(t)) do datum
-        apply(pref, datum)
-    end
-end
-
 function parameters(pref, kind::Symbol)
     type = Dict(:discrete => Set, :continuous => Tuple)[kind]
     filter(parameters(pref)) do (field, spec)
@@ -57,6 +47,15 @@ mutable struct Model
     ε::Real
 end
 
+"Initialize a Model with the given preference types and all parameters NaN"
+function Model(pref_types::Type...)
+    prefs = map(pref_types) do T
+        T(fill(NaN, length(fieldnames(T)))...)
+    end |> collect
+    Model(prefs, fill(NaN, length(prefs)), NaN)
+end
+
+
 function preference(model::Model, t::Trial, b::Belief)
     mapreduce(+, model.preferences, model.weights) do pref, w
         w * apply(pref, t, b)
@@ -86,7 +85,8 @@ function likelihood(model::Model, t::Trial, b::Belief)
     model.ε * (possible / sum(possible)) + (1-model.ε) * mysoftmax(h)
 end
 
-logp(model::Model, d::Datum) = log(likelihood(model, d.t, d.b)[d.c+1])
+likelihood(model::Model, d::Datum) = likelihood(model, d.t, d.b)
+logp(model::Model, d::Datum) = log(likelihood(model, d)[d.c+1])
 
 # function p_rand(h)
 #     n_option = sum(h .!= -1e20)
@@ -186,10 +186,6 @@ function Distributions.fit(base_model::Model, trials)
     models[argmin(losses)]  # note this breaks ties arbitrarily
 end
 
-#convenience
-function Model(prefs::Preference...)
-    Model(collect(prefs), fill(NaN, length(prefs)), NaN)
-end
 
 
 # # %% ====================  ====================
