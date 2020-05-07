@@ -114,17 +114,17 @@ end
 
 # %% ==================== Features ====================
 
-@everywhere function descrybe(d::Datum; skip_logp=false)
-    m = MetaMDP(d.t, NaN)
+@everywhere function descrybe(d::Datum; skip_logp=true)
     (
-        map=d.t.map,
+        map="themap",
         wid=d.t.wid,
         logp=skip_logp ? NaN : logp(fits[Optimal, :default][d.t.wid], d),
         n_revealed=sum(observed(d.b)) - 1,
         is_term=d.c == TERM,
-        term_reward=term_reward(m, d.b)
+        term_reward=term_reward(d.t.m, d.b)
     )
 end
+
 
 using CSV
 mkpath("$results_path/features")
@@ -132,7 +132,14 @@ map(descrybe, all_data) |> CSV.write("$results_path/features/Human.csv")
 
 
 # %% ==================== Simulations ====================
+sims = map(flat_trials) do t
+    repeatedly(50) do
+        simulate(bf_fits[t.wid], t.m)
+    end
+end |> flatten |> CSV.write("$results_path/features/$(dd[1].wid).csv")
 
+
+# %% ====================  ====================
 # mkpath("$base_path/sims")
 # pmap(write_sim, readdir("$base_path/fits"));
 
