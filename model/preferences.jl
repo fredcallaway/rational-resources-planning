@@ -9,9 +9,8 @@ parameters(pref::MetaGreedy) = [
     :cost => Set(COSTS),
 ]
 
-function apply(pref::MetaGreedy, t::Trial, b::Belief)
-    m = MetaMDP(t, pref.cost)
-    voc1(m, b)
+function apply(pref::MetaGreedy, m::MetaMDP, b::Belief)
+    voc1(mutate(m, cost=pref.cost), b)
 end
 
 function voc1(m::MetaMDP, b::Belief, c::Int)
@@ -49,7 +48,8 @@ function get_V(t::Trial, cost)
     tbl[identify(t), cost]
 end
 
-function apply(pref::Optimal, t::Trial, b::Belief)
+function apply(pref::Optimal, m::MetaMDP, b::Belief)
+    error("TODO")
     V = get_V(t, pref.cost)
     Q(V, b)
 end
@@ -60,8 +60,18 @@ end
 struct BestFirst <: Preference
 end
 
-function apply(pref::BestFirst, t::Trial, b::Belief)
-    m = MetaMDP(t, NaN)
+@memoize function node_values(m::MetaMDP, b::Belief)
+    nv = fill(-Inf, length(m))
+    for p in paths(m)
+        v = path_value(m, b, p)
+        for i in p
+            nv[i] = max(nv[i], v)
+        end
+    end
+    nv
+end
+
+function apply(pref::BestFirst, m::MetaMDP, b::Belief)
     [0; node_values(m, b)]
 end
 
@@ -76,8 +86,7 @@ parameters(pref::Satisficing) = [
     :threshold => (-30., 30.)
 ]
 
-function apply(pref::Satisficing, t::Trial, b::Belief)
-    m = MetaMDP(t, NaN)
+function apply(pref::Satisficing, m::MetaMDP, b::Belief)
     [term_reward(m, b) - pref.threshold; zeros(length(b))]
 end
 
@@ -92,13 +101,11 @@ parameters(pref::Pruning) = [
     :threshold => (-30., 30.)
 ]
 
-function apply(pref::Pruning, t::Trial, b::Belief)
-    m = MetaMDP(t, NaN)
+function apply(pref::Pruning, m::MetaMDP, b::Belief)
     nv = node_values(m, b)
     map(0:length(b)) do c
         c == TERM && return 0.
         min(0, nv[c] - pref.threshold)
-        # term_reward(m, b) - pref.threshold
     end
 end
 
@@ -108,12 +115,11 @@ end
 struct Expansion <: Preference end
 
 
-function apply(pref::Expansion, t::Trial, b::Belief)
-    m = MetaMDP(t, NaN)
+function apply(pref::Expansion, m::MetaMDP, b::Belief)
     map(0:length(b)) do c
         c == TERM && return 0.
         !allowed(m, b, c) && return -Inf
-        float(has_observed_parent(t.graph, b, c))
+        float(has_observed_parent(m.graph, b, c))
     end
 end
 

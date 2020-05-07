@@ -3,13 +3,11 @@ using JSON
 using SplitApplyCombine
 using Memoize
 
-# REWARD = DiscreteNonParametric(Float64[-100, -50, -35, -25])
-# MIN_REWARD = -300
-
 struct Trial
-    map::String
+    m::MetaMDP  # Note: cost must be NaN
+    # map::String
     wid::String
-    graph::Vector{Vector{Int64}}
+    # graph::Vector{Vector{Int64}}
     bs::Vector{Belief}
     cs::Vector{Int}
     rts::Vector
@@ -22,7 +20,9 @@ struct Datum
     t::Trial
     b::Belief
     c::Int
-    c_last::Union{Int, Nothing}
+    node_values::Vector{Float64}
+    term_reward::Float64
+    # c_last::Union{Int, Nothing}
 end
 Base.hash(t::Datum, h::UInt64) = hash_struct(t, h)
 # Base.:(==)(x1::Datum, x2::Datum) = struct_equal(x2, x2)
@@ -120,10 +120,6 @@ end
 
 get_reward_structure(map) = startswith(map, "fantasy") ? "roadtrip" : split(map, "-")[end]
 
-function MetaMDP(t::Trial, cost)
-    make_meta_mdp(t.graph, get_reward_structure(t.map), cost)
-end
-
 @memoize Dict function make_meta_mdp(graph, rstruct, cost)
     min_reward = rstruct == "roadtrip" ? -300 : -Inf
     rewards = reward_distributions(rstruct, graph)
@@ -158,13 +154,20 @@ function Trial(wid::String, t::Dict{String,Any})
     push!(cs, TERM)
     path = Int.(t["route"] .+ 1)[2:end-1]
     rts = [x == nothing ? NaN : float(x) for x in t["rts"]]
-    Trial(t["map"], wid, graph, bs, cs, rts, path)
+
+    function MetaMDP(t::Trial, cost)
+        make_meta_mdp(t.graph, get_reward_structure(t.map), cost)
+    end
+
+    m = make_meta_mdp(graph, get_reward_structure(t["map"]), NaN)
+
+    Trial(m, wid, bs, cs, rts, path)
 end
 
 function get_data(t::Trial)
     map(eachindex(t.bs)) do i
-        c_last = i == 1 ? nothing : t.cs[i-1]
-        Datum(t, t.bs[i], t.cs[i], c_last)
+        # c_last = i == 1 ? nothing : t.cs[i-1]
+        Datum(t, t.bs[i], t.cs[i])
     end
 end
 
@@ -187,11 +190,11 @@ end
     end |> Dict
 end
 
-# to ensure that precomputed Qs are correctly aligned
-function checksum(data::Vector{Datum})
-    map(data) do d
-        d.t.map, d.t.wid
-    end |> hash
-end
+# # to ensure that precomputed Qs are correctly aligned
+# function checksum(data::Vector{Datum})
+#     map(data) do d
+#         d.t.map, d.t.wid
+#     end |> hash
+# end
 
 

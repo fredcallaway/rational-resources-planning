@@ -2,11 +2,17 @@ using Optim
 
 # %% ==================== Preference ====================
 
-"""
-A Preference defines how desirable each computation is in a given belief state.
-"""
+"A Preference defines how desirable each computation is in a given belief state."
 abstract type Preference end
 
+apply(pref::Preference, m::MetaMDP, b::Belief) = error("Not implemented")
+apply(pref::Preference, d::Datum) = apply(pref, d.t.m, d.b)
+
+"Returns a list of (name => spec) pairs.
+
+if spec is a Set, it gives the possible values of a discrete variable
+if spec is a Tuple, it gives bounds for a continuous variable
+"
 parameters(pref::Preference) = []
 
 function parameters(pref, kind::Symbol)
@@ -57,9 +63,9 @@ function Model(pref_types::Type...)
 end
 
 "Total preference of the model is weighted sum of its preferences"
-function preference(model::Model, t::Trial, b::Belief)
+function preference(model::Model, m::MetaMDP, b::Belief)
     mapreduce(+, model.preferences, model.weights) do pref, w
-        w * apply(pref, t, b)
+        w * apply(pref, m, b)
     end
 end
 
@@ -105,8 +111,7 @@ function mysoftmax(x)
     ex
 end
 
-function disprefer_impossible!(prefs, t, b)
-    m = MetaMDP(t, NaN)
+function disprefer_impossible!(prefs::Vector, m::MetaMDP, b::Belief)
     for c in 1:length(m)
         if !allowed(m, b, c)
             prefs[c+1] = -1e20
@@ -114,13 +119,14 @@ function disprefer_impossible!(prefs, t, b)
     end
 end
 
-function likelihood(model::Model, t::Trial, b::Belief)
-    h = preference(model, t, b)
-    disprefer_impossible!(h, t, b)
+function likelihood(model::Model, m::MetaMDP, b::Belief)
+    h = preference(model, m, b)
+    disprefer_impossible!(h, m, b)
     possible = h .!= -1e20
     model.ε * (possible / sum(possible)) + (1-model.ε) * mysoftmax(h)
 end
 
+likelihood(model::Model, t::Trial) = likelihood(model, t.m, b)
 likelihood(model::Model, d::Datum) = likelihood(model, d.t, d.b)
 logp(model::Model, d::Datum) = log(likelihood(model, d)[d.c+1])
 logp(model::Model, data::Vector{Datum}) = mapreduce(d->logp(model, d), +, data)
@@ -171,3 +177,25 @@ function Distributions.fit(base_model::Model, trials)
     end |> invert
     models[argmin(losses)]  # note this breaks ties arbitrarily
 end
+
+
+# %% ==================== Simulating ====================
+
+struct Simulator <: Policy
+    model::Model
+    m::MetaMDP
+end
+
+(sim::Simulator)(b::Belief) = rand(Categorical(likelihood(sim.model, sim.m, b))) - 1
+
+function simulate(sim::Simulator)
+    bs = Belief[]
+    cs = Int[]
+    rollout(sim) do b, c
+        push!(bs, deepcopy(b)); push!(cs, c)
+    end
+    bs, cs
+    wid = join([typeof(p) for p in model.preferences], "-")
+    Trial(sim.m, wid, bs, cs, [], [])
+end
+
