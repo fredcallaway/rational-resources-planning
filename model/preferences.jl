@@ -44,15 +44,19 @@ parameters(pref::Optimal) = [
     end |> Dict
 end
 
-function get_V(t::Trial, cost)
+function get_V(m::MetaMDP, cost)
     tbl = get_V_tbl()
-    tbl[identify(t), cost]
+    tbl[identify(m), cost]
 end
 
+
 function apply(pref::Optimal, m::MetaMDP, b::Belief)
-    error("TODO")
-    V = get_V(t, pref.cost)
+    V = get_V(m, pref.cost)
     Q(V, b)
+end
+
+function apply(pref::Optimal, d::Datum)
+    apply(pref, d.t.m, d.b)
 end
 
 
@@ -97,9 +101,8 @@ function apply(pref::Satisficing, m::MetaMDP, b::Belief)
 end
 
 @memoize term_reward(d::Datum) = term_reward(d.t.m, d.b)
-@memoize sat_vec(n) = zeros(Real, n)
 function apply(pref::Satisficing, d::Datum)
-    v = sat_vec(length(d.b)+1)
+    v = zeros(Real, length(d.b)+1)
     v[1] = term_reward(d) - pref.threshold
     v
 end
@@ -116,7 +119,17 @@ parameters(pref::Pruning) = [
 ]
 
 function apply(pref::Pruning, m::MetaMDP, b::Belief)
+    v = zeros(Real, length(b)+1)
     nv = node_values(m, b)
+    map(0:length(b)) do c
+        c == TERM && return 0.
+        min(0, nv[c] - pref.threshold)
+    end
+end
+function apply(pref::Pruning, d::Datum)
+    b = d.b
+    v = zeros(Real, length(b)+1)
+    nv = node_values(d)
     map(0:length(b)) do c
         c == TERM && return 0.
         min(0, nv[c] - pref.threshold)
