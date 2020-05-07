@@ -32,6 +32,7 @@ end
 
 include("preferences.jl")
 
+
 # %% ==================== Choice model ====================
 
 """
@@ -55,52 +56,16 @@ function Model(pref_types::Type...)
     Model(prefs, fill(NaN, length(prefs)), NaN)
 end
 
-
+"Total preference of the model is weighted sum of its preferences"
 function preference(model::Model, t::Trial, b::Belief)
     mapreduce(+, model.preferences, model.weights) do pref, w
         w * apply(pref, t, b)
     end
 end
 
-function mysoftmax(x)
-    ex = exp.(x .- maximum(x))
-    ex ./= sum(ex)
-    ex
-end
-
-
-function disprefer_impossible!(prefs, t, b)
-    m = MetaMDP(t, NaN)
-    for c in 1:length(m)
-        if !allowed(m, b, c)
-            prefs[c+1] = -1e20
-        end
-    end
-end
-
-function likelihood(model::Model, t::Trial, b::Belief)
-    h = preference(model, t, b)
-    disprefer_impossible!(h, t, b)
-    possible = h .!= -1e20
-    model.ε * (possible / sum(possible)) + (1-model.ε) * mysoftmax(h)
-end
-
-likelihood(model::Model, d::Datum) = likelihood(model, d.t, d.b)
-logp(model::Model, d::Datum) = log(likelihood(model, d)[d.c+1])
-logp(model::Model, data::Vector{Datum}) = mapreduce(d->logp(model, d), +, data)
-logp(model::Model, trial::Trial) = logp(model, get_data(trial))
-logp(model::Model, trials::Vector{Trial}) = logp(model, get_data(trials))
-
-
 function parameters(model::Model, kind::Symbol)
     mapreduce(vcat, model.preferences) do pref
         parameters(pref, kind::Symbol)
-    end
-end
-
-function n_continuous(model::Model)
-    1 + mapreduce(+, model.preferences) do pref
-        1 + length(a(pref, :continuous))
     end
 end
 
@@ -130,6 +95,40 @@ function get_params(model::Model, kind::Symbol)
         push!(x, model.ε)
     end
 end
+
+
+# %% ==================== Likelihood ====================
+
+function mysoftmax(x)
+    ex = exp.(x .- maximum(x))
+    ex ./= sum(ex)
+    ex
+end
+
+function disprefer_impossible!(prefs, t, b)
+    m = MetaMDP(t, NaN)
+    for c in 1:length(m)
+        if !allowed(m, b, c)
+            prefs[c+1] = -1e20
+        end
+    end
+end
+
+function likelihood(model::Model, t::Trial, b::Belief)
+    h = preference(model, t, b)
+    disprefer_impossible!(h, t, b)
+    possible = h .!= -1e20
+    model.ε * (possible / sum(possible)) + (1-model.ε) * mysoftmax(h)
+end
+
+likelihood(model::Model, d::Datum) = likelihood(model, d.t, d.b)
+logp(model::Model, d::Datum) = log(likelihood(model, d)[d.c+1])
+logp(model::Model, data::Vector{Datum}) = mapreduce(d->logp(model, d), +, data)
+logp(model::Model, trial::Trial) = logp(model, get_data(trial))
+logp(model::Model, trials::Vector{Trial}) = logp(model, get_data(trials))
+
+
+# %% ==================== Fitting ====================
 
 function discrete_options(model::Model)
     specs = map(x->x[2], parameters(model, :discrete))
@@ -172,25 +171,3 @@ function Distributions.fit(base_model::Model, trials)
     end |> invert
     models[argmin(losses)]  # note this breaks ties arbitrarily
 end
-
-
-
-# # %% ====================  ====================
-# function fit_model(model, trials)
-#     lower = [1e-3, 1e-3]; upper = [10., 1.]; x0 = [0.01, 0.1]
-
-#     for (low, high) in bounds(model)
-#         push!(lower, low); push!(upper, high)
-#         push!(x0, rand(Uniform(low, high)))
-#     end
-
-#     opt = optimize(lower, upper, x0, Fminbox(LBFGS()), autodiff=:forward) do x
-#         # model = model_class(x[3:end]...)
-#         set_params!(model, x[3:end])
-#         error_model = ErrorModel(model, x[1:2]...)
-#         -logp(error_model, trials)
-#     end
-#     x = opt.minimizer
-#     set_params!(model, x[3:end])
-#     error_model = ErrorModel(model, x[1:2]...)
-# end
