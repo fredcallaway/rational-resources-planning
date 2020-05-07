@@ -126,7 +126,7 @@ function likelihood(model::Model, m::MetaMDP, b::Belief)
     model.ε * (possible / sum(possible)) + (1-model.ε) * mysoftmax(h)
 end
 
-likelihood(model::Model, t::Trial) = likelihood(model, t.m, b)
+likelihood(model::Model, t::Trial, b::Belief) = likelihood(model, t.m, b)
 likelihood(model::Model, d::Datum) = likelihood(model, d.t, d.b)
 logp(model::Model, d::Datum) = log(likelihood(model, d)[d.c+1])
 logp(model::Model, data::Vector{Datum}) = mapreduce(d->logp(model, d), +, data)
@@ -153,15 +153,17 @@ function continuous_space(model::Model)
     bounds
 end
 
-function Distributions.fit(base_model::Model, trials)
+function Distributions.fit(base_model::Model, trials; x0=nothing)
     lower, upper = invert(continuous_space(base_model))
 
     models, losses = map(discrete_options(base_model)) do x_disc
         model = deepcopy(base_model)
         set_params!(model, :discrete, x_disc)
         
-        r = rand(length(upper))
-        x0 = @. lower + r * (upper - lower)
+        if x0 == nothing
+            r = rand(length(upper))
+            x0 = @. lower + r * (upper - lower)
+        end
 
         algo = Fminbox(LBFGS())
         options = Optim.Options()

@@ -20,8 +20,6 @@ struct Datum
     t::Trial
     b::Belief
     c::Int
-    node_values::Vector{Float64}
-    term_reward::Float64
     # c_last::Union{Int, Nothing}
 end
 Base.hash(t::Datum, h::UInt64) = hash_struct(t, h)
