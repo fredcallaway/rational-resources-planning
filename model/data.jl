@@ -165,6 +165,7 @@ end
 function get_data(t::Trial)
     map(eachindex(t.bs)) do i
         # c_last = i == 1 ? nothing : t.cs[i-1]
+        # tmp = zeros(length(t.bs)+1)
         Datum(t, t.bs[i], t.cs[i])
     end
 end

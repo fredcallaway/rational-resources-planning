@@ -1,4 +1,5 @@
 
+
 # %% ==================== MetaGreedy ====================
 
 mutable struct MetaGreedy <: Preference
@@ -60,7 +61,7 @@ end
 struct BestFirst <: Preference
 end
 
-@memoize function node_values(m::MetaMDP, b::Belief)
+function node_values(m::MetaMDP, b::Belief)
     nv = fill(-Inf, length(m))
     for p in paths(m)
         v = path_value(m, b, p)
@@ -72,9 +73,14 @@ end
 end
 
 function apply(pref::BestFirst, m::MetaMDP, b::Belief)
+    # error("TEST")
     [0; node_values(m, b)]
 end
 
+@memoize node_values(d::Datum) = node_values(d.t.m, d.b)
+@memoize function apply(pref::BestFirst, d::Datum)
+    [0; node_values(d)]
+end
 
 # %% ==================== Satisficing ====================
 
@@ -88,6 +94,14 @@ parameters(pref::Satisficing) = [
 
 function apply(pref::Satisficing, m::MetaMDP, b::Belief)
     [term_reward(m, b) - pref.threshold; zeros(length(b))]
+end
+
+@memoize term_reward(d::Datum) = term_reward(d.t.m, d.b)
+@memoize sat_vec(n) = zeros(Real, n)
+function apply(pref::Satisficing, d::Datum)
+    v = sat_vec(length(d.b)+1)
+    v[1] = term_reward(d) - pref.threshold
+    v
 end
 
 

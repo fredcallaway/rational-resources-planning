@@ -68,6 +68,11 @@ function preference(model::Model, m::MetaMDP, b::Belief)
         w * apply(pref, m, b)
     end
 end
+function preference(model::Model, d::Datum)
+    mapreduce(+, model.preferences, model.weights) do pref, w
+        w * apply(pref, d)
+    end
+end
 
 function parameters(model::Model, kind::Symbol)
     mapreduce(vcat, model.preferences) do pref
@@ -119,15 +124,21 @@ function disprefer_impossible!(prefs::Vector, m::MetaMDP, b::Belief)
     end
 end
 
-function likelihood(model::Model, m::MetaMDP, b::Belief)
-    h = preference(model, m, b)
+function likelihood(h::Vector, ε::Real, m::MetaMDP, b::Belief)
     disprefer_impossible!(h, m, b)
     possible = h .!= -1e20
-    model.ε * (possible / sum(possible)) + (1-model.ε) * mysoftmax(h)
+    ε * (possible / sum(possible)) + (1-ε) * mysoftmax(h)
+end
+function likelihood(model::Model, m::MetaMDP, b::Belief)
+    h = preference(model, m, b)
+    likelihood(h, model.ε, m, b)
+end
+function likelihood(model::Model, d::Datum)
+    h = preference(model, d)
+    likelihood(h, model.ε, d.t.m, d.b)
 end
 
 likelihood(model::Model, t::Trial, b::Belief) = likelihood(model, t.m, b)
-likelihood(model::Model, d::Datum) = likelihood(model, d.t, d.b)
 logp(model::Model, d::Datum) = log(likelihood(model, d)[d.c+1])
 logp(model::Model, data::Vector{Datum}) = mapreduce(d->logp(model, d), +, data)
 logp(model::Model, trial::Trial) = logp(model, get_data(trial))
@@ -168,17 +179,24 @@ function Distributions.fit(base_model::Model, trials; x0=nothing)
         algo = Fminbox(LBFGS())
         options = Optim.Options()
         # options = Optim.Options(f_tol=1e-3, successive_f_tol=10)
+        # set_params!(model, :continuous, x0)
+        data = get_data(trials)
+        @show model
+        @show logp(model, data)
         opt = optimize(lower, upper, x0, algo, options, autodiff=:forward) do x
             set_params!(model, :continuous, x)
             # penalty = sum(model.weights) * 1e-3
-            -logp(model, trials)# + penalty
+            y = -logp(model, data)# + penalty
+            y
         end
+        @info "Optimization" opt.time_run opt.iterations opt.f_calls
 
         set_params!(model, :continuous, opt.minimizer)
         model, opt.minimum
     end |> invert
     models[argmin(losses)]  # note this breaks ties arbitrarily
 end
+
 
 
 # %% ==================== Simulating ====================
