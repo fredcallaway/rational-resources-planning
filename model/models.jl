@@ -1,5 +1,5 @@
 using Optim
-
+using Sobol
 # %% ==================== Preference ====================
 
 "A Preference defines how desirable each computation is in a given belief state."
@@ -164,36 +164,36 @@ function continuous_space(model::Model)
     bounds
 end
 
-function Distributions.fit(base_model::Model, trials; x0=nothing)
-    lower, upper = invert(continuous_space(base_model))
+function Distributions.fit(base_model::Model, trials; x0=nothing, n_restart=20)
+    lower, upper = invert(continuous_space(model))
+
+    algo = Fminbox(LBFGS())
+    options = Optim.Options()
+    data = get_data(trials)
 
     models, losses = map(discrete_options(base_model)) do x_disc
         model = deepcopy(base_model)
         set_params!(model, :discrete, x_disc)
-        
-        if x0 == nothing
-            r = rand(length(upper))
-            x0 = @. lower + r * (upper - lower)
+
+        if x0 != nothing
+            x0s = [x0]
+        else
+            seq = SobolSeq(lower, upper)
+            skip(seq, n_restart)
+            x0s = [next!(seq) for i in 1:n_restart]
         end
 
-        algo = Fminbox(LBFGS())
-        options = Optim.Options()
-        # options = Optim.Options(f_tol=1e-3, successive_f_tol=10)
-        # set_params!(model, :continuous, x0)
-        data = get_data(trials)
-        @show model
-        @show logp(model, data)
-        opt = optimize(lower, upper, x0, algo, options, autodiff=:forward) do x
-            set_params!(model, :continuous, x)
-            # penalty = sum(model.weights) * 1e-3
-            y = -logp(model, data)# + penalty
-            y
-        end
-        @info "Optimization" opt.time_run opt.iterations opt.f_calls
+        map(x0s) do x0
+            opt = optimize(lower, upper, x0, algo, options, autodiff=:forward) do x
+                set_params!(model, :continuous, x)
+                -logp(model, data)
+            end
+            @debug "Optimization" opt.time_run opt.iterations opt.f_calls
 
-        set_params!(model, :continuous, opt.minimizer)
-        model, opt.minimum
-    end |> invert
+            set_params!(model, :continuous, opt.minimizer)
+            model, opt.minimum
+        end
+    end |> flatten |> invert
     models[argmin(losses)]  # note this breaks ties arbitrarily
 end
 
@@ -218,4 +218,6 @@ function simulate(sim::Simulator)
     wid = join([typeof(p) for p in model.preferences], "-")
     Trial(sim.m, wid, bs, cs, [], [])
 end
+
+simulate(model::Model, m::MetaMDP) = simulate(Simulator(model, m))
 
