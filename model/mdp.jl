@@ -130,6 +130,7 @@ function allowed(m::MetaMDP, b::Belief, c::Int)
     !isnan(b[c]) && return false
     !m.expand_only || has_observed_parent(m.graph, b, c)
 end
+allowed(m::MetaMDP, b::Belief) = [allowed(m, b, c) for c in 0:length(b)]
 
 
 function results(m::MetaMDP, b::Belief, c::Int)
