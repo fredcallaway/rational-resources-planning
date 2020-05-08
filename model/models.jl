@@ -2,36 +2,32 @@ using DataStructures: OrderedDict
 using Optim
 using Sobol
 
-struct Param{T}
-    β_q::T
-    β_prune::T
+const NOT_ALLOWED = -1e20
+
+abstract type AbstractModel{T} end
+Space = OrderedDict{Symbol,Tuple{Float64, Float64}}
+features(::Type{T}, d::Datum) where T <: AbstractModel = features(T, d.t.m, d.b)
+
+
+# %% ==================== BestFirst ====================
+
+struct BestFirst{T} <: AbstractModel{T}
     β_node_value::T
+    β_prune::T
     β_satisfice::T
     threshold_prune::T
     threshold_satisfice::T
     ε::T
 end
 
-function Param(space, x::Vector{T})::Param{T} where T
-    x = Iterators.Stateful(x)
-    args = map(fieldnames(Param)) do fn
-        fn in keys(space) ? first(x) : zero(T)
-    end
-    Param(args...)
-end
-
-
-function preference(node_values, term_reward, c, prm::Param{T})::T where T
-    c == TERM && return prm.β_satisfice * (term_reward - prm.threshold_satisfice)
-    prm.β_prune * min(0, node_values[c] - prm.threshold_prune) + 
-    prm.β_node_value * node_values[c]
-end
-
-function foo_pref(nv, tr, c, prm)
-    threshold, w1, w2 = prm
-    c == TERM && return w2 * (tr - threshold)
-    w1 * nv[c]
-end
+default_space(::Type{BestFirst}) = Space(
+    :β_prune => (0, 1000),
+    :β_satisfice => (0, 1000),
+    :β_node_value => (0, 1000),
+    :threshold_prune => (-30, 30),
+    :threshold_satisfice => (-30, 30),
+    :ε => (0, 1)
+)
 
 function node_values(m::MetaMDP, b::Belief)
     nv = fill(-Inf, length(m))
@@ -44,110 +40,46 @@ function node_values(m::MetaMDP, b::Belief)
     nv
 end
 
-
-# %% ==================== Likelihood ====================
-
-
-struct Likelihood
-    data::Vector{Datum}
+function features(::Type{BestFirst{T}}, m::MetaMDP, b::Belief) where T
+    (node_values=node_values(m, b), term_reward=term_reward(m, b))
 end
-Likelihood(trials::Vector{Trial}) = Likelihood(get_data(trials))
-n_action(L) = length(L.data[1].b) + 1
-n_datum(L) = length(L.data)
 
-@memoize function apply(f::Function, L::Likelihood)
-    map(L.data) do d
-        f(d.t.m, d.b)
+function BestFirst(x::Vector{T}, space::Space=default_space(BestFirst))::BestFirst{T} where T
+    x = Iterators.Stateful(x)
+    args = map(fieldnames(BestFirst)) do fn
+        fn in keys(space) ? first(x) : zero(T)
     end
+    @assert isempty(x)
+    BestFirst{T}(args...)
 end
 
-# works on julia 1.4 only??
-# function initial_pref(L::Likelihood, t::Type{T})::Vector{Vector{T}} where T
-#     map(data) do d
-#         .!allowed(d.t.m, d.b) * -1e20
-#     end
-# end
-
-function initial_pref(L::Likelihood, ::Type{T})::Vector{Vector{T}} where T
-    _initial_pref(L)
+function preference(model::BestFirst{T}, phi, c)::T where T
+    c == TERM && return model.β_satisfice * (phi.term_reward - model.threshold_satisfice)
+    model.β_prune * min(0, phi.node_values[c] - model.threshold_prune) + 
+    model.β_node_value * phi.node_values[c]
 end
 
-@memoize function _initial_pref(L::Likelihood)
-    map(data) do d
-        .!allowed(d.t.m, d.b) * -1e20
-    end
+
+# %% ==================== Optimal ====================
+
+ws = Iterators.Stateful(Iterators.cycle(workers()))
+@memoize Dict function worker(m::MetaMDP)
+     first(ws)
 end
 
-@memoize chosen_actions(L::Likelihood) = map(d->d.c+1, L.data)
+@memoize load_V(mid::String) = deserialize("$base_path/V/$mid")
 
-rand_prob(m::MetaMDP, b::Belief) = 1. / sum(allowed(m, b))
-
-function mysoftmax(x)
-    ex = exp.(x .- maximum(x))
-    ex ./= sum(ex)
-    ex
-end
-
-function softmax(tmp, h, c)
-    @. tmp = exp(h - $maximum(h))
-    tmp[c] / sum(tmp)
-end
-
-function logp(L::Likelihood, prm::Param{T})::T where T <: Real
-    nv = apply(node_values, L)
-    tr = apply(term_reward, L)
-    H = initial_pref(L, T)
-    p_rand = apply(rand_prob, L)
-    chosen = chosen_actions(L)
-
-    all_actions = 1:n_action(L)
-    tmp = zeros(T, n_action(L))
-
-    total = zero(T)
-    for i in eachindex(L.data)
-        h = H[i]
-        for a in all_actions
-            if h[a] != -1e20
-                # h[c] = foo_pref(nv[i], tr[i], c, x)
-                h[a] = preference(nv[i], tr[i], a-1, prm)
-            end
+function get_qs(m::MetaMDP, t::Trial)
+    @fetchfrom worker(m) begin
+        V = load_V(string(hash(m)))
+        map(get_data(t)) do d
+            Q(V, d.b)
         end
-        p = prm.ε * p_rand[i] + (1-prm.ε) * softmax(tmp, h, chosen[i])
-        total += log(p)
     end
-    total
 end
 
-Space = OrderedDict{Symbol,Tuple{Float64, Float64}}
 
-function Distributions.fit(space::Space, trials; x0=nothing, n_restart=20)
-    lower, upper = invert(collect(values(space)))
 
-    algo = Fminbox(LBFGS())
-    options = Optim.Options()
-    L = Likelihood(trials)
-
-    if x0 != nothing
-        x0s = [x0]
-    else
-        seq = SobolSeq(lower, upper)
-        skip(seq, n_restart)
-        x0s = [next!(seq) for i in 1:n_restart]
-    end
-
-    xs, ys = map(x0s) do x0
-        opt = optimize(lower, upper, x0, algo, options, autodiff=:forward) do x
-            prm = Param(space, x)
-            -logp(L, prm)
-        end
-        @debug "Optimization" opt.time_run opt.iterations opt.f_calls
-
-        opt.minimizer, opt.minimum
-    end
-    xs[argmin(ys)]  # note this breaks ties arbitrarily
-end
-
-# %% ====================  ====================
 
 # @memoize function get_Vs(cost)
 #     n = length(readdir("$base_path/mdps/"))
