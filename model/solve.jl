@@ -1,6 +1,4 @@
 include("base.jl")
-save_path = "$base_path/mdps"
-
 
 function sbatch_script(n)
     """
@@ -34,23 +32,24 @@ end
 
 if ARGS[2] == "setup"
     flat_trials = flatten(values(load_trials(EXPERIMENT)));
-    all_mdps = [MetaMDP(t, c) for t in flat_trials, c in COSTS] |> unique
+    all_mdps = [mutate(t.m, cost=c) for t in flat_trials, c in COSTS] |> unique
+    mkpath("$base_path/mdps")
+    mkpath("$base_path/V")
 
     for (i, m) in enumerate(all_mdps)
-        mkpath("$save_path/$i")
-        serialize("$save_path/$i/mdp", m)
+        serialize("$base_path/mdps/$i", m)
     end
-    println(length(all_mdps), " mdps saved to $save_path/")
     open("solve.sbatch", "w") do f
         write(f, sbatch_script(length(all_mdps)))
     end
     open("solve.sh", "w") do f
         write(f, bash_script(length(all_mdps)))
     end
+    println(length(all_mdps), " mdps to solve with solve.sbatch or solve.sh")
 
 else  # solve an MDP
     i = parse(Int, ARGS[2])
-    m = deserialize("$save_path/$i/mdp")
+    m = deserialize("$base_path/mdps/$i")
 
     println("Begin solving MDP $i with cost ", round(m.cost; digits=1)); flush(stdout)
 
@@ -59,5 +58,6 @@ else  # solve an MDP
     V = ValueFunction(m, hasher)
     @time v = V(initial_belief(m))
     println("Value of initial state is ", v)
-    serialize("$save_path/$i/V", V)
+    id = string(hash(m))
+    serialize("$base_path/V/$id", V)
 end

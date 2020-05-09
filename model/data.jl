@@ -58,14 +58,14 @@ function identify(m::MetaMDP)
     m.graph, structure
 end
 
-function identify(t::Trial)
-    structure = if startswith(t.map, "fantasy")
-        "constant"
-    else
-        split(t.map, "-")[2]
-    end
-    t.graph, structure
-end
+# function identify(t::Trial)
+#     structure = if startswith(t.map, "fantasy")
+#         "constant"
+#     else
+#         split(t.map, "-")[2]
+#     end
+#     t.graph, structure
+# end
 
 function reward_distributions(reward_structure, graph)
     if reward_structure == "constant"
@@ -153,16 +153,13 @@ function Trial(wid::String, t::Dict{String,Any})
     path = Int.(t["route"] .+ 1)[2:end-1]
     rts = [x == nothing ? NaN : float(x) for x in t["rts"]]
 
-    function MetaMDP(t::Trial, cost)
-        make_meta_mdp(t.graph, get_reward_structure(t.map), cost)
-    end
-
     m = make_meta_mdp(graph, get_reward_structure(t["map"]), NaN)
 
     Trial(m, wid, bs, cs, rts, path)
 end
 
-function get_data(t::Trial)
+# this is memoized for the sake of future memoization based on object ID
+@memoize function get_data(t::Trial)
     map(eachindex(t.bs)) do i
         # c_last = i == 1 ? nothing : t.cs[i-1]
         # tmp = zeros(length(t.bs)+1)
