@@ -1,4 +1,6 @@
 using Distributed
+using StatsBase
+
 isempty(ARGS) && push!(ARGS, "web")
 include("conf.jl")
 @everywhere begin
@@ -9,7 +11,6 @@ include("conf.jl")
     include("models.jl")
     # include("simulation.jl")
 end
-
 @everywhere results_path = "$results/$EXPERIMENT"
 mkpath(results_path)
 mkpath("$base_path/fits")
@@ -29,6 +30,26 @@ fits = map(models) do M
         fit(M, trials)
     end
 end |> Dict
+
+# %% ====================  ====================
+
+X = map(models) do M
+    [f[2] for f in fits[M]]
+end |> combinedims
+
+total = sum(X; dims=1)
+best_fit = counts([p.I[2] for p in argmin(X; dims=2)][:], 1:length(models))
+
+# %% ====================  ====================
+let
+    println("Model        Likelihood   Best Fit")
+    for i in eachindex(models)
+        @printf "%-10s         %d         %d\n" models[i] total[i] best_fit[i]
+    end
+end
+
+
+
 
 
 # # %% ==================== Fit models ====================

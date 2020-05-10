@@ -18,6 +18,9 @@ Base.map(f::Function) = xs -> map(f, xs)
 Base.map(f::Type) = xs -> map(f, xs)
 Base.map(f, d::Dict) = [f(k, v) for (k, v) in d]
 
+Base.dropdims(idx::Int...) = X -> dropdims(X, dims=idx)
+Base.reshape(idx::Union{Int,Colon}...) = x -> reshape(x, idx...)
+
 
 valmap(f, d::Dict) = Dict(k => f(v) for (k, v) in d)
 valmap(f, d::OrderedDict) = OrderedDict(k => f(v) for (k, v) in d)
