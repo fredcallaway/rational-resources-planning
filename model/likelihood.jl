@@ -63,7 +63,7 @@ end
 
 function Distributions.fit(::Type{M}, trials::Vector{Trial}; space=default_space(M), 
         x0=nothing, n_restart=20, progress=false) where M
-    lower, upper = space)
+    lower, upper = bounds(space)
 
     algo = Fminbox(LBFGS())
     options = Optim.Options()
