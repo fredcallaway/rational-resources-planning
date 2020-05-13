@@ -5,11 +5,10 @@ using Memoize
 
 struct Trial
     m::MetaMDP  # Note: cost must be NaN
-    # map::String
     wid::String
-    # graph::Vector{Vector{Int64}}
     bs::Vector{Belief}
     cs::Vector{Int}
+    score::Float64
     rts::Vector
     path::Vector{Int}
 end
@@ -150,12 +149,12 @@ function Trial(wid::String, t::Dict{String,Any})
     end
     push!(bs, b)
     push!(cs, TERM)
-    path = Int.(t["route"] .+ 1)[2:end-1]
+    path = Int.(t["route"] .+ 1)[2:end]
     rts = [x == nothing ? NaN : float(x) for x in t["rts"]]
 
     m = make_meta_mdp(graph, get_reward_structure(t["map"]), NaN)
 
-    Trial(m, wid, bs, cs, rts, path)
+    Trial(m, wid, bs, cs, t["score"], rts, path)
 end
 
 # this is memoized for the sake of future memoization based on object ID

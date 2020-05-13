@@ -7,7 +7,6 @@ using Serialization
 dictkeys(d::Dict) = (collect(keys(d))...,)
 dictvalues(d::Dict) = (collect(values(d))...,)
 
-
 namedtuple(d::Dict{String,T}) where {T} =
     NamedTuple{Symbol.(dictkeys(d))}(dictvalues(d))
 
@@ -35,7 +34,11 @@ nanreduce(f, x) = f(filter(!isnan, x))
 nanmean(x) = nanreduce(mean, x)
 nanstd(x) = nanreduce(std, x)
 
-Base.show(io::IO, f::Float64) = @printf(io, "%1.3f", f)
+function Base.write(fn)
+    obj -> open(fn, "w") do f
+        write(f, string(obj))
+    end
+end
 
 # type2dict(x::T) where T = Dict(fn=>getfield(x, fn) for fn in fieldnames(T))
 

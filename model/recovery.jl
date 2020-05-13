@@ -42,6 +42,7 @@ all_sims = map(collect(all_fits)) do (M, fits)
 end |> Dict
 serialize("$base_path/recovery/all_sims", all_sims)
 
+
 # %% ==================== Update Q table with simulated data ====================
 
 sim_data = map(values(all_sims)) do sims
@@ -98,6 +99,7 @@ CM = zeros(Int, length(models), length(models))
 for idx in outcomes
     CM[idx] += 1
 end
+CM
 
 # %% ==================== Error magnitudes ====================
 
@@ -107,9 +109,10 @@ error_magnitudes = map(enumerate(outcomes)) do (i, o)
     x = X[:, :, cld(i, 2)]
     x[s,s] - x[f,s]
 end |> skipmissing |> collect
-
+error_magnitudes
 
 # %% ==================== Save for plotting in python ====================
+
 using JSON
 
 open("$results_path/recovery.json", "w+") do f
@@ -119,4 +122,60 @@ open("$results_path/recovery.json", "w+") do f
         models=string.(models)
     )))
 end
+
+# %% ==================== Save simulations for visualization ====================
+
+
+
+# %% ====================  ====================
+function get_preds(::Type{M}, t::Trial) where M <: AbstractModel
+    i = wid_index[split(t.wid, "-")[1]]
+    model = all_fits[M][i][1]
+    map(t.bs) do b
+        action_dist(model, t.m, b)
+    end
+end
+
+
+wid_index = Dict(w=> i for (i, w) in enumerate(keys(all_trials)))
+function demo_trial(t)
+    (
+        stateRewards = t.bs[end],
+        demo = (
+            clicks = t.cs[1:end-1] .- 1,
+            path = t.path .- 1,
+            predictions = Dict(string(M) => get_preds(M, t) for M in models)
+        )
+    )
+end
+
+function sort_by_score(xs)
+    sort(xs, by=x->-x.score)
+end
+
+rec = map(enumerate(keys(all_trials))) do (i, wid)
+    trials = all_trials[wid]
+    @assert all_sims[Optimal][i][1].wid == "Optimal-$wid"
+    (
+        wid = wid,
+        trials = demo_trial.(trials),
+        score = mean(t.score for t in trials),
+        clicks = mean(length(t.cs)-1 for t in trials),
+        optimal_sim = demo_trial.(all_sims[Optimal][i]),
+        bestfirst_sim = demo_trial.(all_sims[BestFirst][i]),
+        optimal_nll = all_fits[Optimal][i][2],
+        bestfirst_nll = all_fits[BestFirst][i][2],
+        optimal_cost = all_fits[Optimal][i][1].cost
+    )
+end |> sort_by_score;
+rec |> JSON.json |> write("$results_path/demo_viz.json")
+
+
+
+
+
+
+
+
+
 

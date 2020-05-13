@@ -3,5 +3,4 @@ model/figs/
 model/notes.txt
 model/benchmark.ipynb
 model/pullfigs.sh
-model/results/
 model/scratch.jl
