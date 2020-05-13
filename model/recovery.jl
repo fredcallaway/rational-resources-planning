@@ -127,7 +127,6 @@ end
 
 
 
-# %% ====================  ====================
 function get_preds(::Type{M}, t::Trial) where M <: AbstractModel
     i = wid_index[split(t.wid, "-")[1]]
     model = all_fits[M][i][1]
@@ -156,16 +155,22 @@ end
 rec = map(enumerate(keys(all_trials))) do (i, wid)
     trials = all_trials[wid]
     @assert all_sims[Optimal][i][1].wid == "Optimal-$wid"
+    fits = map(models) do M
+        model, nll = all_fits[M][i]
+        params = Dict(fn => getfield(model, fn) for fn in fieldnames(M))
+        (
+            sim = demo_trial.(all_sims[Optimal][i]),
+            nll = nll,
+            params = params,
+        )
+        M => params
+    end |> Dict
     (
         wid = wid,
         trials = demo_trial.(trials),
         score = mean(t.score for t in trials),
         clicks = mean(length(t.cs)-1 for t in trials),
-        optimal_sim = demo_trial.(all_sims[Optimal][i]),
-        bestfirst_sim = demo_trial.(all_sims[BestFirst][i]),
-        optimal_nll = all_fits[Optimal][i][2],
-        bestfirst_nll = all_fits[BestFirst][i][2],
-        optimal_cost = all_fits[Optimal][i][1].cost
+        fits = fits
     )
 end |> sort_by_score;
 rec |> JSON.json |> write("$results_path/demo_viz.json")
