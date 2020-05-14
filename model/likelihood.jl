@@ -35,6 +35,11 @@ function softmax(tmp, h, c)
     tmp[c] / sum(tmp)
 end
 
+function logp(model::AbstractModel, trials::Vector{Trial})
+    L = Likelihood(get_data(trials))
+    logp(L, model)
+end
+
 function logp(L::Likelihood, model::M)::T where M <: AbstractModel{T} where T <: Real
     H = initial_pref(L, T)
     p_rand = memo_map(rand_prob, L)
