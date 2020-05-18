@@ -4,3 +4,8 @@ model/notes.txt
 model/benchmark.ipynb
 model/pullfigs.sh
 model/scratch.jl
+model/scratch_base.jl
+model/test_grad.jl
+model/test_hashing.jl
+model/test_models.jl
+plots-Copy1.ipynb
