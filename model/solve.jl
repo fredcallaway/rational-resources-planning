@@ -7,12 +7,12 @@ function sbatch_script(n)
     #SBATCH --output=out/%A_%a
     #SBATCH --array=1-$n
     #SBATCH --time=30
-    #SBATCH --mem-per-cpu=1000
+    #SBATCH --mem-per-cpu=3000
     #SBATCH --cpus-per-task=1
     #SBATCH --mail-type=end
     #SBATCH --mail-user=flc2@princeton.edu
 
-    module load julia
+    module load julia/1.3.1
     julia solve.jl $conf \$SLURM_ARRAY_TASK_ID
     """
 end

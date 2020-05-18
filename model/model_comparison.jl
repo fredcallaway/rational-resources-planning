@@ -48,7 +48,58 @@ let
 end
 
 
-# %% ==================== Cross validation ====================\
+# %% --------
+using DataFrames
+
+fmods = getfield.(full_fits[:, 1], :model)
+fns = fieldnames(typeof(fmods[1]))
+model = fmods[1]
+rows = map(fmods) do model
+    [getfield(model, k) for k in fns]
+end
+DataFrame(combinedims(rows)', collect(fns))
+
+
+# %% ==================== Simulations ====================
+
+
+ks = map(jobs) do (trials, M)
+    trials[1].wid, M
+end
+fit_dict = Dict(zip(ks, getfield.(full_fits, :model)))
+
+@everywhere fit_dict = $fit_dict
+@everywhere function get_model(M::Type, t::Trial)
+    fit_dict[t.wid, M]
+end
+
+sims = pmap(jobs) do (trials, M)
+    wid = string(M) * "-" * trials[1].wid 
+    map(repeat(trials, 50)) do t
+        model = get_model(M, t)
+        simulate(model, t.m; wid=wid)
+    end
+end
+
+serialize("$base_path/sims", sims)
+
+
+# %% --------
+
+nll = getfield.(full_fits, :nll)
+total = sum(nll; dims=1)
+best_model = [p.I[2] for p in argmin(nll; dims=2)]
+n_fit = counts(best_model)
+
+let
+    println("Model        Likelihood   Best Fit")
+    for i in eachindex(models)
+        @printf "%-10s         %4d         %d\n" models[i] total[i] n_fit[i]
+    end
+end
+
+
+# %% ==================== Cross validation ====================
 
 function kfold_splits(n, k)
     @assert (n / k) % 1 == 0  # can split evenly

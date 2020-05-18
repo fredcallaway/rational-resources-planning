@@ -3,8 +3,9 @@ using Distributions
 import Base
 using Printf: @printf
 using Memoize
-using StatsFuns
+# using StatsFuns
 
+include("utils.jl")
 include("dnp.jl")
 
 const TERM = 0  # termination action
@@ -32,8 +33,16 @@ function MetaMDP(g::Graph, rdist::Distribution, cost::Float64; kws...)
     MetaMDP(graph=g, rewards=rewards, cost=cost; kws...)
 end
 
+function Base.hash(m::MetaMDP, h::UInt64)
+    reduce(getfields(m); init=h) do acc, x
+        if x == -Inf
+            x = "-Inf"  # hash(Inf) varies by machine!
+        end
+        hash(x, acc)
+    end
+end
+
 Base.:(==)(x1::MetaMDP, x2::MetaMDP) = struct_equal(x1, x2)
-Base.hash(m::MetaMDP, h::UInt64) = hash_struct(m, h)
 Base.length(m::MetaMDP) = length(m.graph)
 
 initial_belief(m::MetaMDP) = [0; fill(NaN, length(m)-1)]

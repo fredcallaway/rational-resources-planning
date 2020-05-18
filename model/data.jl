@@ -21,6 +21,12 @@ struct Datum
     c::Int
     # c_last::Union{Int, Nothing}
 end
+
+# this is used to look up data in the Q_TABLE
+function q_key(d::Datum)
+    hash((d.b, d.c, d.t.m))
+end
+
 Base.hash(t::Datum, h::UInt64) = hash_struct(t, h)
 # Base.:(==)(x1::Datum, x2::Datum) = struct_equal(x2, x2)
 

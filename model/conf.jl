@@ -4,7 +4,9 @@ if myid() == 1  # only run on the master process
     @everywhere begin
         conf = $conf
         include("conf/$conf.jl")
-        base_path = "tmp/$EXPERIMENT$MODEL_VERSION"
+        base_path = "tmp/$EXPERIMENT"
+        results_path = "results/$EXPERIMENT"
     end
     mkpath(base_path)
+    mkpath(results_path)
 end

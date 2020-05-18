@@ -27,8 +27,12 @@ end
 
 # for likelihood: use precomputed look up table for just the
 # beliefs found in the experiment
-const Q_TABLE = deserialize("$base_path/Q_table")
-features(::Type{Optimal{T}}, d::Datum) where T = Q_TABLE[hash(d)]
+if isfile("$base_path/Q_table")
+    const Q_TABLE = deserialize("$base_path/Q_table")
+else
+    @warn "No file $base_path/Q_table. Can't fit Optimal model"
+end
+features(::Type{Optimal{T}}, d::Datum) where T = Q_TABLE[q_key(d)]
 
 
 # for simulation: just get the q value you need.

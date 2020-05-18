@@ -1,5 +1,3 @@
-
-
 function make_Q_table(data)
     n = length(readdir("$base_path/mdps/"))
     X = reshape(1:n, :, length(COSTS))
@@ -24,7 +22,7 @@ function make_Q_table(data)
     @assert length(all_qs) == length(data)
     @assert length(all_qs[1]) == length(COSTS)
     map(data, all_qs) do d, dqs
-        hash(d) => Dict(zip(COSTS, dqs))
+        q_key(d) => Dict(zip(COSTS, dqs))
     end |> Dict
 end
 
