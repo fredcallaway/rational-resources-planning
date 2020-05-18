@@ -16,6 +16,12 @@ default_space(::Type{NewBestFirst}) = Space(
 
 
 function action_dist!(p::Vector{T}, model::NewBestFirst{T}, phi::NamedTuple) where T
+    p .= 0.
+    if length(phi.click_options) == 0
+        p[1] = 1.
+        return p
+    end
+
     ε = model.ε
     p_rand = ε / (1+length(phi.click_options))
 
@@ -68,9 +74,20 @@ function best_lead(m, b)
     undetermined = [isnan(b[path[end]]) for path in paths(m)]
     # find best path, breaking ties in favor of undetermined
     best = argmax(collect(zip(pvals, undetermined)))
-    # either the best or the competitor must be undetermind
-    competitors = undetermined[best] ? pvals : pvals[undetermined]
-    competing_value = partialsort(competitors, 2, rev=true)
+    
+    competing_value = if undetermined[best]
+        # best path is undetermined -> competing value is the second best path (undetermined or not)
+        partialsort(pvals, 2; rev=true)
+    else
+        # best path is determined -> competing value is the best undetermined path
+        vals = pvals[undetermined]
+        if isempty(vals)
+            0.  # Doesn't matter, you have to terminate.
+        else
+            maximum(vals)
+        end
+    end
+    
     pvals[best] - competing_value
 end
 
@@ -84,8 +101,9 @@ function logp(L::Likelihood, model::M)::T where M <: NewBestFirst{T} where T <: 
     total = zero(T)
     for i in eachindex(L.data)
         a = L.data[i].c + 1
-        p = action_dist!(tmp, model, phi[i])[a]
-        total += log(p)
+        p = action_dist!(tmp, model, phi[i])
+        @assert sum(p) ≈ 1
+        total += log(p[a])
     end
     total
 end

@@ -23,10 +23,8 @@ println(length(flat_trials), " trials")
 all_data = all_trials |> values |> flatten |> get_data;
 
 # %% ==================== Fit models to full dataset ====================
-
-
-models = [Optimal, BestFirst]
-n_trial = length(all_trials |> values |> first)
+@everywhere include("best_first_alt.jl")
+models = [Optimal, BestFirst, NewBestFirst]
 jobs = Iterators.product(values(all_trials), models);
 @time full_fits = pmap(jobs) do (trials, M)
     model, nll = fit(M, trials)
@@ -35,15 +33,14 @@ end;
 
 # %% --------
 
-nll = getfield.(full_fits, :nll)
-total = sum(nll; dims=1)
-best_model = [p.I[2] for p in argmin(nll; dims=2)]
-n_fit = counts(best_model)
-
 let
-    println("Model        Likelihood   Best Fit")
+    nll = getfield.(full_fits, :nll)
+    total = sum(nll; dims=1)
+    best_model = [p.I[2] for p in argmin(nll; dims=2)]
+    n_fit = counts(best_model)
+    println("Model             Likelihood   Best Fit")
     for i in eachindex(models)
-        @printf "%-10s         %4d         %d\n" models[i] total[i] n_fit[i]
+        @printf "%-15s         %4d         %d\n" models[i] total[i] n_fit[i]
     end
 end
 

@@ -6,7 +6,7 @@ end
 
 default_space(::Type{Optimal}) = Space(
     :cost => collect(COSTS),
-    :β => (0, 1000),
+    :β => (0, 50),
     :ε => (0, 1)
 )
 
