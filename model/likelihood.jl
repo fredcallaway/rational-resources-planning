@@ -67,7 +67,7 @@ function logp(L::Likelihood, model::M)::T where M <: AbstractModel{T} where T <:
 end
 
 function Distributions.fit(::Type{M}, trials::Vector{Trial}; space=default_space(M), 
-        x0=nothing, n_restart=20, progress=false) where M
+        x0=nothing, n_restart=20, progress=false) where M <: AbstractModel
     lower, upper = bounds(space)
 
     algo = Fminbox(LBFGS())
