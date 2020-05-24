@@ -1,67 +1,115 @@
-@everywhere begin 
+@everywhere begin
+    base_path = "tmp/explore_reward"
+    results_path = "results/explore_reward"
     include("mdp.jl")
     include("utils.jl")
+    include("data.jl")
+    include("models.jl")
 end
 
-function depth(g, i)
-    pths = paths(g)
-    i == 1 && return 0
-    for d in 1:maximum(length.(pths))
-        for p in pths
-            p[d] == i && return d
+using CSV
+mkpath(base_path)
+mkpath(results_path)
+# %% ==================== Setup ====================
+
+@everywhere begin
+    function depth(g, i)
+        pths = paths(g)
+        i == 1 && return 0
+        for d in 1:maximum(length.(pths))
+            for p in pths
+                p[d] == i && return d
+            end
+        end
+        @assert false
+    end
+
+    function make_rewards(graph, mult, depth_factor)
+        base = mult * Float64[-2, -1, 1, 2]
+        map(eachindex(graph)) do i
+            i == 1 && return DiscreteNonParametric([0.])
+            vs = round.(unique(base .*  depth_factor ^ (depth(graph, i)-1)))
+            DiscreteNonParametric(vs)
         end
     end
-    @assert false
-end
 
-function make_rewards(graph, mult, depth_factor)
-    base = mult * Float64[-2, -1, 1, 2]
-    map(eachindex(graph)) do i
-        i == 1 && return DiscreteNonParametric([0.])
-        vs = round.(unique(base .*  depth_factor ^ (depth(graph, i)-1)))
-        DiscreteNonParametric(vs)
+    function make_mdp(factor, mult)
+        g = tree([4,1,2])
+        if factor < 1
+             mult *= factor ^ -(length(paths(g)[1]) - 1)
+         end
+        rewards = make_rewards(g, float(mult), factor)
+        MetaMDP(g, rewards, 0., -Inf, true)
+    end
+
+    function mean_reward_clicks(pol; N=100000)
+        reward, clicks = N \ mapreduce(+, 1:N) do i
+            roll = rollout(pol)
+            [roll.reward, roll.n_steps - 1]
+        end
+        (reward=reward, clicks=clicks)
     end
 end
 
+factors = [1//2, 1//3, 2, 3]
+mults = 1:3
+
+
+# %% ==================== BasFirst ====================
+
+function possible_path_values2(m::MetaMDP)
+    dists = [m.rewards[i] for i in paths(m)[1]]
+    map(sum, Iterators.product([[d.support; 0] for d in dists]...)) |> unique
+end
+
+function possible_thresholds(m::MetaMDP)
+    ppv = possible_path_values2(m)
+    vals = map(Iterators.product(ppv, ppv)) do (v1, v2)
+        abs(v1 - v2)
+    end |> unique |> sort
+end
+
+bf_jobs = mapmany(Iterators.product(factors, mults)) do (factor, mult)
+    m = make_mdp(factor, mult)
+    map(possible_thresholds(m)) do θ
+        (factor, mult, θ)
+    end
+end
+
+pmap(bf_jobs[1:40]) do (factor, mult, θ)
+    m = make_mdp(factor, mult)
+    model = BasFirst(1e3, 1e3, θ, 0.)
+    pol = Simulator(model, m)
+    (model="BasFirst", factor=factor, mult=mult, threshold=θ, mean_reward_clicks(pol)...)
+end |> CSV.write("$results_path/bas_first.csv")
+println("Wrote $results_path/bas_first.csv")
+
+
+# %% ==================== Optimal ====================
+
 @everywhere function solve(m::MetaMDP)
-    V = ValueFunction(m, hash_312)
+    V = ValueFunction(m, hash_412)
     @time v = V(initial_belief(m))
     return V
 end
 
-function simulate(V::ValueFunction)
-    pol = OptimalPolicy(V)
-    bs = Belief[]
-    cs = Int[]
-    roll = rollout(pol) do b, c
-        push!(bs, copy(b)); push!(cs, c)
-    end
-    bs, cs
-end
+opt_jobs = collect(Iterators.product(factors, mults, costs))[:]
+pmap(opt_jobs) do (factor, mult, cost)
+    m = make_mdp(factor, mult)
+    V = solve(mutate(m, cost=cost))
+    pol = OptimalPolicy(m, V)
+    (model="Optimal", factor=factor, mult=mult, cost=cost, mean_reward_clicks(pol)...)
+end |> CSV.write("$results_path/optimal.csv")
+println("Wrote $results_path/optimal.csv")
 
-function show_sim(V)
-    bs, cs = simulate(V)
-    for (i, c) in enumerate(cs)
-        c != 0 && print(c, " ", bs[i+1][c], "   ")
-    end
-    return bs
-end
 
-# %% ==================== Generate MDPs ====================
 
-factors = [1//2, 1//3, 2, 3]
-costs = 1:.2:3
-mults = 1:3
-jobs = collect(Iterators.product(factors, costs, mults))
 
-mdps = map(jobs) do (factor, cost, mult)
-    g = tree([3,1,2])
-    if factor < 1
-         mult *= factor ^ -(length(paths(g)[1]) - 1)
-     end
-    rewards = make_rewards(g, float(mult), factor)
-    MetaMDP(g, rewards, cost, -Inf, true)
-end;
+# %% ==================== OLD ====================
+
+
+
+
 
 Vs = pmap(solve, mdps)
 
