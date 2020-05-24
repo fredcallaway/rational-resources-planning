@@ -53,3 +53,11 @@ function get_q(m::MetaMDP, b::Belief)
     Q(V, b)
 end
 
+# Use the Q table if you can
+function action_dist(model::Optimal{T}, d::Datum) where T
+    possible = allowed(m, d.b)
+    q = features(Optimal{Float64}, d)[model.cost]
+    h = model.β * q
+    p_rand = model.ε .* rand_prob(m, d.b) .* possible
+    p_rand .+ (1-model.ε) .* softmax(h)
+end

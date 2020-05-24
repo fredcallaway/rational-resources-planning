@@ -45,4 +45,4 @@ function action_dist(model::AbstractModel, m::MetaMDP, b::Belief)
     # model.ε * p_rand + (1-model.ε) * pref
     p_rand .+ (1-model.ε) .* softmax(h)
 end
-
+action_dist(model::AbstractModel, d::Datum) = action_dist(model, d.t.m, d.b)

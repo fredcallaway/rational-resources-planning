@@ -23,7 +23,7 @@ all_data = all_trials |> values |> flatten |> get_data;
 
 # %% ==================== Fit models ====================
 
-models = [Optimal, BestFirst]
+models = [Optimal, BestFirst, BasFirst]
 all_fits = map(models) do M
     M => @time pmap(values(all_trials)) do trials
         fit(M, trials)

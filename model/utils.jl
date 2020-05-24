@@ -9,9 +9,9 @@ dictvalues(d::Dict) = (collect(values(d))...,)
 
 namedtuple(d::Dict{String,T}) where {T} =
     NamedTuple{Symbol.(dictkeys(d))}(dictvalues(d))
-
 namedtuple(d::Dict{Symbol,T}) where {T} =
     NamedTuple{dictkeys(d)}(dictvalues(d))
+namedtuple(x) = namedtuple(Dict(fn => getfield(x, fn) for fn in fieldnames(typeof(x))))
 
 Base.map(f::Function) = xs -> map(f, xs)
 Base.map(f::Type) = xs -> map(f, xs)

@@ -28,6 +28,8 @@ using DataStructures
     expand_only::Bool
 end
 
+Base.show(io::IO, m::MetaMDP) = print(io, "M")
+
 function MetaMDP(g::Graph, rdist::Distribution, cost::Float64; kws...)
     rewards = repeat([rdist], length(g))
     MetaMDP(graph=g, rewards=rewards, cost=cost; kws...)
@@ -70,9 +72,7 @@ end
 
 tree(b::Int, d::Int) = tree(repeat([b], d))
 
-
-@memoize function paths(m::MetaMDP)::Vector{Vector{Int}}
-    g = m.graph
+function paths(g::Graph)
     frontier = [[1]]
     result = Vector{Int}[]
 
@@ -91,6 +91,8 @@ tree(b::Int, d::Int) = tree(repeat([b], d))
     end
     [pth[2:end] for pth in result]
 end
+@memoize paths(m::MetaMDP) = paths(m.graph)
+
 
 function easy_path_value(m::MetaMDP, b::Belief, path)
     d = 0.
@@ -180,16 +182,21 @@ function symmetry_breaking_hash(m::MetaMDP, b::Belief)
 end
 
 function hash_312(m::MetaMDP, b::Belief)
-    hash(hash(b[2]) + hash(b[3]), hash(b[4]) + hash(b[5])) +
-    hash(hash(b[6]) + hash(b[7]), hash(b[8]) + hash(b[9])) +
-    hash(hash(b[10]) + hash(b[11]), hash(b[12]) + hash(b[13]))
+    hash(hash(b[2]) + hash(b[3]) >> 1, hash(b[4]) + hash(b[5])) +
+    hash(hash(b[6]) + hash(b[7]) >> 1, hash(b[8]) + hash(b[9])) +
+    hash(hash(b[10]) + hash(b[11]) >> 1, hash(b[12]) + hash(b[13]))
 end
+# function hash_312(m::MetaMDP, b::Belief)
+#     hash(hash(b[2]) + hash(b[3]), hash(b[4]) + hash(b[5])) +
+#     hash(hash(b[6]) + hash(b[7]), hash(b[8]) + hash(b[9])) +
+#     hash(hash(b[10]) + hash(b[11]), hash(b[12]) + hash(b[13]))
+# end
 
 function hash_412(m::MetaMDP, b::Belief)
-    hash(hash(b[2]) + hash(b[3]), hash(b[4]) + hash(b[5])) +
-    hash(hash(b[6]) + hash(b[7]), hash(b[8]) + hash(b[9])) +
-    hash(hash(b[10]) + hash(b[11]), hash(b[12]) + hash(b[13])) +
-    hash(hash(b[14]) + hash(b[15]), hash(b[16]) + hash(b[17]))
+    hash(hash(b[2]) + hash(b[3]) >> 1, hash(b[4]) + hash(b[5])) +
+    hash(hash(b[6]) + hash(b[7]) >> 1, hash(b[8]) + hash(b[9])) +
+    hash(hash(b[10]) + hash(b[11]) >> 1, hash(b[12]) + hash(b[13])) +
+    hash(hash(b[14]) + hash(b[15]) >> 1, hash(b[16]) + hash(b[17]))
 end
 
 default_hash(m::MetaMDP, b::Belief) = hash(b)
@@ -224,12 +231,12 @@ function step_V(V::ValueFunction, b::Belief)::Float64
     @fastmath @inbounds for c in 1:length(b)
         !allowed(V.m, b, c) && continue
         val = 0.
-        R = m.rewards[c]
+        R = V.m.rewards[c]
         for i in eachindex(R.p)
             v = R.support[i]; p = R.p[i]
             b1 = copy(b)
             b1[c] = v
-            val += p * (V(b1) - m.cost)
+            val += p * (V(b1) - V.m.cost)
         end
         if val > best
             best = val
