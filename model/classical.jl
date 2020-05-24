@@ -1,21 +1,17 @@
 using StatsFuns: logistic
 
-struct BasFirst{T} <: AbstractModel{T}
-    β_term::T
-    β_click::T
-    θ_term::T
-    ε::T
-end
+# ---------- Base code for all models ---------- #
 
-default_space(::Type{BasFirst}) = Space(
+abstract type ClassicalSearchModel{T} <: AbstractModel{T} end
+
+default_space(::Type{M}) where M <: ClassicalSearchModel = Space(
     :β_term => (0, 3),
     :β_click => (0, 3),
     :θ_term => (0, 30),
     :ε => (0, 1)
 )
 
-
-function action_dist!(p::Vector{T}, model::BasFirst{T}, phi::NamedTuple) where T
+function action_dist!(p::Vector{T}, model::M, phi::NamedTuple) where M <: ClassicalSearchModel{T} where T
     p .= 0.
     if length(phi.click_options) == 0
         p[1] = 1.
@@ -38,34 +34,22 @@ function action_dist!(p::Vector{T}, model::BasFirst{T}, phi::NamedTuple) where T
     p
 end
 
-function action_dist(model::M, m::MetaMDP, b::Belief) where M <: BasFirst{T} where T <: Real
+function action_dist(model::M, m::MetaMDP, b::Belief) where M <: ClassicalSearchModel{T} where T
     phi = features(M, m, b)
     p = zeros(T, length(b) + 1)
     action_dist!(p, model, phi)
 end
 
-function features(::Type{BasFirst{T}}, m::MetaMDP, b::Belief) where T
-    nv = node_values(m, b)
+function features(::Type{M}, m::MetaMDP, b::Belief) where M <: ClassicalSearchModel{T} where T
+    np = node_preference(M, m, b)  # this function is defined for each model (best/depth/breadth)
     possible = allowed(m, b)[2:end]
-    click_values = nv[possible]
+    click_values = np[possible]
     (
         best_lead = best_lead(m, b),
         click_options = findall(possible),
         click_values = click_values,
         tmp = zeros(T, length(click_values)),
     )
-end
-
-"What is the maximal expected path value for each node?"
-function node_values(m::MetaMDP, b::Belief)
-    nv = fill(-Inf, length(m))
-    for p in paths(m)
-        v = path_value(m, b, p)
-        for i in p
-            nv[i] = max(nv[i], v)
-        end
-    end
-    nv
 end
 
 "How much better is the best path from its competitors?"
@@ -91,8 +75,7 @@ function best_lead(m, b)
     pvals[best] - competing_value
 end
 
-
-function logp(L::Likelihood, model::M)::T where M <: BasFirst{T} where T <: Real
+function logp(L::Likelihood, model::M)::T where M <: ClassicalSearchModel{T} where T
     phi = memo_map(L) do d
         features(M, d)
     end
@@ -107,3 +90,62 @@ function logp(L::Likelihood, model::M)::T where M <: BasFirst{T} where T <: Real
     end
     total
 end
+
+# ---------- Specific search orders ---------- #
+
+
+struct BestFirst{T} <: ClassicalSearchModel{T}
+    β_term::T
+    β_click::T
+    θ_term::T
+    ε::T
+end
+
+"What is the maximal expected path value for each node?"
+function node_preference(::Type{BestFirst{T}}, m::MetaMDP, b::Belief) where T
+    nv = fill(-Inf, length(m))
+    for p in paths(m)
+        v = path_value(m, b, p)
+        for i in p
+            nv[i] = max(nv[i], v)
+        end
+    end
+    nv
+end
+
+
+struct DepthFirst{T} <: ClassicalSearchModel{T}
+    β_term::T
+    β_click::T
+    θ_term::T
+    ε::T
+end
+
+function node_depths(g::Graph)
+    result = zeros(Int, length(g))
+    function rec(i, d)
+        result[i] = d
+        for j in g[i]
+            rec(j, d+1)
+        end
+    end
+    rec(1, 0)
+    result
+end
+
+function node_preference(::Type{DepthFirst{T}}, m::MetaMDP, b::Belief) where T
+    node_depths(m.graph) .* 10  # multiply by 10 so that β_click = 3 gives hard maximization
+end
+
+
+struct BreadthFirst{T} <: ClassicalSearchModel{T}
+    β_term::T
+    β_click::T
+    θ_term::T
+    ε::T
+end
+
+function node_preference(::Type{BreadthFirst{T}}, m::MetaMDP, b::Belief) where T
+    node_depths(m.graph) .* -10
+end
+
