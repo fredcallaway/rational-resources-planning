@@ -7,7 +7,7 @@ abstract type ClassicalSearchModel{T} <: AbstractModel{T} end
 default_space(::Type{M}) where M <: ClassicalSearchModel = Space(
     :β_term => (0, 3),
     :β_click => (0, 3),
-    :θ_term => (0, 30),
+    :θ_term => (0, MAX_THETA),
     :ε => (0, 1)
 )
 
@@ -20,8 +20,7 @@ function action_dist!(p::Vector{T}, model::M, phi::NamedTuple) where M <: Classi
 
     ε = model.ε
     p_rand = ε / (1+length(phi.click_options))
-
-    p_term = logistic(model.β_term * (phi.best_lead - model.θ_term))
+    p_term = logistic(model.β_term * (phi.term_value - model.θ_term))
     p[1] = p_rand + (1-ε) * p_term
 
     p_clicks = phi.tmp  # use pre-allocated array
@@ -45,11 +44,19 @@ function features(::Type{M}, m::MetaMDP, b::Belief) where M <: ClassicalSearchMo
     possible = allowed(m, b)[2:end]
     click_values = np[possible]
     (
-        best_lead = best_lead(m, b),
+        term_value = term_value(M, m, b),
         click_options = findall(possible),
         click_values = click_values,
         tmp = zeros(T, length(click_values)),
     )
+end
+
+# function term_prob(model::M, phi::NamedTuple)::T where M <: ClassicalSearchModel{T} where T
+    # logistic(model.β_term * (phi.term_value - model.θ_term))
+# end
+
+function term_value(::Type{M}, m::MetaMDP, b::Belief) where M <: ClassicalSearchModel{T} where T
+    best_lead(m, b)
 end
 
 "How much better is the best path from its competitors?"
@@ -134,7 +141,7 @@ function node_depths(g::Graph)
 end
 
 function node_preference(::Type{DepthFirst{T}}, m::MetaMDP, b::Belief) where T
-    node_depths(m.graph) .* 10  # multiply by 10 so that β_click = 3 gives hard maximization
+    node_depths(m.graph)
 end
 
 
@@ -148,4 +155,19 @@ end
 function node_preference(::Type{BreadthFirst{T}}, m::MetaMDP, b::Belief) where T
     node_depths(m.graph) .* -10
 end
+
+function term_value(::Type{M}, m::MetaMDP, b::Belief) where M <: BreadthFirst{T} where T
+    nd = node_depths(m.graph)
+    # minimum(nd[c] for c in 1:length(b) if allowed(m, b, c))  # do this but handle fully revealed case
+    mapreduce(min, 1:length(b); init=Inf) do c
+        allowed(m, b, c) ? nd[c] : Inf
+    end
+end
+
+default_space(::Type{M}) where M <: BreadthFirst = Space(
+    :β_term => (0, 5),
+    :β_click => (0, 30),
+    :θ_term => (0, 4),
+    :ε => (0, 1)
+)
 

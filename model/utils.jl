@@ -3,6 +3,19 @@ flatten = SplitApplyCombine.flatten  # block DataFrames.flatten
 using DataStructures: OrderedDict
 using Printf
 using Serialization
+using Distributed
+
+
+function logspace(low, high, n)
+    x = range(0, 1, length=n)
+    @. exp(log(low) + x * (log(high) - log(low)))
+end
+
+function softmax!(x)
+    x .= exp.(x .- maximum(x))
+    x ./= sum(x)
+end
+softmax(x) = softmax!(copy(x))
 
 dictkeys(d::Dict) = (collect(keys(d))...,)
 dictvalues(d::Dict) = (collect(values(d))...,)
@@ -43,6 +56,11 @@ end
 # type2dict(x::T) where T = Dict(fn=>getfield(x, fn) for fn in fieldnames(T))
 
 function mutate(x::T; kws...) where T
+    for field in keys(kws)
+        if !(field in fieldnames(T))
+            error("$(T.name) has no field $field")
+        end
+    end
     return T([get(kws, fn, getfield(x, fn)) for fn in fieldnames(T)]...)
 end
 

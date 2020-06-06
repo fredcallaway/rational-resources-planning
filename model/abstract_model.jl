@@ -32,12 +32,6 @@ end
 
 preference(model::AbstractModel, d::Datum) = preference(model, d.t.m, d.b, d.c)
 
-function softmax!(x)
-    x .= exp.(x .- maximum(x))
-    x ./= sum(x)
-end
-softmax(x) = softmax!(copy(x))
-
 function action_dist(model::AbstractModel, m::MetaMDP, b::Belief)
     possible = allowed(m, b)
     h = preferences(model, m, b) .+ .!possible .* -Inf

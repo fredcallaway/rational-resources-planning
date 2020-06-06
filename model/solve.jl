@@ -1,13 +1,14 @@
-include("base.jl")
+using Distributed
+@everywhere include("base.jl")
 
-function sbatch_script(n)
+function sbatch_script(n, minutes, memory)
     """
     #!/usr/bin/env bash
     #SBATCH --job-name=solve
     #SBATCH --output=out/%A_%a
     #SBATCH --array=1-$n
-    #SBATCH --time=30
-    #SBATCH --mem-per-cpu=3000
+    #SBATCH --time=$minutes
+    #SBATCH --mem-per-cpu=$memory
     #SBATCH --cpus-per-task=1
     #SBATCH --mail-type=end
     #SBATCH --mail-user=flc2@princeton.edu
@@ -33,6 +34,7 @@ end
 if ARGS[2] == "setup"
     flat_trials = flatten(values(load_trials(EXPERIMENT)));
     all_mdps = [mutate(t.m, cost=c) for t in flat_trials, c in COSTS] |> unique
+    rm("$base_path/mdps"; force=true, recursive=true)
     mkpath("$base_path/mdps")
     mkpath("$base_path/V")
 
@@ -40,24 +42,33 @@ if ARGS[2] == "setup"
         serialize("$base_path/mdps/$i", m)
     end
     open("solve.sbatch", "w") do f
-        write(f, sbatch_script(length(all_mdps)))
+        kws = if startswith(EXPERIMENT, "webofcash-2")
+            (minutes=30, memory=10000)
+        else
+            (minutes=30, memory=3000)
+        end
+
+        write(f, sbatch_script(length(all_mdps)), kws...)
     end
     open("solve.sh", "w") do f
         write(f, bash_script(length(all_mdps)))
     end
     println(length(all_mdps), " mdps to solve with solve.sbatch or solve.sh")
 
-else  # solve an MDP
-    i = parse(Int, ARGS[2])
-    m = deserialize("$base_path/mdps/$i")
+else  # solve an MDP (or several)
+    jobs = eval(Meta.parse(ARGS[2]))
+    pmap(jobs) do i
+        m = deserialize("$base_path/mdps/$i")
+        id = string(hash(m); base=62)
+        if isfile("$base_path/V/$id")
+            println("This MDP has already been solved.")
+            exit()
+        end
+        println("Begin solving MDP $i with cost ", m.cost); flush(stdout)
 
-    println("Begin solving MDP $i with cost ", round(m.cost; digits=1)); flush(stdout)
-
-    hasher = @isdefined(HASH_FUNCTION) ? eval(HASH_FUNCTION) : default_hash
-    println("hash function: ", hasher); flush(stdout)
-    V = ValueFunction(m, hasher)
-    @time v = V(initial_belief(m))
-    println("Value of initial state is ", v)
-    id = string(hash(m))
-    serialize("$base_path/V/$id", V)
+        V = ValueFunction(m)
+        @time v = V(initial_belief(m))
+        println("Value of initial state is ", v)
+        serialize("$base_path/V/$id", V)
+    end
 end

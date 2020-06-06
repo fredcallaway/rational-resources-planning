@@ -2,6 +2,7 @@ using Distributed
 if myid() == 1  # only run on the master process
     conf = ARGS[1]
     @everywhere begin
+        include("utils.jl")
         conf = $conf
         include("conf/$conf.jl")
         base_path = "tmp/$EXPERIMENT"

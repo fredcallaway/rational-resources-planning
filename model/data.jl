@@ -3,6 +3,8 @@ using JSON
 using SplitApplyCombine
 using Memoize
 
+include("reward_structures.jl")
+
 struct Trial
     m::MetaMDP  # Note: cost must be NaN
     wid::String
@@ -31,112 +33,55 @@ Base.hash(t::Datum, h::UInt64) = hash_struct(t, h)
 # Base.:(==)(x1::Datum, x2::Datum) = struct_equal(x2, x2)
 
 
-function parse_graph(t)
-    if haskey(t, "graph")
-        g = t["graph"]
-        if g isa String
-            return tree(parse.(Int, collect(g)))
-        end
-        return map(g) do children
-            Int.(children .+ 1)
-        end
+function make_mdp(map_name::String)
+    if startswith(map_name, "fantasy")
+        error("TODO")
+            # min_reward = -300
     else
-        edges = map(t["edges"]) do (x, y)
-            Int(x) + 1, Int(y) + 1
-        end
-        n_node = maximum(flatten(edges))
-        graph = [Int[] for _ in 1:n_node]
-        for (a, b) in edges
-            push!(graph[a], b)
-        end
-        graph
+        branching, variance = split(map_name, "-")
+        g = tree(parse.(Int, collect(branching)))
+        MetaMDP(g, make_rewards(g, variance), NaN, -Inf, EXPAND_ONLY)
     end
 end
 
-# These functions are used to link a trial with the
-# corresponding MetaMDP
-function identify(m::MetaMDP)
-    rs = m.rewards
-    r2 = maximum(rs[2])
-    r3 = maximum(rs[3])
-    structure = r2 < r3 ? "increasing" : (r2 > r3 ? "decreasing" : "constant")
-    m.graph, structure
-end
 
-# function identify(t::Trial)
-#     structure = if startswith(t.map, "fantasy")
-#         "constant"
+# function parse_graph(t)
+#     if haskey(t, "graph")
+#         g = t["graph"]
+#         if g isa String
+#             return tree(parse.(Int, collect(g)))
+#         end
+#         return map(g) do children
+#             Int.(children .+ 1)
+#         end
 #     else
-#         split(t.map, "-")[2]
+#         edges = map(t["edges"]) do (x, y)
+#             Int(x) + 1, Int(y) + 1
+#         end
+#         n_node = maximum(flatten(edges))
+#         graph = [Int[] for _ in 1:n_node]
+#         for (a, b) in edges
+#             push!(graph[a], b)
+#         end
+#         graph
 #     end
-#     t.graph, structure
 # end
 
-function reward_distributions(reward_structure, graph)
-    if reward_structure == "constant"
-        d = DiscreteNonParametric([-10., -5, 5, 10])
-        return repeat([d], length(graph))
-    elseif reward_structure == "decreasing"
-        dists = [
-            [0.],
-            [-48, -24, 24, 48],
-            [-8, -4, 4, 8],
-            [-4.0, -2.0, 2.0, 4.0],
-            [-4.0, -2.0, 2.0, 4.0],
-            [-48, -24, 24, 48],
-            [-8, -4, 4, 8],
-            [-4.0, -2.0, 2.0, 4.0],
-            [-4.0, -2.0, 2.0, 4.0],
-            [-48, -24, 24, 48],
-            [-8, -4, 4, 8],
-            [-4.0, -2.0, 2.0, 4.0],
-            [-4.0, -2.0, 2.0, 4.0]
-        ]
-        DiscreteNonParametric.(dists)
-    elseif reward_structure == "increasing"
-        dists = [
-            [0.],
-            [-4.0, -2.0, 2.0, 4.0],
-            [-8, -4, 4, 8],
-            [-48, -24, 24, 48],
-            [-48, -24, 24, 48],
-            [-4.0, -2.0, 2.0, 4.0],
-            [-8, -4, 4, 8],
-            [-48, -24, 24, 48],
-            [-48, -24, 24, 48],
-            [-4.0, -2.0, 2.0, 4.0],
-            [-8, -4, 4, 8],
-            [-48, -24, 24, 48],
-            [-48, -24, 24, 48]
-        ]
-        DiscreteNonParametric.(dists)
-    elseif reward_structure == "roadtrip"
-        d = DiscreteNonParametric(Float64[-100, -50, -35, -25])
-        rewards = repeat([d], length(graph))
-        destination = findfirst(isempty, graph)
-        rewards[destination] = DiscreteNonParametric([0.])
-        return rewards
-    else
-        error("Invalid reward_structure: $reward_structure")
-    end
-end
+# get_reward_structure(map) = startswith(map, "fantasy") ? "roadtrip" : split(map, "-")[end]
 
-get_reward_structure(map) = startswith(map, "fantasy") ? "roadtrip" : split(map, "-")[end]
-
-@memoize Dict function make_meta_mdp(graph, rstruct, cost)
-    min_reward = rstruct == "roadtrip" ? -300 : -Inf
-    rewards = reward_distributions(rstruct, graph)
-    MetaMDP(graph, rewards, cost, min_reward, EXPAND_ONLY)
-end
+# @memoize Dict function make_meta_mdp(graph, rstruct, cost)
+#     min_reward = rstruct == "roadtrip" ? -300 : -Inf
+#     rewards = reward_distributions(rstruct, graph)
+#     MetaMDP(graph, rewards, cost, min_reward, EXPAND_ONLY)
+# end
 
 function Trial(wid::String, t::Dict{String,Any})
-    graph = parse_graph(t)
+    m = make_mdp(t["map"])
+    # graph = parse_graph(t)
 
     bs = Belief[]
     cs = Int[]
-
-    b = fill(NaN, length(graph))
-    b[1] = 0.
+    b = initial_belief(m)
 
     for (c, value) in t["reveals"]
         c += 1  # 0->1 indexing
@@ -147,7 +92,7 @@ function Trial(wid::String, t::Dict{String,Any})
         # value is known to be 0 (it is irrelevant to the decision).
         # it actually shouldn't be allowed in the experiment...
         if c != 1
-            if get_reward_structure(t["map"]) == "roadtrip"  # road trip experiment uses units of cost
+            if startswith(t["map"], "fantasy")  # road trip experiment uses units of cost
                 value *= -1
             end
             b[c] = value
@@ -157,10 +102,7 @@ function Trial(wid::String, t::Dict{String,Any})
     push!(cs, TERM)
     path = Int.(t["route"] .+ 1)[2:end]
     rts = [x == nothing ? NaN : float(x) for x in t["rts"]]
-
-    m = make_meta_mdp(graph, get_reward_structure(t["map"]), NaN)
-
-    Trial(m, wid, bs, cs, t["score"], rts, path)
+    Trial(m, wid, bs, cs, get(t, "score", NaN), rts, path)
 end
 
 # this is memoized for the sake of future memoization based on object ID

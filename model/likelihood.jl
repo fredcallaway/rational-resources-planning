@@ -65,8 +65,10 @@ function logp(L::Likelihood, model::M)::T where M <: AbstractModel{T} where T <:
     end
     total
 end
+# %% --------
 
-function Distributions.fit(::Type{M}, trials::Vector{Trial}; space=default_space(M), 
+
+@everywhere function Distributions.fit(::Type{M}, trials::Vector{Trial}; space=default_space(M), 
         x0=nothing, n_restart=20, progress=false) where M <: AbstractModel
     lower, upper = bounds(space)
 
@@ -82,11 +84,22 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; space=default_space
         x0s = [next!(seq) for i in 1:n_restart]
     end
 
+    function opt_helper(x0, z; kws...)
+        optimize(lower, upper, x0, algo, options; kws...) do x
+            model = create_model(M, x, z, space)
+            -logp(L, model)
+        end
+    end
+
     models, losses = map(combinations(space)) do z
         map(x0s) do x0
-            opt = optimize(lower, upper, x0, algo, options, autodiff=:forward) do x
-                model = create_model(M, x, z, space)
-                -logp(L, model)
+            opt = try
+                opt_helper(x0, z; autodiff=:forward)
+            catch err
+                # fall back on numerical gradient when autograd fails
+                (err isa ArgumentError && err.msg == "Value and slope at step length = 0 must be finite.") || rethrow(err)
+                @warn("Automatic differentation failed while fitting $M to $(trials[1].wid)")
+                opt_helper(x0, z)
             end
             @debug "Optimization" opt.time_run opt.iterations opt.f_calls
             progress && print(".")
@@ -97,7 +110,6 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; space=default_space
     progress && println("")
     models[i], losses[i]
 end
-
 
 
 

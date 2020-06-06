@@ -27,9 +27,11 @@ end
 
 function make_mdp(factor, mult)
     g = tree([4,1,2])
-    if factor < 1
-         mult *= factor ^ -(length(paths(g)[1]) - 1)
-     end
+    if factor == 1
+        mult *= 5
+    elseif factor < 1
+        mult *= factor ^ -(length(paths(g)[1]) - 1)
+    end
     rewards = make_rewards(g, float(mult), factor)
     MetaMDP(g, rewards, 0., -Inf, true)
 end

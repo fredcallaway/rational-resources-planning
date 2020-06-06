@@ -30,6 +30,11 @@ end
 
 Base.show(io::IO, m::MetaMDP) = print(io, "M")
 
+function MetaMDP(g::Graph, reward::Distribution, cost::Float64, min_reward::Float64, expand_only::Bool)
+    rewards = repeat([reward], length(g))
+    MetaMDP(g, rewards, cost, min_reward, expand_only)
+end
+
 function MetaMDP(g::Graph, rdist::Distribution, cost::Float64; kws...)
     rewards = repeat([rdist], length(g))
     MetaMDP(graph=g, rewards=rewards, cost=cost; kws...)
@@ -40,6 +45,7 @@ function Base.hash(m::MetaMDP, h::UInt64)
         if x == -Inf
             x = "-Inf"  # hash(Inf) varies by machine!
         end
+
         hash(x, acc)
     end
 end
@@ -186,11 +192,6 @@ function hash_312(m::MetaMDP, b::Belief)
     hash(hash(b[6]) + hash(b[7]) >> 1, hash(b[8]) + hash(b[9])) +
     hash(hash(b[10]) + hash(b[11]) >> 1, hash(b[12]) + hash(b[13]))
 end
-# function hash_312(m::MetaMDP, b::Belief)
-#     hash(hash(b[2]) + hash(b[3]), hash(b[4]) + hash(b[5])) +
-#     hash(hash(b[6]) + hash(b[7]), hash(b[8]) + hash(b[9])) +
-#     hash(hash(b[10]) + hash(b[11]), hash(b[12]) + hash(b[13]))
-# end
 
 function hash_412(m::MetaMDP, b::Belief)
     hash(hash(b[2]) + hash(b[3]) >> 1, hash(b[4]) + hash(b[5])) +
@@ -199,10 +200,31 @@ function hash_412(m::MetaMDP, b::Belief)
     hash(hash(b[14]) + hash(b[15]) >> 1, hash(b[16]) + hash(b[17]))
 end
 
+function hash_412_iid(m::MetaMDP, b::Belief)
+    hash(hash(b[2]) + hash(b[3]), hash(b[4]) + hash(b[5])) +
+    hash(hash(b[6]) + hash(b[7]), hash(b[8]) + hash(b[9])) +
+    hash(hash(b[10]) + hash(b[11]), hash(b[12]) + hash(b[13])) +
+    hash(hash(b[14]) + hash(b[15]), hash(b[16]) + hash(b[17]))
+end
+
 default_hash(m::MetaMDP, b::Belief) = hash(b)
 
+function choose_hash(m::MetaMDP)
+    if m.graph == [[2, 6, 10], [3], [4, 5], [], [], [7], [8, 9], [], [], [11], [12, 13], [], []]
+        hash_312
+    elseif m.graph == [[2, 6, 10, 14], [3], [4, 5], [], [], [7], [8, 9], [], [], [11], [12, 13], [], [], [15], [16, 17], [], []]
+        if m.rewards[2] == m.rewards[3]
+            hash_412_iid
+        else
+            hash_412
+        end
+    else
+        symmetry_breaking_hash
+    end
+end
+
 ValueFunction(m::MetaMDP, h) = ValueFunction(m, h, Dict{UInt64, Float64}())
-ValueFunction(m::MetaMDP) = ValueFunction(m, default_hash)
+ValueFunction(m::MetaMDP) = ValueFunction(m, choose_hash(m))
 
 function Q(V::ValueFunction, b::Belief, c::Int)::Float64
     c == 0 && return term_reward(V.m, b)
@@ -249,6 +271,12 @@ function Base.show(io::IO, v::ValueFunction)
     print(io, "V")
 end
 
+function solve(m::MetaMDP)
+    V = ValueFunction(m)
+    V(initial_belief(m))
+    V
+end
+
 
 # ========== Policy ========== #
 
@@ -264,6 +292,18 @@ OptimalPolicy(V::ValueFunction) = OptimalPolicy(V.m, V)
 (pol::OptimalPolicy)(b::Belief) = begin
     argmax(noisy([Q(pol.V, b, c) for c in 0:length(b)])) - 1
 end
+
+struct SoftOptimalPolicy <: Policy
+    m::MetaMDP
+    V::ValueFunction
+    β::Float64
+end
+SoftOptimalPolicy(V::ValueFunction, β::Float64) = SoftOptimalPolicy(V.m, V, β)
+function (pol::SoftOptimalPolicy)(b::Belief)
+    p = softmax!(pol.β .* Q(pol.V, b))
+    rand(Categorical(p)) - 1
+end
+
 
 struct RandomPolicy <: Policy
     m::MetaMDP

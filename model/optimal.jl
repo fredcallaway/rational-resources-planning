@@ -30,7 +30,7 @@ end
 if isfile("$base_path/Q_table")
     const Q_TABLE = deserialize("$base_path/Q_table")
 else
-    @warn "No file $base_path/Q_table. Can't fit Optimal model"
+    myid() == 1 && @warn "No file $base_path/Q_table. Can't fit Optimal model"
 end
 features(::Type{Optimal{T}}, d::Datum) where T = Q_TABLE[q_key(d)]
 
@@ -55,6 +55,7 @@ end
 
 # Use the Q table if you can
 function action_dist(model::Optimal{T}, d::Datum) where T
+    m = d.t.m
     possible = allowed(m, d.b)
     q = features(Optimal{Float64}, d)[model.cost]
     h = model.β * q
