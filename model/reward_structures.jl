@@ -29,6 +29,12 @@ function make_rewards(g::Graph, variance::AbstractString)
     make_rewards(g, float(mult), factor)
 end
 
+function variance_structure(m::MetaMDP)
+    v1 = var(m.rewards[2])
+    v2 = var(m.rewards[3])
+    v2 > v1 ? "increasing" : v2 < v1 ? "decreasing" : "constant"
+end
+
 # function reward_distributions(reward_structure, graph)
 #     if reward_structure == "constant"
 #         d = DiscreteNonParametric([-10., -5, 5, 10])

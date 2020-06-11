@@ -5,10 +5,14 @@ using StatsFuns: logistic
 abstract type ClassicalSearchModel{T} <: AbstractModel{T} end
 
 default_space(::Type{M}) where M <: ClassicalSearchModel = Space(
-    :β_term => (0, 3),
+    :β_sat => (0, 3),
+    :β_lead => (0, 3),
+    :β_depth => (0, 3),
     :β_click => (0, 3),
-    :θ_term => (0, MAX_THETA),
-    :ε => (0, 1)
+    :θ_sat => (0, MAX_THETA),
+    :θ_lead => (0, MAX_THETA),
+    :θ_depth => (0, 4),
+    :ε => (1e-3, 1)
 )
 
 function action_dist!(p::Vector{T}, model::M, phi::NamedTuple) where M <: ClassicalSearchModel{T} where T
@@ -20,7 +24,7 @@ function action_dist!(p::Vector{T}, model::M, phi::NamedTuple) where M <: Classi
 
     ε = model.ε
     p_rand = ε / (1+length(phi.click_options))
-    p_term = logistic(model.β_term * (phi.term_value - model.θ_term))
+    p_term = termination_probability(model, phi)
     p[1] = p_rand + (1-ε) * p_term
 
     p_clicks = phi.tmp  # use pre-allocated array
@@ -44,19 +48,53 @@ function features(::Type{M}, m::MetaMDP, b::Belief) where M <: ClassicalSearchMo
     possible = allowed(m, b)[2:end]
     click_values = np[possible]
     (
-        term_value = term_value(M, m, b),
+        term_features(m, b)...,
         click_options = findall(possible),
         click_values = click_values,
-        tmp = zeros(T, length(click_values)),
+        tmp = zeros(T, length(click_values)),  # pre-allocate for use in action_dist!
     )
 end
 
-# function term_prob(model::M, phi::NamedTuple)::T where M <: ClassicalSearchModel{T} where T
-    # logistic(model.β_term * (phi.term_value - model.θ_term))
-# end
+function logp(L::Likelihood, model::M)::T where M <: ClassicalSearchModel{T} where T
+    phi = memo_map(L) do d
+        features(M, d)
+    end
 
-function term_value(::Type{M}, m::MetaMDP, b::Belief) where M <: ClassicalSearchModel{T} where T
-    best_lead(m, b)
+    tmp = zeros(T, n_action(L))
+    total = zero(T)
+    for i in eachindex(L.data)
+        a = L.data[i].c + 1
+        p = action_dist!(tmp, model, phi[i])
+        @assert sum(p) ≈ 1
+        total += log(p[a])
+    end
+    total
+end
+
+
+# ---------- Stopping rule---------- #
+
+function termination_probability(model, phi)
+    v = model.β_sat * (phi.term_reward - model.θ_sat) +
+        model.β_lead * (phi.best_lead - model.θ_lead) +
+        model.β_depth * (phi.min_depth - model.θ_depth)
+    logistic(v)
+end
+
+function term_features(m::MetaMDP, b::Belief)
+    (
+        term_reward = term_reward(m, b),
+        best_lead = best_lead(m, b),
+        min_depth = min_depth(m, b)
+    )
+end
+
+function min_depth(m::MetaMDP, b::Belief)
+    nd = node_depths(m.graph)
+    # minimum(nd[c] for c in 1:length(b) if allowed(m, b, c))  # do this but handle fully revealed case
+    mapreduce(min, 1:length(b); init=Inf) do c
+        allowed(m, b, c) ? nd[c] : Inf
+    end
 end
 
 "How much better is the best path from its competitors?"
@@ -82,29 +120,17 @@ function best_lead(m, b)
     pvals[best] - competing_value
 end
 
-function logp(L::Likelihood, model::M)::T where M <: ClassicalSearchModel{T} where T
-    phi = memo_map(L) do d
-        features(M, d)
-    end
-
-    tmp = zeros(T, n_action(L))
-    total = zero(T)
-    for i in eachindex(L.data)
-        a = L.data[i].c + 1
-        p = action_dist!(tmp, model, phi[i])
-        @assert sum(p) ≈ 1
-        total += log(p[a])
-    end
-    total
-end
-
 # ---------- Specific search orders ---------- #
 
 
 struct BestFirst{T} <: ClassicalSearchModel{T}
-    β_term::T
+    β_sat::T
+    β_lead::T
+    β_depth::T
     β_click::T
-    θ_term::T
+    θ_sat::T
+    θ_lead::T
+    θ_depth::T
     ε::T
 end
 
@@ -122,9 +148,13 @@ end
 
 
 struct DepthFirst{T} <: ClassicalSearchModel{T}
-    β_term::T
+    β_sat::T
+    β_lead::T
+    β_depth::T
     β_click::T
-    θ_term::T
+    θ_sat::T
+    θ_lead::T
+    θ_depth::T
     ε::T
 end
 
@@ -141,14 +171,18 @@ function node_depths(g::Graph)
 end
 
 function node_preference(::Type{DepthFirst{T}}, m::MetaMDP, b::Belief) where T
-    node_depths(m.graph)
+    node_depths(m.graph) .* 10
 end
 
 
 struct BreadthFirst{T} <: ClassicalSearchModel{T}
-    β_term::T
+    β_sat::T
+    β_lead::T
+    β_depth::T
     β_click::T
-    θ_term::T
+    θ_sat::T
+    θ_lead::T
+    θ_depth::T
     ε::T
 end
 
@@ -163,11 +197,3 @@ function term_value(::Type{M}, m::MetaMDP, b::Belief) where M <: BreadthFirst{T}
         allowed(m, b, c) ? nd[c] : Inf
     end
 end
-
-default_space(::Type{M}) where M <: BreadthFirst = Space(
-    :β_term => (0, 5),
-    :β_click => (0, 30),
-    :θ_term => (0, 4),
-    :ε => (0, 1)
-)
-

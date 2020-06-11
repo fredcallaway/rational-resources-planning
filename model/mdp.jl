@@ -29,6 +29,7 @@ using DataStructures
 end
 
 Base.show(io::IO, m::MetaMDP) = print(io, "M")
+id(m::MetaMDP) = string(hash(m); base=62)
 
 function MetaMDP(g::Graph, reward::Distribution, cost::Float64, min_reward::Float64, expand_only::Bool)
     rewards = repeat([reward], length(g))

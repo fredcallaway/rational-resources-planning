@@ -67,8 +67,7 @@ function logp(L::Likelihood, model::M)::T where M <: AbstractModel{T} where T <:
 end
 # %% --------
 
-
-@everywhere function Distributions.fit(::Type{M}, trials::Vector{Trial}; space=default_space(M), 
+function Distributions.fit(::Type{M}, trials::Vector{Trial}; space=default_space(M), 
         x0=nothing, n_restart=20, progress=false) where M <: AbstractModel
     lower, upper = bounds(space)
 
@@ -87,7 +86,8 @@ end
     function opt_helper(x0, z; kws...)
         optimize(lower, upper, x0, algo, options; kws...) do x
             model = create_model(M, x, z, space)
-            -logp(L, model)
+            L1 = sum(abs.(x) ./ upper) 
+            -logp(L, model) + 0.1 * L1
         end
     end
 
@@ -103,7 +103,8 @@ end
             end
             @debug "Optimization" opt.time_run opt.iterations opt.f_calls
             progress && print(".")
-            create_model(M, opt.minimizer, z, space), opt.minimum
+            model = create_model(M, opt.minimizer, z, space)
+            model, -logp(L, model)
         end
     end |> flatten |> invert
     i = argmin(losses)

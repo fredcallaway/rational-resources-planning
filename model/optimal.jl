@@ -44,12 +44,13 @@ end
 
 
 @memoize function load_V(mid::String)
-    println("Loading value function: $mid")
+    println("Loading value function: $mid"); flush(stdout)
     deserialize("$base_path/V/$mid")
 end
 
 function get_q(m::MetaMDP, b::Belief)
-    V = load_V(string(hash(m)))
+    mid = string(hash(m); base=62)
+    V = load_V(mid)
     Q(V, b)
 end
 

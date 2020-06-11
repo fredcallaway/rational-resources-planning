@@ -1,7 +1,7 @@
 using Distributed
 @everywhere include("base.jl")
 
-function sbatch_script(n, minutes, memory)
+function sbatch_script(n; minutes=30, memory=3000)
     """
     #!/usr/bin/env bash
     #SBATCH --job-name=solve
@@ -48,7 +48,7 @@ if ARGS[2] == "setup"
             (minutes=30, memory=3000)
         end
 
-        write(f, sbatch_script(length(all_mdps)), kws...)
+        write(f, sbatch_script(length(all_mdps); kws...))
     end
     open("solve.sh", "w") do f
         write(f, bash_script(length(all_mdps)))
