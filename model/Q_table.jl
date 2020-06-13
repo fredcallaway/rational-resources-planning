@@ -11,6 +11,7 @@ function make_Q_table(data)
         cost = vs[1].m.cost
         @assert all(v.m.cost == cost for v in vs)
         value_functions = Dict(v.m => v for v in vs)
+        println("Processing cost: $cost")
 
         map(data) do d
             V = value_functions[mutate(d.t.m, cost=cost)]

@@ -67,11 +67,28 @@ function logp(L::Likelihood, model::M)::T where M <: AbstractModel{T} where T <:
 end
 # %% --------
 
+
+function print_tracked(x)
+    if x[1] isa Float64
+        xx = x
+    else
+        xx = getfield.(x, :value)
+    end
+    println(round.(xx; sigdigits=6))
+end
+
 function Distributions.fit(::Type{M}, trials::Vector{Trial}; space=default_space(M), 
         x0=nothing, n_restart=20, progress=false) where M <: AbstractModel
     lower, upper = bounds(space)
+    space_size = upper .- lower
+    @assert all(space_size .> 0)
 
-    algo = Fminbox(LBFGS())
+    algorithms = [
+        Fminbox(LBFGS()),
+        Fminbox(LBFGS(linesearch=Optim.LineSearches.BackTracking())),
+    ] |> Iterators.cycle |> Iterators.Stateful
+    algo = first(algorithms)
+    
     options = Optim.Options()
     L = Likelihood(trials)
 
@@ -83,30 +100,52 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; space=default_space
         x0s = [next!(seq) for i in 1:n_restart]
     end
 
-    function opt_helper(x0, z; kws...)
-        optimize(lower, upper, x0, algo, options; kws...) do x
+    # function opt_helper(x0, z; kws...)
+        # optimize(lower, upper, x0, algo, options; kws...) do x
+        #     model = create_model(M, x, z, space)
+        #     L1 = sum(abs.(x) ./ space_size)
+        #     loss = -logp(L, model) + 0.1 * L1
+        #     # print_tracked(x)
+        #     # print("   "); print_tracked(loss)
+        #     loss
+        # end
+    # end
+
+    function make_loss(z)
+        x -> begin
+            print_tracked(x)
             model = create_model(M, x, z, space)
-            L1 = sum(abs.(x) ./ upper) 
+            L1 = sum(abs.(x) ./ space_size)
             -logp(L, model) + 0.1 * L1
         end
     end
 
+    # (err isa ArgumentError && err.msg == "Value and slope at step length = 0 must be finite.") || rethrow(err)
+
     models, losses = map(combinations(space)) do z
+        loss = make_loss(z)
         map(x0s) do x0
             opt = try
-                opt_helper(x0, z; autodiff=:forward)
+                optimize(loss, lower, upper, x0, algo, options, autodiff=:forward)
             catch err
-                # fall back on numerical gradient when autograd fails
-                (err isa ArgumentError && err.msg == "Value and slope at step length = 0 must be finite.") || rethrow(err)
-                @warn("Automatic differentation failed while fitting $M to $(trials[1].wid)")
-                opt_helper(x0, z)
+                err isa InterruptException && rethrow(err)
+                @warn("First attempt failed fitting $M to $(trials[1].wid)", err)
+                # try the other line search method
+                algo = first(algorithms)  # this cycles
+                try
+                    optimize(loss, lower, upper, x0, algo, options, autodiff=:forward)
+                catch err
+                    err isa InterruptException && rethrow(err)
+                    @error("Second attempt failed fitting $M to $(trials[1].wid)", err)
+                    return missing
+                end
             end
             @debug "Optimization" opt.time_run opt.iterations opt.f_calls
             progress && print(".")
             model = create_model(M, opt.minimizer, z, space)
             model, -logp(L, model)
         end
-    end |> flatten |> invert
+    end |> flatten |> skipmissing |> collect |> invert
     i = argmin(losses)
     progress && println("")
     models[i], losses[i]

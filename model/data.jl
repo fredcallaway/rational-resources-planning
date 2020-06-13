@@ -124,6 +124,7 @@ end
 # function load_params(experiment)::DataFrame
 #     x = open(JSON.parse, "../data/$experiment/params.json")
 #     DataFrame(map(namedtuple, x))
+
 # end
 
 @memoize function load_trials(experiment)::Dict{String,Vector{Trial}}

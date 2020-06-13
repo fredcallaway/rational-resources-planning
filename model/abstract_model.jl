@@ -10,10 +10,10 @@ function create_model(::Type{M}, x::Vector{T}, z, space::Space) where M where T
         elseif spec isa Vector
             first(zs)
         else
-            spec
+            T(spec)
         end
     end
-    M(args...)
+    M{T}(args...)
 end
 
 features(::Type{T}, d::Datum) where T <: AbstractModel = features(T, d.t.m, d.b)

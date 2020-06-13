@@ -2,42 +2,38 @@ using StatsFuns: logistic
 
 # ---------- Base code for all heuristic models ---------- #
 
-struct HeuristicModel{T} <: AbstractModel{T}
+struct Heuristic{H,T} <: AbstractModel{T}
     # Selection rule weights
-    β_best::Union{Float64,T}
-    β_depth::Union{Float64,T}
+    β_best::T
+    β_depth::T
     # Stopping rule weights
-    β_satisfice::Union{Float64,T}
-    β_best_next::Union{Float64,T}
-    β_depth_limit::Union{Float64,T}
+    β_satisfice::T
+    β_best_next::T
+    β_depth_limit::T
     # Stopping rule thresholds
-    θ_satisfice::Union{Float64,T}
-    θ_best_next::Union{Float64,T}
-    θ_depth_limit::Union{Float64,T}
+    θ_satisfice::T
+    θ_best_next::T
+    θ_depth_limit::T
     # Lapse rate
-    ε::Union{Float64,T}
+    ε::T
 end
 
-function HeuristicModel(a::Float64, b::Float64, c::Float64, d::Float64, e::Float64, f::Float64, g::Float64, h::Float64, i::Float64)
-    HeuristicModel{Float64}(a,b,c,d,e,f,g,h,i)
+Base.show(io::IO, model::Heuristic{H,T}) where {H, T} = print(io, "Heuristic{:$H}(...)")
+function Base.display(model::Heuristic{H,T}) where {H, T}
+    println("--------- Heuristic{:$H} ---------")
+    space = default_space(Heuristic{H})
+    for k in fieldnames(Heuristic)
+        print("  ", lpad(k, 14), " = ")
+        if length(space[k]) == 1
+            println("(", space[k], ")")
+        else
+            println(round(getfield(model, k); sigdigits=3))
+        end
+            
+    end
 end
 
-default_space(::Type{M}) where M <: HeuristicModel = Space(
-    :β_best => (1e-6, 3),
-    :β_depth => (-3, 3),
-
-    :β_satisfice => (1e-6, 3),
-    :β_best_next => (1e-6, 3),
-    :β_depth_limit => (1e-6, 3),
-
-    :θ_satisfice => (0, MAX_THETA),
-    :θ_best_next => (0, MAX_THETA),
-    :θ_depth_limit => (0, 4),
-
-    :ε => (1e-3, 1)
-)
-
-function action_dist!(p::Vector{T}, model::HeuristicModel{T}, φ::NamedTuple) where T
+function action_dist!(p::Vector{T}, model::Heuristic{H,T}, φ::NamedTuple) where {H, T}
     p .= 0.
     if length(φ.frontier) == 0
         p[1] = 1.
@@ -58,13 +54,13 @@ function action_dist!(p::Vector{T}, model::HeuristicModel{T}, φ::NamedTuple) wh
     p
 end
 
-function action_dist(model::HeuristicModel{T}, m::MetaMDP, b::Belief) where T
+function action_dist(model::Heuristic{H,T}, m::MetaMDP, b::Belief) where {H, T}
     φ = features(m, b)
     p = zeros(T, length(b) + 1)
     action_dist!(p, model, φ)
 end
 
-function features(::Type{HeuristicModel{T}}, m::MetaMDP, b::Belief) where T
+function features(::Type{Heuristic{H,T}}, m::MetaMDP, b::Belief) where {H, T}
     frontier = findall(1:length(b)) do i
         allowed(m, b, i)
     end
@@ -79,9 +75,9 @@ function features(::Type{HeuristicModel{T}}, m::MetaMDP, b::Belief) where T
     )
 end
 
-function logp(L::Likelihood, model::HeuristicModel{T}) where T
+function logp(L::Likelihood, model::Heuristic{H,T}) where {H, T}
     φ = memo_map(L) do d
-        features(HeuristicModel{T}, d.t.m, d.b)
+        features(Heuristic{H,T}, d.t.m, d.b)
     end
 
     tmp = zeros(T, n_action(L))
@@ -89,12 +85,55 @@ function logp(L::Likelihood, model::HeuristicModel{T}) where T
     for i in eachindex(L.data)
         a = L.data[i].c + 1
         p = action_dist!(tmp, model, φ[i])
+        if !(sum(p) ≈ 1)
+            println("\n\n")
+            display(model)
+            println("\n\n")
+        end
         @assert sum(p) ≈ 1
         total += log(p[a])
     end
     total
 end
 
+# ---------- Define parameter ranges and special cases ---------- #
+
+default_space(::Type{Heuristic{:Full}}) = Space(
+    :β_best => (1e-6, 3),
+    :β_depth => (-3, 3),
+
+    :β_satisfice => (1e-6, 3),
+    :β_best_next => (1e-6, 3),
+    :β_depth_limit => (1e-6, 3),
+
+    :θ_satisfice => (0, MAX_THETA),
+    :θ_best_next => (0, MAX_THETA),
+    :θ_depth_limit => (0, 4),
+
+    :ε => (1e-3, 1)
+)
+
+function _modify(base; kws...)
+    space = default_space(Heuristic{base})
+    for (k,v) in kws
+        space[k] = v
+    end
+    space
+end
+
+default_space(::Type{Heuristic{:BestFirst}}) = _modify(:Full, β_depth=0)
+default_space(::Type{Heuristic{:DepthFirst}}) = _modify(:Full, β_best=0, β_depth=(0, 3))
+default_space(::Type{Heuristic{:BreadthFirst}}) = _modify(:Full, β_best=0, β_depth=(-3, 0))
+
+default_space(::Type{Heuristic{:BestFirstNoSatisfice}}) = _modify(:BestFirst, β_satisfice=0, θ_satisfice=0)
+default_space(::Type{Heuristic{:BestFirstNoBestNext}}) = _modify(:BestFirst, β_best_next=0, θ_best_next=0)
+default_space(::Type{Heuristic{:BestFirstNoDepthLimit}}) = _modify(:BestFirst, β_depth_limit=0, θ_depth_limit=0)
+
+default_space(::Type{Heuristic{:FullNoSatisfice}}) = _modify(:Full, β_satisfice=0, θ_satisfice=0)
+default_space(::Type{Heuristic{:FullNoBestNext}}) = _modify(:Full, β_best_next=0, θ_best_next=0)
+default_space(::Type{Heuristic{:FullNoDepthLimit}}) = _modify(:Full, β_depth_limit=0, θ_depth_limit=0)
+
+default_space(::Type{Heuristic{:Foobar}}) = _modify(:Full, θ_depth_limit=0, θ_satisfice=0)
 
 # ---------- Selection rule ---------- #
 
@@ -140,7 +179,7 @@ function termination_probability(model, φ)
 end
 
 function min_depth(m::MetaMDP, b::Belief)
-    nd = node_depths(m.graph)
+    nd = node_depths(m)
     # minimum(nd[c] for c in 1:length(b) if allowed(m, b, c))  # do this but handle fully revealed case
     mapreduce(min, 1:length(b); init=Inf) do c
         allowed(m, b, c) ? nd[c] : Inf
@@ -169,3 +208,4 @@ function best_vs_next(m, b)
     
     pvals[best] - competing_value
 end
+

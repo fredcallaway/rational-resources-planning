@@ -1,5 +1,8 @@
 using Distributed
 if myid() == 1  # only run on the master process
+    if isempty(ARGS)
+        error("Must pass configuration name as first argument!")
+    end
     conf = ARGS[1]
     @everywhere begin
         include("utils.jl")

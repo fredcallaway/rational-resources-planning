@@ -1,5 +1,5 @@
-EXPERIMENT = "webofcash-1.4"
+EXPERIMENT = "webofcash"
 COSTS = [0:0.05:4; 100]
-MAX_THETA = 30
+MAX_THETA = 60
 EXPAND_ONLY = true
 FIT_BIAS = false
