@@ -31,32 +31,19 @@ function bash_script(n)
     """
 end
 
-if ARGS[2] == "setup"
+function write_mdps()
     flat_trials = flatten(values(load_trials(EXPERIMENT)));
     all_mdps = [mutate(t.m, cost=c) for t in flat_trials, c in COSTS] |> unique
     rm("$base_path/mdps"; force=true, recursive=true)
     mkpath("$base_path/mdps")
     mkpath("$base_path/V")
-
     for (i, m) in enumerate(all_mdps)
         serialize("$base_path/mdps/$i", m)
     end
-    open("solve.sbatch", "w") do f
-        kws = if startswith(EXPERIMENT, "webofcash-2")
-            (minutes=30, memory=10000)
-        else
-            (minutes=30, memory=3000)
-        end
+    all_mdps
+end
 
-        write(f, sbatch_script(length(all_mdps); kws...))
-    end
-    open("solve.sh", "w") do f
-        write(f, bash_script(length(all_mdps)))
-    end
-    println(length(all_mdps), " mdps to solve with solve.sbatch or solve.sh")
-
-else  # solve an MDP (or several)
-    jobs = eval(Meta.parse(ARGS[2]))
+function solve_mdps(jobs)
     pmap(jobs) do i
         m = deserialize("$base_path/mdps/$i")
         id = string(hash(m); base=62)
@@ -64,11 +51,44 @@ else  # solve an MDP (or several)
             println("This MDP has already been solved.")
             exit()
         end
-        println("Begin solving MDP $i with cost ", m.cost); flush(stdout)
 
         V = ValueFunction(m)
+        println("Begin solving MDP $i:  cost = $(m.cost),  hasher = $(V.hasher)"); flush(stdout)
         @time v = V(initial_belief(m))
         println("Value of initial state is ", v)
         serialize("$base_path/V/$id", V)
     end
+end
+
+function solve_mdps()
+    N = length(write_mdps())
+    println("Solving $N mdps.")
+    solve_mdps(1:N)
+end
+
+if basename(PROGRAM_FILE) == basename(@__FILE__)
+    if ARGS[2] == "setup"
+        write_mdps()
+        open("solve.sbatch", "w") do f
+            kws = if startswith(EXPERIMENT, "webofcash-2")
+                (minutes=30, memory=10000)
+            else
+                (minutes=30, memory=3000)
+            end
+
+            write(f, sbatch_script(length(all_mdps); kws...))
+        end
+        open("solve.sh", "w") do f
+            write(f, bash_script(length(all_mdps)))
+        end
+        println(length(all_mdps), " mdps to solve with solve.sbatch or solve.sh")
+    else  # solve an MDP (or several)
+        if ARGS[2] == "all"
+            solve_mdps()
+        else
+            solve_mdps(eval(Meta.parse(ARGS[2])))
+        end
+
+    end
+
 end

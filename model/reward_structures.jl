@@ -30,8 +30,9 @@ function make_rewards(g::Graph, variance::AbstractString)
 end
 
 function variance_structure(m::MetaMDP)
-    v1 = var(m.rewards[2])
-    v2 = var(m.rewards[3])
+    initial, final = paths(m)[1][[1, end]]
+    v1 = var(m.rewards[initial])
+    v2 = var(m.rewards[final])
     v2 > v1 ? "increasing" : v2 < v1 ? "decreasing" : "constant"
 end
 

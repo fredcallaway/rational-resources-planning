@@ -113,7 +113,6 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; space=default_space
 
     function make_loss(z)
         x -> begin
-            print_tracked(x)
             model = create_model(M, x, z, space)
             L1 = sum(abs.(x) ./ space_size)
             -logp(L, model) + 0.1 * L1
@@ -122,7 +121,7 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; space=default_space
 
     # (err isa ArgumentError && err.msg == "Value and slope at step length = 0 must be finite.") || rethrow(err)
 
-    models, losses = map(combinations(space)) do z
+    results = map(combinations(space)) do z
         loss = make_loss(z)
         map(x0s) do x0
             opt = try
@@ -145,7 +144,12 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; space=default_space
             model = create_model(M, opt.minimizer, z, space)
             model, -logp(L, model)
         end
-    end |> flatten |> skipmissing |> collect |> invert
+    end |> flatten |> skipmissing |> collect 
+    if isempty(results)
+        @error("Could not fit $M to $(trials[1].wid)", err)
+        error("Fitting error")
+    end
+    models, losses = invert(results)
     i = argmin(losses)
     progress && println("")
     models[i], losses[i]

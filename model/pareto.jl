@@ -1,4 +1,4 @@
-isempty(ARGS) && push!(ARGS, "exp2")
+isempty(ARGS) && push!(ARGS, "web")
 include("conf.jl")
 using Glob
 using Serialization
@@ -24,7 +24,7 @@ all_mdps = [mutate(t.m, cost=0.) for t in flat_trials] |> unique
 
 map(all_mdps) do m
     (mdp=id(m), variance=variance_structure(m))
-end |> CSV.write("$results_path/pareto/mdps.csv")
+end |> CSV.write("$results_path/mdps.csv")
 
 
 # %% ==================== Optimal ====================
@@ -32,13 +32,13 @@ end |> CSV.write("$results_path/pareto/mdps.csv")
 opt_pareto = pmap(Iterators.product(all_mdps, COSTS)) do (m, cost)
     V = deserialize("$base_path/V/$(id(mutate(m, cost=cost)))")
     pol = OptimalPolicy(m, V)
-    (model="Optimal", mdp=id(m), cost=V.m.cost..., mean_reward_clicks(pol)...)
+    (model="Optimal", mdp=id(m), cost=V.m.cost, mean_reward_clicks(pol)...)
 end
 opt_pareto = opt_pareto[:];
 sort!(opt_pareto, by=(x->x.cost))
 opt_pareto |> CSV.write("$results_path/pareto/Optimal.csv")
 
-# %% ====================  ====================
+# %% ==================== Heuristic ====================
 
 
 function sample_models(M, n)
@@ -54,10 +54,10 @@ function sample_models(M, n)
     end
 end
 
-function pareto_front(M, m; n_candidate=1000, n_eval=100000)
+function pareto_front(M, m; n_candidate=10000, n_eval=100000)
     candidates = pmap(sample_models(M, n_candidate)) do model
         mrc = mean_reward_clicks(Simulator(model, m), N=n_eval)
-        (model=string(typeof(model).name), mdp=id(m), namedtuple(model)..., mrc...)
+        (model=name(model), mdp=id(m), namedtuple(model)..., mrc...)
     end
     sort!(candidates, by=x->x.clicks)
     result = [candidates[1]]
@@ -69,20 +69,26 @@ function pareto_front(M, m; n_candidate=1000, n_eval=100000)
     result
 end
 
-for M in [BreadthFirst, DepthFirst, BestFirst]
+Hs = [:BestFirst, :BreadthFirst, :DepthFirst, 
+      :BestFirstNoBestNext, :BreadthFirstNoBestNext, :DepthFirstNoBestNext]
+
+for H in Hs[5:6]
+    M = Heuristic{H}
+    println("Making pareto front for ", name(M))
     mapmany(all_mdps) do m
         pareto_front(M, m)
-    end |> CSV.write("$results_path/pareto/$M.csv")
+    end |> CSV.write("$results_path/pareto/$(name(M)).csv")
 end
 
+# %% --------
 
+H = first(Hs)
+M = Heuristic{H}
+m = all_mdps[1]
 
-# pmap(Iterators.product(all_mdps, mods)) do (m, model)
-#     mean_reward_clicks(Simulator(model, m), N=1000)
-# end
-# X = ans
-
-
+models = sample_models(M, 2)
+rollout(Simulator(models[1], m))
+pareto_front(M, all_mdps[1])
 
 
 

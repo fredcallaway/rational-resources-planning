@@ -1,4 +1,5 @@
 function make_Q_table(data)
+    println("Creating Q_table")
     n = length(readdir("$base_path/mdps/"))
     X = reshape(1:n, :, length(COSTS))
 

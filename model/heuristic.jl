@@ -10,13 +10,17 @@ struct Heuristic{H,T} <: AbstractModel{T}
     β_satisfice::T
     β_best_next::T
     β_depth_limit::T
+    θ_term::T
     # Stopping rule thresholds
-    θ_satisfice::T
-    θ_best_next::T
-    θ_depth_limit::T
+    # θ_satisfice::T
+    # θ_best_next::T
+    # θ_depth_limit::T
     # Lapse rate
     ε::T
 end
+
+name(::Type{Heuristic{H}}) where H = string(H)
+name(::Type{Heuristic{H,T}}) where {H,T} = string(H)
 
 Base.show(io::IO, model::Heuristic{H,T}) where {H, T} = print(io, "Heuristic{:$H}(...)")
 function Base.display(model::Heuristic{H,T}) where {H, T}
@@ -55,7 +59,7 @@ function action_dist!(p::Vector{T}, model::Heuristic{H,T}, φ::NamedTuple) where
 end
 
 function action_dist(model::Heuristic{H,T}, m::MetaMDP, b::Belief) where {H, T}
-    φ = features(m, b)
+    φ = features(Heuristic{H,T}, m, b)
     p = zeros(T, length(b) + 1)
     action_dist!(p, model, φ)
 end
@@ -106,9 +110,10 @@ default_space(::Type{Heuristic{:Full}}) = Space(
     :β_best_next => (1e-6, 3),
     :β_depth_limit => (1e-6, 3),
 
-    :θ_satisfice => (0, MAX_THETA),
-    :θ_best_next => (0, MAX_THETA),
-    :θ_depth_limit => (0, 4),
+    :θ_term => (-30, 30),
+    # :θ_satisfice => (0, MAX_THETA),
+    # :θ_best_next => (0, MAX_THETA),
+    # :θ_depth_limit => (0, 4),
 
     :ε => (1e-3, 1)
 )
@@ -128,6 +133,14 @@ default_space(::Type{Heuristic{:BreadthFirst}}) = _modify(:Full, β_best=0, β_d
 default_space(::Type{Heuristic{:BestFirstNoSatisfice}}) = _modify(:BestFirst, β_satisfice=0, θ_satisfice=0)
 default_space(::Type{Heuristic{:BestFirstNoBestNext}}) = _modify(:BestFirst, β_best_next=0, θ_best_next=0)
 default_space(::Type{Heuristic{:BestFirstNoDepthLimit}}) = _modify(:BestFirst, β_depth_limit=0, θ_depth_limit=0)
+
+default_space(::Type{Heuristic{:BreadthFirstNoSatisfice}}) = _modify(:BreadthFirst, β_satisfice=0, θ_satisfice=0)
+default_space(::Type{Heuristic{:BreadthFirstNoBestNext}}) = _modify(:BreadthFirst, β_best_next=0, θ_best_next=0)
+default_space(::Type{Heuristic{:BreadthFirstNoDepthLimit}}) = _modify(:BreadthFirst, β_depth_limit=0, θ_depth_limit=0)
+
+default_space(::Type{Heuristic{:DepthFirstNoSatisfice}}) = _modify(:DepthFirst, β_satisfice=0, θ_satisfice=0)
+default_space(::Type{Heuristic{:DepthFirstNoBestNext}}) = _modify(:DepthFirst, β_best_next=0, θ_best_next=0)
+default_space(::Type{Heuristic{:DepthFirstNoDepthLimit}}) = _modify(:DepthFirst, β_depth_limit=0, θ_depth_limit=0)
 
 default_space(::Type{Heuristic{:FullNoSatisfice}}) = _modify(:Full, β_satisfice=0, θ_satisfice=0)
 default_space(::Type{Heuristic{:FullNoBestNext}}) = _modify(:Full, β_best_next=0, θ_best_next=0)
@@ -172,9 +185,13 @@ end
 # ---------- Stopping rule---------- #
 
 function termination_probability(model, φ)
-    v = model.β_satisfice * (φ.term_reward - model.θ_satisfice) +
-        model.β_best_next * (φ.best_vs_next - model.θ_best_next) +
-        model.β_depth_limit * (φ.min_depth - model.θ_depth_limit)
+    v = model.θ_term + 
+        model.β_satisfice * φ.term_reward +
+        model.β_best_next * φ.best_vs_next +
+        model.β_depth_limit * 10φ.min_depth  # put min_depth on the roughly the same scale as the others
+    # v = model.β_satisfice * (φ.term_reward - model.θ_satisfice) +
+    #     model.β_best_next * (φ.best_vs_next - model.θ_best_next) +
+    #     model.β_depth_limit * (φ.min_depth - model.θ_depth_limit)
     logistic(v)
 end
 

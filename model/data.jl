@@ -32,40 +32,33 @@ end
 Base.hash(t::Datum, h::UInt64) = hash_struct(t, h)
 # Base.:(==)(x1::Datum, x2::Datum) = struct_equal(x2, x2)
 
+is_roadtrip(t::Dict) = startswith(get(t, "map", ""), "fantasy")
 
-function make_mdp(map_name::String)
-    if startswith(map_name, "fantasy")
-        error("TODO")
-            # min_reward = -300
-    else
-        branching, variance = split(map_name, "-")
-        g = tree(parse.(Int, collect(branching)))
-        MetaMDP(g, make_rewards(g, variance), NaN, -Inf, EXPAND_ONLY)
-    end
+@memoize function get_mdp(t::Dict)
+    mdp_id = is_roadtrip(t) ? t["map"][13:end-4] : t["mdp"]
+    deserialize("mdps/$mdp_id")
+    # if startswith(mdp_id, "fantasy")
+    #     error("TODO")
+    #         # min_reward = -300
+    # else
+    #     branching, variance = split(map_name, "-")
+    #     g = tree(parse.(Int, collect(branching)))
+    #     MetaMDP(g, make_rewards(g, variance), NaN, -Inf, EXPAND_ONLY)
+    # end
 end
 
 
-# function parse_graph(t)
-#     if haskey(t, "graph")
-#         g = t["graph"]
-#         if g isa String
-#             return tree(parse.(Int, collect(g)))
-#         end
-#         return map(g) do children
-#             Int.(children .+ 1)
-#         end
-#     else
-#         edges = map(t["edges"]) do (x, y)
-#             Int(x) + 1, Int(y) + 1
-#         end
-#         n_node = maximum(flatten(edges))
-#         graph = [Int[] for _ in 1:n_node]
-#         for (a, b) in edges
-#             push!(graph[a], b)
-#         end
-#         graph
-#     end
-# end
+function parse_edges(t)
+    edges = map(t["edges"]) do (x, y)
+        Int(x) + 1, Int(y) + 1
+    end
+    n_node = maximum(flatten(edges))
+    graph = [Int[] for _ in 1:n_node]
+    for (a, b) in edges
+        push!(graph[a], b)
+    end
+    graph
+end
 
 # get_reward_structure(map) = startswith(map, "fantasy") ? "roadtrip" : split(map, "-")[end]
 
@@ -76,7 +69,7 @@ end
 # end
 
 function Trial(wid::String, t::Dict{String,Any})
-    m = make_mdp(t["map"])
+    m = get_mdp(t)
     # graph = parse_graph(t)
 
     bs = Belief[]
@@ -92,7 +85,7 @@ function Trial(wid::String, t::Dict{String,Any})
         # value is known to be 0 (it is irrelevant to the decision).
         # it actually shouldn't be allowed in the experiment...
         if c != 1
-            if startswith(t["map"], "fantasy")  # road trip experiment uses units of cost
+            if is_roadtrip(t)  # road trip experiment uses units of cost
                 value *= -1
             end
             b[c] = value

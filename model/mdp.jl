@@ -28,6 +28,13 @@ using DataStructures
     expand_only::Bool
 end
 
+import Base: ==
+==(c1::D, c2::D) where D<:DiscreteNonParametric =
+    (support(c1) == support(c2) || size(support(c1)) == size(support(c2)) && 
+        all(support(c1) .== support(c2))) &&
+    (probs(c1) == probs(c2) || all(probs(c1) .== probs(c2)))
+
+
 Base.show(io::IO, m::MetaMDP) = print(io, "M")
 id(m::MetaMDP) = string(hash(m); base=62)
 
@@ -208,6 +215,19 @@ function hash_412_iid(m::MetaMDP, b::Belief)
     hash(hash(b[14]) + hash(b[15]), hash(b[16]) + hash(b[17]))
 end
 
+function spiral_hasher(m, b)
+    acc = UInt64(0)
+    for pth in paths(m)
+        x = UInt64(0)
+        for i in pth
+            x += hash(b[i])
+        end
+        acc += hash(x)
+    end
+    acc
+end
+
+
 default_hash(m::MetaMDP, b::Belief) = hash(b)
 
 function choose_hash(m::MetaMDP)
@@ -219,6 +239,13 @@ function choose_hash(m::MetaMDP)
         else
             hash_412
         end
+    elseif all(length(children) <=1 for children in m.graph[2:end])
+        # Check that assumption of spiral_hasher holds. TODO provide alternative
+        all_unique(x) = x == unique(x)
+        @assert mapreduce(vcat, unique(m.rewards)) do r
+            r.support
+        end |> all_unique
+        spiral_hasher
     else
         symmetry_breaking_hash
     end
@@ -272,8 +299,8 @@ function Base.show(io::IO, v::ValueFunction)
     print(io, "V")
 end
 
-function solve(m::MetaMDP)
-    V = ValueFunction(m)
+function solve(m::MetaMDP, h=choose_hash(m))
+    V = ValueFunction(m, h)
     V(initial_belief(m))
     V
 end

@@ -4,10 +4,11 @@ using Glob
 using CSV
 using DataFrames
 
-isempty(ARGS) && push!(ARGS, "web")
+isempty(ARGS) && push!(ARGS, "exp2")
 include("conf.jl")
 @everywhere include("base.jl")
 
+# EXPERIMENT = "exp2.4"
 @everywhere results_path = "$results/$EXPERIMENT"
 mkpath(results_path)
 FOLDS = 5
@@ -19,14 +20,18 @@ flat_trials = flatten(values(all_trials));
 println(length(flat_trials), " trials")
 all_data = all_trials |> values |> flatten |> get_data;
 
-# %% ==================== Write Q table and load model code ====================
 
-# if !isfile("$base_path/Q_table")
-#     include("Q_table.jl")
-#     println("Creating Q_table")
-#     @time serialize("$base_path/Q_table", make_Q_table(all_data))
-#     println("Wrote $base_path/Q_table")
-# end
+# %% ==================== Solve MDPs and precompute Q lookup table ====================
+
+include("solve.jl")
+@time solve_mdps();
+
+include("Q_table.jl")
+@time serialize("$base_path/Q_table", make_Q_table(all_data));
+
+# %% ==================== Load model code ====================
+
+
 @everywhere include("models.jl")
 
 MODELS = [
@@ -35,34 +40,24 @@ MODELS = [
     Heuristic{:BestFirst},
     Heuristic{:DepthFirst},
     Heuristic{:BreadthFirst},
-    Heuristic{:BestFirstNoSatisfice},
+    # Heuristic{:BestFirstNoSatisfice},
     Heuristic{:BestFirstNoBestNext},
-    Heuristic{:BestFirstNoDepthLimit},
-    Heuristic{:FullNoSatisfice},
-    Heuristic{:FullNoBestNext},
-    Heuristic{:FullNoDepthLimit},
+    # Heuristic{:BestFirstNoDepthLimit},
+    # Heuristic{:FullNoSatisfice},
+    # Heuristic{:FullNoBestNext},
+    # Heuristic{:FullNoDepthLimit},
 ]
 
-
-
 # %% ==================== Fit models to full dataset ====================
-name(::Type{Optimal}) = "Optimal"
-name(::Type{Heuristic{H}}) where H = string(H)
 
-# fit(Optimal, all_trials |> values |> first)
+
+fit(Heuristic{:BreadthFirst}, all_trials |> values |> first)
 # @fetchfrom 2 fit(BestFirst, all_trials |> values |> first)
 
 full_jobs = Iterators.product(values(all_trials), MODELS);
 @time full_fits = pmap(full_jobs) do (trials, M)
-    try
-        model, nll = fit(M, trials)
-        (model=model, nll=nll)
-    catch e
-        println("Error fitting $M to $(trials[1].wid):  $e")
-        # rethrow(e)
-        missing
-        # (model=model, nll=NaN)
-    end
+    model, nll = fit(M, trials)
+    (model=model, nll=nll)
 end;
 serialize("$base_path/full_fits", full_fits)
 
@@ -182,8 +177,8 @@ function demo_trial(t, trial_index)
         demo = (
             clicks = t.cs[1:end-1] .- 1,
             path = t.path .- 1,
-            predictions = Dict(string(M) => get_preds(M, t, trial_index) for M in MODELS),
-            parameters = Dict(string(M) => get_params(M, t, trial_index) for M in MODELS)
+            predictions = Dict(name(M) => get_preds(M, t, trial_index) for M in MODELS),
+            parameters = Dict(name(M) => get_params(M, t, trial_index) for M in MODELS)
         )
     )
 end

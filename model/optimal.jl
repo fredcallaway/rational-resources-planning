@@ -4,6 +4,8 @@ struct Optimal{T} <: AbstractModel{T}
     ε::T
 end
 
+name(::Type{Optimal}) = "Optimal"
+
 default_space(::Type{Optimal}) = Space(
     :cost => collect(COSTS),
     :β => (0, 50),
