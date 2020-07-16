@@ -1,3 +1,5 @@
+COSTS = [0:0.05:4; 100]
+
 struct Optimal{T} <: AbstractModel{T}
     cost::Float64
     β::T
@@ -11,7 +13,6 @@ default_space(::Type{Optimal}) = Space(
     :β => (0, 50),
     :ε => (0, 1)
 )
-
 
 function preference(model::Optimal{T}, phi, c)::T where T
     model.β * phi[model.cost][c+1]

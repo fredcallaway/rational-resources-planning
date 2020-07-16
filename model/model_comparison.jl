@@ -6,53 +6,49 @@ using DataFrames
 
 isempty(ARGS) && push!(ARGS, "exp2")
 include("conf.jl")
+
 @everywhere include("base.jl")
 
-# EXPERIMENT = "exp2.4"
-@everywhere results_path = "$results/$EXPERIMENT"
 mkpath(results_path)
 FOLDS = 5
 
-# %% ==================== Load data ====================
+# %% ==================== LOAD DATA ====================
 
 all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
 flat_trials = flatten(values(all_trials));
 println(length(flat_trials), " trials")
 all_data = all_trials |> values |> flatten |> get_data;
 
-
-# %% ==================== Solve MDPs and precompute Q lookup table ====================
+# %% ==================== SOLVE MDPS AND PRECOMPUTE Q LOOKUP TABLE ====================
 
 include("solve.jl")
-@time solve_mdps();
+@time solve_all();
 
 include("Q_table.jl")
 @time serialize("$base_path/Q_table", make_Q_table(all_data));
 
-# %% ==================== Load model code ====================
-
+# %% ==================== LOAD MODEL CODE ====================
 
 @everywhere include("models.jl")
 
 MODELS = [
     Optimal,
-    Heuristic{:Full},
+    # Heuristic{:Full},
     Heuristic{:BestFirst},
     Heuristic{:DepthFirst},
     Heuristic{:BreadthFirst},
     # Heuristic{:BestFirstNoSatisfice},
-    Heuristic{:BestFirstNoBestNext},
+    # Heuristic{:BestFirstNoBestNext},
     # Heuristic{:BestFirstNoDepthLimit},
     # Heuristic{:FullNoSatisfice},
     # Heuristic{:FullNoBestNext},
     # Heuristic{:FullNoDepthLimit},
 ]
 
-# %% ==================== Fit models to full dataset ====================
+# %% ==================== FIT MODELS TO FULL DATASET ====================
 
-
+@fetchfrom 2 fit(BestFirst, all_trials |> values |> first)
 fit(Heuristic{:BreadthFirst}, all_trials |> values |> first)
-# @fetchfrom 2 fit(BestFirst, all_trials |> values |> first)
 
 full_jobs = Iterators.product(values(all_trials), MODELS);
 @time full_fits = pmap(full_jobs) do (trials, M)
@@ -83,7 +79,7 @@ let
         @printf "%-22s       %4d         %d\n" name(MODELS[i]) total[i] n_fit[i]
     end
 end
-# %% ==================== Cross validation ====================
+# %% ==================== CROSS VALIDATION ====================
 
 function kfold_splits(n, k)
     @assert (n / k) % 1 == 0  # can split evenly
@@ -145,7 +141,7 @@ let
 end
 
 
-# %% ==================== Save model predictions ====================
+# %% ==================== SAVE MODEL PREDICTIONS ====================
 fit_lookup = let
     ks = map(cv_jobs) do (trials, M, fold)
         trials[1].wid, M, fold.test[1]
@@ -171,6 +167,10 @@ function get_params(M::Type, t::Trial, trial_index)
     Dict(fn => getfield(model, fn) for fn in fieldnames(typeof(model)))
 end
 
+# %% --------
+
+
+# %% --------
 function demo_trial(t, trial_index)
     (
         stateRewards = t.bs[end],

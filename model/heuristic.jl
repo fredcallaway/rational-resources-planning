@@ -22,6 +22,7 @@ end
 name(::Type{Heuristic{H}}) where H = string(H)
 name(::Type{Heuristic{H,T}}) where {H,T} = string(H)
 
+
 Base.show(io::IO, model::Heuristic{H,T}) where {H, T} = print(io, "Heuristic{:$H}(...)")
 function Base.display(model::Heuristic{H,T}) where {H, T}
     println("--------- Heuristic{:$H} ---------")

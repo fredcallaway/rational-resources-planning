@@ -6,7 +6,7 @@ using Memoize
 include("reward_structures.jl")
 
 struct Trial
-    m::MetaMDP  # Note: cost must be NaN
+    m::MetaMDP  # Note: cost must be NaN (or maybe 0??)
     wid::String
     bs::Vector{Belief}
     cs::Vector{Int}
@@ -36,7 +36,7 @@ is_roadtrip(t::Dict) = startswith(get(t, "map", ""), "fantasy")
 
 @memoize function get_mdp(t::Dict)
     mdp_id = is_roadtrip(t) ? t["map"][13:end-4] : t["mdp"]
-    deserialize("mdps/$mdp_id")
+    deserialize("mdps/base/$mdp_id")
     # if startswith(mdp_id, "fantasy")
     #     error("TODO")
     #         # min_reward = -300
@@ -122,6 +122,7 @@ end
 
 @memoize function load_trials(experiment)::Dict{String,Vector{Trial}}
     data = open(JSON.parse, "../data/$experiment/trials.json")
+    data |> values |> first |> first
     map(data) do wid, tt
         wid => [Trial(wid, t) for t in tt]
     end |> Dict

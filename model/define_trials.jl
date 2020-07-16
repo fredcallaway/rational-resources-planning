@@ -9,8 +9,11 @@
 # write("/Users/fred/heroku/webofcash2/rewards.json", json(rewards))
 
 # # %% ====================  ====================
-mkpath("mdps")
-base = "/Users/fred/heroku/webofcash2/static/json/"
+using JSON
+include("mdp.jl")
+mkpath("mdps/base")
+
+base = "/Users/fred/heroku/webofcash2/static/json"
 
 DIRECTIONS = ["up", "right", "down", "left"]
 OFFSETS = [(0, -1), (1,0), (0, 1), (-1, 0)]
@@ -62,9 +65,12 @@ write("$base/structure/41111.json", json(spirals(4, [0, 1, -1, 1, 1])))
 # ---------- REWARDS ---------- #
 
 function make_rewards(g::Graph, kind::Symbol, factor, p1, p2)
+    @assert kind in [:breadth, :depth, :constant]
     map(eachindex(g)) do i
         i == 1 && return DiscreteNonParametric([0.])
-        if kind == :depth && isempty(g[i])
+        if kind == :constant
+            DiscreteNonParametric([-10, -5, 5, 10])
+        elseif kind == :depth && isempty(g[i])
             DiscreteNonParametric([-2factor, factor], [1-p2, p2])
         elseif kind == :breadth && i in g[1]
             x = (p2 * (1 - factor) + factor) / (2factor)
@@ -82,16 +88,21 @@ function make_mdp(branching, kind, factor, p1, p2)
 end
 
 function write_trials(name::String, m::MetaMDP)
-    trials = map(1:100) do i
+    trials = map(1:300) do i
         rewards = rand.(m.rewards)
-        tid = "M" * id(m) * "-" * string(hash(rewards); base=62)
+        tid = id(m) * "-" * string(hash(rewards); base=62)
         (trial_id=tid, stateRewards=rewards)
     end
 
-    serialize("mdps/$(id(m))", m)
-    write("$base/rewards/$name.json", json(trials))
-    return id(m)
+    f = "mdps/base/$(id(m))"
+    serialize(f, m)
+    println("Wrote ", f)
+    
+    f = "$base/rewards/$name.json"
+    write(f, json(trials))
+    println("Wrote ", f)
 end
 
-write_trials("41111_increasing.json", make_mdp([4,1,1,1,1], :depth, 20, 1/2, 2/3))
-write_trials("41111_decreasing.json", make_mdp([4,1,1,1,1], :breadth, 20, 1/2, 3/5))
+write_trials("41111_increasing", make_mdp([4,1,1,1,1], :depth, 20, 1/2, 2/3))
+write_trials("41111_decreasing", make_mdp([4,1,1,1,1], :breadth, 20, 1/2, 3/5))
+write_trials("41111_constant", make_mdp([4,1,1,1,1], :constant, NaN, NaN, NaN))

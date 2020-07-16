@@ -1,4 +1,4 @@
-EXPERIMENT = "exp2_pilot2"
+EXPERIMENT = "prolific"
 COSTS = [0:0.05:4; 100]
 MAX_THETA = 60
 EXPAND_ONLY = true

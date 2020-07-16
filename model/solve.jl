@@ -1,5 +1,13 @@
 using Distributed
-@everywhere include("base.jl")
+
+@everywhere include("utils.jl")
+@everywhere include("mdp.jl")
+
+COSTS = [0:0.05:4; 100]
+
+mkpath("mdps/withcost")
+mkpath("mdps/V")
+
 
 function sbatch_script(n; minutes=30, memory=3000)
     """
@@ -31,39 +39,41 @@ function bash_script(n)
     """
 end
 
-function write_mdps()
-    flat_trials = flatten(values(load_trials(EXPERIMENT)));
-    all_mdps = [mutate(t.m, cost=c) for t in flat_trials, c in COSTS] |> unique
-    rm("$base_path/mdps"; force=true, recursive=true)
-    mkpath("$base_path/mdps")
-    mkpath("$base_path/V")
-    for (i, m) in enumerate(all_mdps)
-        serialize("$base_path/mdps/$i", m)
+function write_mdps(ids)
+    base_mdps = map(ids) do i
+        deserialize("mdps/base/$i")
     end
-    all_mdps
-end
-
-function solve_mdps(jobs)
-    pmap(jobs) do i
-        m = deserialize("$base_path/mdps/$i")
-        id = string(hash(m); base=62)
-        if isfile("$base_path/V/$id")
-            println("This MDP has already been solved.")
-            exit()
-        end
-
-        V = ValueFunction(m)
-        println("Begin solving MDP $i:  cost = $(m.cost),  hasher = $(V.hasher)"); flush(stdout)
-        @time v = V(initial_belief(m))
-        println("Value of initial state is ", v)
-        serialize("$base_path/V/$id", V)
+    all_mdps = [mutate(m, cost=c) for m in base_mdps, c in COSTS]
+    for m in base_mdps, c in COSTS
+        mc = mutate(m, cost=c)
+        serialize("mdps/withcost/$(id(mc))", mc)
     end
 end
 
-function solve_mdps()
-    N = length(write_mdps())
-    println("Solving $N mdps.")
-    solve_mdps(1:N)
+write_mdps() = write_mdps(readdir("mdps/base"))
+
+
+@everywhere function solve_mdp(i::String)
+    m = deserialize("mdps/withcost/$i")
+    if isfile("mdps/V/$i")
+        println("MDP $i has already been solved.")
+        return
+    end
+
+    V = ValueFunction(m)
+    println("Begin solving MDP $i:  cost = $(m.cost),  hasher = $(V.hasher)"); flush(stdout)
+    @time v = V(initial_belief(m))
+    println("Value of initial state is ", v)
+    serialize("mdps/V/$i", V)
+end
+
+@everywhere do_job(id::String) = solve_mdp(id)
+@everywhere do_job(idx::Int) = solve_mdp(readdir("mdps/withcost/")[idx])
+do_job(jobs) = pmap(solve_mdp, jobs)
+
+function solve_all()
+    write_mdps()
+    do_job(readdir("mdps/withcost/"))
 end
 
 if basename(PROGRAM_FILE) == basename(@__FILE__)
@@ -76,7 +86,7 @@ if basename(PROGRAM_FILE) == basename(@__FILE__)
                 (minutes=30, memory=3000)
             end
 
-            write(f, sbatch_script(length(all_mdps); kws...))
+            write("solve.sbatch", sbatch_script(length(all_mdps); kws...))
         end
         open("solve.sh", "w") do f
             write(f, bash_script(length(all_mdps)))
@@ -84,9 +94,10 @@ if basename(PROGRAM_FILE) == basename(@__FILE__)
         println(length(all_mdps), " mdps to solve with solve.sbatch or solve.sh")
     else  # solve an MDP (or several)
         if ARGS[2] == "all"
-            solve_mdps()
+            write_mdps()
+            do_job(readdir("mdps/withcost/"))
         else
-            solve_mdps(eval(Meta.parse(ARGS[2])))
+            do_job(eval(Meta.parse(ARGS[2])))
         end
 
     end

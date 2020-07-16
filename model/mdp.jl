@@ -215,18 +215,28 @@ function hash_412_iid(m::MetaMDP, b::Belief)
     hash(hash(b[14]) + hash(b[15]), hash(b[16]) + hash(b[17]))
 end
 
-function spiral_hasher(m, b)
-    acc = UInt64(0)
-    for pth in paths(m)
-        x = UInt64(0)
-        for i in pth
-            x += hash(b[i])
-        end
-        acc += hash(x)
-    end
-    acc
-end
+function make_spiral_hasher(m)
+    the_paths = paths(m)
+    reward_hashes = Dict(i => hash(d) for (i, d) in enumerate(m.rewards))
 
+    # check conditions for correctness
+    @assert sum(length(pth) for pth in the_paths) == length(m) - 1
+    @assert map(the_paths) do pth
+        [reward_hashes[i] for i in pth]
+    end |> unique |> length |> isequal(1)
+
+    function spiral_hasher(_, b)
+        acc = UInt64(0)
+        for pth in the_paths
+            x = UInt64(0)
+            for i in pth
+                x += hash(hash(b[i]), reward_hashes[i])
+            end
+            acc += hash(x)
+        end
+        acc
+    end
+end
 
 default_hash(m::MetaMDP, b::Belief) = hash(b)
 
@@ -240,12 +250,7 @@ function choose_hash(m::MetaMDP)
             hash_412
         end
     elseif all(length(children) <=1 for children in m.graph[2:end])
-        # Check that assumption of spiral_hasher holds. TODO provide alternative
-        all_unique(x) = x == unique(x)
-        @assert mapreduce(vcat, unique(m.rewards)) do r
-            r.support
-        end |> all_unique
-        spiral_hasher
+        make_spiral_hasher(m)
     else
         symmetry_breaking_hash
     end
@@ -303,6 +308,11 @@ function solve(m::MetaMDP, h=choose_hash(m))
     V = ValueFunction(m, h)
     V(initial_belief(m))
     V
+end
+
+@everywhere function load_V(i::String)
+    V = deserialize("mdps/V/$i")
+    ValueFunction(V.m, choose_hash(V.m), V.cache)
 end
 
 
