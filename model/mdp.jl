@@ -310,10 +310,12 @@ function solve(m::MetaMDP, h=choose_hash(m))
     V
 end
 
-@everywhere function load_V(i::String)
+function load_V_nomem(i::String)
     V = deserialize("mdps/V/$i")
     ValueFunction(V.m, choose_hash(V.m), V.cache)
 end
+
+@memoize load_V(i::String) = load_V_nomem(i)
 
 
 # ========== Policy ========== #

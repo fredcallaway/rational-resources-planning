@@ -5,6 +5,11 @@ if myid() == 1  # only run on the master process
     end
     conf = ARGS[1]
     @everywhere begin
+
+        # defaults
+        CV_METHOD = :random  # :stratified
+        OPT_METHOD = :bfgs
+
         include("utils.jl")
         conf = $conf
         include("conf/$conf.jl")

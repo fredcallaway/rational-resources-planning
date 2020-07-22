@@ -1,4 +1,6 @@
 using CSV
+using Glob
+
 @everywhere begin
     include("utils.jl")
     include("mdp.jl")
@@ -18,12 +20,6 @@ mkpath("mdps/pareto")
     (reward=reward, clicks=clicks)
 end
 
-# This bypasses a world age error 
-@everywhere function load_V(i::String)
-    V = deserialize("mdps/V/$i")
-    ValueFunction(V.m, choose_hash(V.m), V.cache)
-end
-
 # %% ==================== Optimal ====================
 let
     FORCE = true
@@ -32,17 +28,18 @@ let
         if !FORCE && isfile(f)
             println("$f already exists")
         else
+            println("Generating $f...")
             V = load_V(i)
             m = mutate(V.m, cost=0)
             pol = OptimalPolicy(m, V)
             res = (model="Optimal", mdp=id(m), cost=V.m.cost, mean_reward_clicks(pol)...)
             CSV.write(f, [res])  # one line csv
+            println("Wrote $f")
         end
     end
 end
 
 # %% ==================== Heuristic ====================
-
 
 function sample_models(M, n)
     space = default_space(M)
@@ -72,10 +69,10 @@ function pareto_front(M, m; n_candidate=10000, n_eval=100000)
     result
 end
 
-Hs = [:BestFirst, :BreadthFirst, :DepthFirst, 
-      :BestFirstNoBestNext, :BreadthFirstNoBestNext, :DepthFirstNoBestNext]
+Hs = [:BestFirst, :BestFirstNoBestNext, :BreadthFirst, :DepthFirst,
+      # :BestFirstNoBestNext, :BreadthFirstNoBestNext, :DepthFirstNoBestNext
+      ]
 
-# %% --------
 mdps = map(deserialize, glob("mdps/base/*"))
 
 for H in Hs, m in mdps

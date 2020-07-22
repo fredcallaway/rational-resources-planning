@@ -8,13 +8,15 @@ include("reward_structures.jl")
 struct Trial
     m::MetaMDP  # Note: cost must be NaN (or maybe 0??)
     wid::String
+    i::Int
     bs::Vector{Belief}
     cs::Vector{Int}
     score::Float64
     rts::Vector
     path::Vector{Int}
 end
-Base.hash(t::Trial, h::UInt64) = hash_struct(t, h)
+Base.hash(t::Trial, h::UInt64) = hash(t.wid, hash(t.i, h))
+
 # Base.:(==)(x1::Trial, x2::Trial) = struct_equal(x2, x2)  # doesn't work because NaN ≠ NaN
 
 struct Datum
@@ -24,19 +26,20 @@ struct Datum
     # c_last::Union{Int, Nothing}
 end
 
-# this is used to look up data in the Q_TABLE
-function q_key(d::Datum)
-    hash((d.b, d.c, d.t.m))
-end
-
-Base.hash(t::Datum, h::UInt64) = hash_struct(t, h)
+Base.hash(d::Datum, h::UInt64) = hash(d.c, hash(d.t, h))
 # Base.:(==)(x1::Datum, x2::Datum) = struct_equal(x2, x2)
 
 is_roadtrip(t::Dict) = startswith(get(t, "map", ""), "fantasy")
 
-@memoize function get_mdp(t::Dict)
+function get_mdp(t::Dict)
     mdp_id = is_roadtrip(t) ? t["map"][13:end-4] : t["mdp"]
-    deserialize("mdps/base/$mdp_id")
+    return _load_mdp(mdp_id)
+end
+
+@memoize function _load_mdp(mdp_id)
+    m = deserialize("mdps/base/$mdp_id")
+    mutate(m, expand_only=EXPAND_ONLY)
+
     # if startswith(mdp_id, "fantasy")
     #     error("TODO")
     #         # min_reward = -300
@@ -68,7 +71,7 @@ end
 #     MetaMDP(graph, rewards, cost, min_reward, EXPAND_ONLY)
 # end
 
-function Trial(wid::String, t::Dict{String,Any})
+function Trial(wid::String, i::Int, t::Dict{String,Any})
     m = get_mdp(t)
     # graph = parse_graph(t)
 
@@ -95,7 +98,7 @@ function Trial(wid::String, t::Dict{String,Any})
     push!(cs, TERM)
     path = Int.(t["route"] .+ 1)[2:end]
     rts = [x == nothing ? NaN : float(x) for x in t["rts"]]
-    Trial(m, wid, bs, cs, get(t, "score", NaN), rts, path)
+    Trial(m, wid, i, bs, cs, get(t, "score", NaN), rts, path)
 end
 
 # this is memoized for the sake of future memoization based on object ID
@@ -108,7 +111,6 @@ end
 end
 
 get_data(trials::Vector{Trial}) = flatten(map(get_data, trials))
-
 
 function Base.show(io::IO, t::Trial)
     print(io, "T")
@@ -124,15 +126,9 @@ end
     data = open(JSON.parse, "../data/$experiment/trials.json")
     data |> values |> first |> first
     map(data) do wid, tt
-        wid => [Trial(wid, t) for t in tt]
+        wid => [Trial(wid, i, t) for (i, t) in enumerate(tt)]
     end |> Dict
 end
 
-# # to ensure that precomputed Qs are correctly aligned
-# function checksum(data::Vector{Datum})
-#     map(data) do d
-#         d.t.map, d.t.wid
-#     end |> hash
-# end
 
 

@@ -1,0 +1,5 @@
+EXPERIMENT = "3.0"
+COSTS = [0:0.05:4; 100]
+MAX_THETA = 60
+EXPAND_ONLY = false
+FIT_BIAS = false

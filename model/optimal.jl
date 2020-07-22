@@ -11,7 +11,7 @@ name(::Type{Optimal}) = "Optimal"
 default_space(::Type{Optimal}) = Space(
     :cost => collect(COSTS),
     :β => (0, 50),
-    :ε => (0, 1)
+    :ε => (1e-3, 1)
 )
 
 function preference(model::Optimal{T}, phi, c)::T where T
@@ -30,13 +30,13 @@ end
 
 # for likelihood: use precomputed look up table for just the
 # beliefs found in the experiment
-if isfile("$base_path/Q_table")
+
+if @isdefined(base_path) && isfile("$base_path/Q_table")
     const Q_TABLE = deserialize("$base_path/Q_table")
 else
-    myid() == 1 && @warn "No file $base_path/Q_table. Can't fit Optimal model"
+    myid() == 1 && @warn "Q_table not found. Can't fit Optimal model"
 end
-features(::Type{Optimal{T}}, d::Datum) where T = Q_TABLE[q_key(d)]
-
+features(::Type{Optimal{T}}, d::Datum) where T = Q_TABLE[hash(d)]
 
 # for simulation: just get the q value you need.
 # parallelization code must divide work such that each
@@ -46,10 +46,10 @@ function preferences(model::Optimal{T}, m::MetaMDP, b::Belief) where T
 end
 
 
-@memoize function load_V(mid::String)
-    println("Loading value function: $mid"); flush(stdout)
-    deserialize("$base_path/V/$mid")
-end
+# @memoize function load_V(mid::String)
+#     println("Loading value function: $mid"); flush(stdout)
+#     deserialize("$base_path/V/$mid")
+# end
 
 function get_q(m::MetaMDP, b::Belief)
     mid = string(hash(m); base=62)

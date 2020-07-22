@@ -32,3 +32,6 @@ model/solve.sbatch
 model/solve.sh
 model/tmp/
 old/
+bonus.csv
+dump.py
+fighist/

@@ -77,82 +77,76 @@ function print_tracked(x)
     println(round.(xx; sigdigits=6))
 end
 
-function Distributions.fit(::Type{M}, trials::Vector{Trial}; space=default_space(M), 
-        x0=nothing, n_restart=20, progress=false) where M <: AbstractModel
-    lower, upper = bounds(space)
-    space_size = upper .- lower
-    @assert all(space_size .> 0)
+@memoize function get_sobol(lower, upper, n)
+    seq = SobolSeq(lower, upper)
+    skip(seq, n)
+    x0s = [next!(seq) for i in 1:n]
+end
 
+function bfgs_random_restarts(loss, lower, upper, n_restart)
     algorithms = [
         Fminbox(LBFGS()),
         Fminbox(LBFGS(linesearch=Optim.LineSearches.BackTracking())),
     ] |> Iterators.cycle |> Iterators.Stateful
     algo = first(algorithms)
-    
-    options = Optim.Options()
+
+    opts = map(get_sobol(lower, upper, n_restart)) do x0
+        try
+            optimize(loss, lower, upper, x0, algo, autodiff=:forward)
+        catch err
+            err isa InterruptException && rethrow(err)
+            @warn "First BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name
+            # try the other line search method
+            algo = first(algorithms)  # this cycles
+            try
+                optimize(loss, lower, upper, x0, algo, autodiff=:forward)
+            catch err
+                err isa InterruptException && rethrow(err)
+                @error "Second BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name
+                return missing
+            end
+        end
+    end |> skipmissing |> collect
+    isempty(opts) ? missing : partialsort(opts, 1; by=o->o.minimum)
+end
+
+function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_restart=20) where M <: AbstractModel
+    space = default_space(M)
+    lower, upper = bounds(space)
+    space_size = upper .- lower
+    @assert all(space_size .> 0)
+
     L = Likelihood(trials)
-
-    if x0 != nothing
-        x0s = [x0]
-    else
-        seq = SobolSeq(lower, upper)
-        skip(seq, n_restart)
-        x0s = [next!(seq) for i in 1:n_restart]
-    end
-
-    # function opt_helper(x0, z; kws...)
-        # optimize(lower, upper, x0, algo, options; kws...) do x
-        #     model = create_model(M, x, z, space)
-        #     L1 = sum(abs.(x) ./ space_size)
-        #     loss = -logp(L, model) + 0.1 * L1
-        #     # print_tracked(x)
-        #     # print("   "); print_tracked(loss)
-        #     loss
-        # end
-    # end
-
     function make_loss(z)
         x -> begin
             model = create_model(M, x, z, space)
-            L1 = sum(abs.(x) ./ space_size)
-            -logp(L, model) + 0.1 * L1
+            # L1 = sum(abs.(x) ./ space_size)
+            -logp(L, model) #+ 10 * L1
         end
     end
 
-    # (err isa ArgumentError && err.msg == "Value and slope at step length = 0 must be finite.") || rethrow(err)
-
     results = map(combinations(space)) do z
         loss = make_loss(z)
-        map(x0s) do x0
-            opt = try
-                optimize(loss, lower, upper, x0, algo, options, autodiff=:forward)
-            catch err
-                err isa InterruptException && rethrow(err)
-                @warn("First attempt failed fitting $M to $(trials[1].wid)", err)
-                # try the other line search method
-                algo = first(algorithms)  # this cycles
-                try
-                    optimize(loss, lower, upper, x0, algo, options, autodiff=:forward)
-                catch err
-                    err isa InterruptException && rethrow(err)
-                    @error("Second attempt failed fitting $M to $(trials[1].wid)", err)
-                    return missing
-                end
+        
+        opt = begin
+            if method == :samin
+                x0 = lower .+ rand(length(lower)) .* space_size
+                optimize(loss, lower, upper, x0, SAMIN(verbosity=0), Optim.Options(iterations=10^6))
+            elseif method == :bfgs
+                bfgs_random_restarts(loss, lower, upper, n_restart)
             end
-            @debug "Optimization" opt.time_run opt.iterations opt.f_calls
-            progress && print(".")
-            model = create_model(M, opt.minimizer, z, space)
-            model, -logp(L, model)
         end
-    end |> flatten |> skipmissing |> collect 
+        ismissing(opt) && return missing
+        model = create_model(M, opt.minimizer, z, space)
+        model, -logp(L, model)
+    end |> skipmissing |> collect 
     if isempty(results)
-        @error("Could not fit $M to $(trials[1].wid)", err)
+        @error("Could not fit $M to $(trials[1].wid)")
         error("Fitting error")
     end
     models, losses = invert(results)
     i = argmin(losses)
-    progress && println("")
-    models[i], losses[i]
+    models[i], -logp(L, models[i])
 end
 
 

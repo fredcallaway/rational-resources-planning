@@ -1,15 +1,16 @@
 
-
 function make_Q_table(data)
     println("Creating Q_table")
-    n = length(readdir("mdps/withcost"))
-
     all_mdps = map(deserialize, glob("mdps/withcost/*"))
+    base_mdps = unique([d.t.m for d in data])
+    filter!(all_mdps) do m
+        mutate(m, cost=0.) in base_mdps
+    end
     sort!(all_mdps, by=m->m.cost)
     M = reshape(all_mdps, :, length(COSTS))
     grouped_ids = eachcol(id.(M))
     all_qs = pmap(grouped_ids) do ids
-        vs = map(load_V, ids)
+        vs = map(load_V_nomem, ids)
         cost = vs[1].m.cost
         @assert all(v.m.cost == cost for v in vs)
         value_functions = Dict(v.m => v for v in vs)
@@ -25,7 +26,7 @@ function make_Q_table(data)
     @assert length(all_qs) == length(data)
     @assert length(all_qs[1]) == length(COSTS)
     map(data, all_qs) do d, dqs
-        q_key(d) => Dict(zip(COSTS, dqs))
+        hash(d) => Dict(zip(COSTS, dqs))
     end |> Dict
 end
 

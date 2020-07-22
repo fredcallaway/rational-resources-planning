@@ -4,25 +4,45 @@ using Glob
 using CSV
 using DataFrames
 
-isempty(ARGS) && push!(ARGS, "exp2")
+isempty(ARGS) && push!(ARGS, "exp1")
 include("conf.jl")
 
 @everywhere include("base.jl")
-
 mkpath(results_path)
 FOLDS = 5
+CV_METHOD = :random  # :stratified
+OPT_METHOD = :bfgs  # :samin
+
 
 # %% ==================== LOAD DATA ====================
 
 all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
 flat_trials = flatten(values(all_trials));
+
 println(length(flat_trials), " trials")
 all_data = all_trials |> values |> flatten |> get_data;
+
+@assert length(unique(hash.(flat_trials))) == length(flat_trials)
+@assert length(unique(hash.(all_data))) == length(all_data)
+
+# %% ==================== WRITE MDPS ====================
+# this only applies if we changed the MDP when loading it (e.g. adding/removing expand_only)
+mdps = unique(getfield.(flat_trials, :m))
+
+for m in mdps
+    f = "mdps/base/$(id(m))"
+    serialize(f, m)
+    println("Wrote ", f)
+end
 
 # %% ==================== SOLVE MDPS AND PRECOMPUTE Q LOOKUP TABLE ====================
 
 include("solve.jl")
-@time solve_all();
+todo = write_mdps()
+if !isempty(todo)
+    println("Solving $(length(todo)) mdps....")
+    @time do_jobs(todo)
+end
 
 include("Q_table.jl")
 @time serialize("$base_path/Q_table", make_Q_table(all_data));
@@ -33,10 +53,11 @@ include("Q_table.jl")
 
 MODELS = [
     Optimal,
-    # Heuristic{:Full},
     Heuristic{:BestFirst},
-    Heuristic{:DepthFirst},
-    Heuristic{:BreadthFirst},
+    Heuristic{:BestFirstNoBestNext},
+    # Heuristic{:DepthFirst},
+    # Heuristic{:BreadthFirst},
+
     # Heuristic{:BestFirstNoSatisfice},
     # Heuristic{:BestFirstNoBestNext},
     # Heuristic{:BestFirstNoDepthLimit},
@@ -46,13 +67,18 @@ MODELS = [
 ]
 
 # %% ==================== FIT MODELS TO FULL DATASET ====================
+# @everywhere include("likelihood.jl")
 
-@fetchfrom 2 fit(BestFirst, all_trials |> values |> first)
-fit(Heuristic{:BreadthFirst}, all_trials |> values |> first)
+@sync begin
+    @spawnat 2 @time fit(Optimal, all_trials |> values |> first)
+    @spawnat 3 @time fit(Heuristic{:BreadthFirst}, all_trials |> values |> first)
+end
+
+# %% --------
 
 full_jobs = Iterators.product(values(all_trials), MODELS);
 @time full_fits = pmap(full_jobs) do (trials, M)
-    model, nll = fit(M, trials)
+    model, nll = fit(M, trials; method=OPT_METHOD)
     (model=model, nll=nll)
 end;
 serialize("$base_path/full_fits", full_fits)
@@ -79,12 +105,20 @@ let
         @printf "%-22s       %4d         %d\n" name(MODELS[i]) total[i] n_fit[i]
     end
 end
+
 # %% ==================== CROSS VALIDATION ====================
+
+using Random: randperm
 
 function kfold_splits(n, k)
     @assert (n / k) % 1 == 0  # can split evenly
+    x = Dict(
+        :random => randperm(n),
+        :stratified => 1:n
+    )[CV_METHOD]
+
     map(1:k) do i
-        test = i:k:n
+        test = x[i:k:n]
         (train=setdiff(1:n, test), test=test)
     end
 end
@@ -94,7 +128,7 @@ folds = kfold_splits(n_trial, FOLDS)
 cv_jobs = Iterators.product(values(all_trials), MODELS, folds);
 @time cv_fits = pmap(cv_jobs) do (trials, M, fold)
     try
-        model, train_nll = fit(M, trials[fold.train])
+        model, train_nll = fit(M, trials[fold.train]; method=OPT_METHOD)
         (model=model, train_nll=train_nll, test_nll=-logp(model, trials[fold.test]))
     catch e
         println("Error fitting $M to $(trials[1].wid):  $e")
@@ -142,6 +176,13 @@ end
 
 
 # %% ==================== SAVE MODEL PREDICTIONS ====================
+
+@memoize function get_fold(i::Int)
+    # folds are identified by their first test trial index
+    first(f for f in folds if i in f.test).test[1]
+end
+get_fold(t::Trial) = get_fold(t.i)
+
 fit_lookup = let
     ks = map(cv_jobs) do (trials, M, fold)
         trials[1].wid, M, fold.test[1]
@@ -150,35 +191,65 @@ fit_lookup = let
     Dict(zip(ks, getfield.(cv_fits, :model)))
 end
 
-function get_model(M::Type, t::Trial, trial_index)
-    fold = (trial_index - 1) % FOLDS + 1  # the pains of 1-indexing
-    fit_lookup[t.wid, M, fold]
+function get_model(M::Type, t::Trial)
+    fit_lookup[t.wid, M, get_fold(t)]
 end
 
-function get_preds(M::Type, t::Trial, trial_index)
-    model = get_model(M, t, trial_index)
+function get_preds(M::Type, t::Trial)
+    model = get_model(M, t)
     map(get_data(t)) do d
         action_dist(model, d)
     end
 end
 
-function get_params(M::Type, t::Trial, trial_index)
-    model = get_model(M, t, trial_index)
+function get_params(M::Type, t::Trial)
+    model = get_model(M, t)
     Dict(fn => getfield(model, fn) for fn in fieldnames(typeof(model)))
 end
 
+function get_logp(M::Type, d::Datum)
+    model = get_model(M, t)
+    log(action_dist(model, d.t.m, d.b)[d.c+1])
+end
+
+# namedtuple(Dict(name(M) => get_logp(M, d) for M in MODELS))...,
+
 # %% --------
 
+click_features(d) = (
+    wid=d.t.wid,
+    i=d.t.i,
+    b=d.b,
+    c=d.c,
+    predictions = Dict(name(M) => action_dist(get_model(M, d.t), d) for M in MODELS),
+    n_revealed=sum(observed(d.b)) - 1,
+    term_reward=term_reward(d.t.m, d.b)
+)
+
+click_features.(all_data) |> JSON.json |> write("$results_path/click_features.json")
+run(`du -h $results_path/click_features.json`);
 
 # %% --------
-function demo_trial(t, trial_index)
+term_reward(t::Trial) = term_reward(t.m, t.bs[end])
+
+trial_features(t::Trial) = (
+    wid=t.wid,
+    i=t.i,
+    term_reward=term_reward(t),
+)
+
+trial_features.(flat_trials) |> JSON.json |> write("$results_path/trial_features.json")
+run(`du -h $results_path/trial_features.json`);
+
+# %% --------
+function demo_trial(t)
     (
         stateRewards = t.bs[end],
         demo = (
             clicks = t.cs[1:end-1] .- 1,
             path = t.path .- 1,
-            predictions = Dict(name(M) => get_preds(M, t, trial_index) for M in MODELS),
-            parameters = Dict(name(M) => get_params(M, t, trial_index) for M in MODELS)
+            predictions = Dict(name(M) => get_preds(M, t) for M in MODELS),
+            parameters = Dict(name(M) => get_params(M, t) for M in MODELS)
         )
     )
 end
@@ -198,5 +269,5 @@ map(collect(all_trials)) do (wid, trials)
 end |> sorter |> JSON.json |> write("$results_path/viz/table.json")
 
 foreach(collect(all_trials)) do (wid, trials)
-    demo_trial.(trials, eachindex(trials)) |> JSON.json |> write("$results_path/viz/$wid.json")
+    demo_trial.(trials) |> JSON.json |> write("$results_path/viz/$wid.json")
 end

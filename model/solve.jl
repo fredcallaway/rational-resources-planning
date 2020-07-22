@@ -9,7 +9,7 @@ mkpath("mdps/withcost")
 mkpath("mdps/V")
 
 
-function sbatch_script(n; minutes=30, memory=3000)
+function sbatch_script(conf, n; minutes=30, memory=3000)
     """
     #!/usr/bin/env bash
     #SBATCH --job-name=solve
@@ -26,28 +26,24 @@ function sbatch_script(n; minutes=30, memory=3000)
     """
 end
 
-function bash_script(n)
-    """
-    mkdir -p out/solve
-    rm -f out/solve/*
-    echo solve mdps
-    for i in {1..$n}; do
-        julia solve.jl $conf \$i &> out/solve/\$i &
-    done
-    wait
-    echo Done
-    """
-end
-
 function write_mdps(ids)
     base_mdps = map(ids) do i
         deserialize("mdps/base/$i")
     end
     all_mdps = [mutate(m, cost=c) for m in base_mdps, c in COSTS]
+    files = String[]
     for m in base_mdps, c in COSTS
         mc = mutate(m, cost=c)
-        serialize("mdps/withcost/$(id(mc))", mc)
+        f = "mdps/withcost/$(id(mc))"
+        serialize(f, mc)
+        push!(files, f)
     end
+    unsolved = filter(files) do f
+        !isfile(replace(f, "withcost" => "V"))
+    end
+    unsolved = [string(split(f, "/")[end]) for f in unsolved]
+    serialize("tmp/unsolved", unsolved)
+    unsolved
 end
 
 write_mdps() = write_mdps(readdir("mdps/base"))
@@ -68,30 +64,24 @@ write_mdps() = write_mdps(readdir("mdps/base"))
 end
 
 @everywhere do_job(id::String) = solve_mdp(id)
-@everywhere do_job(idx::Int) = solve_mdp(readdir("mdps/withcost/")[idx])
-do_job(jobs) = pmap(solve_mdp, jobs)
+@everywhere do_job(idx::Int) = solve_mdp(deserialize("tmp/unsolved")[idx])
+do_job(jobs) = pmap(solve_mdp, deserialize("tmp/unsolved")[jobs])
 
 function solve_all()
-    write_mdps()
-    do_job(readdir("mdps/withcost/"))
+    todo = write_mdps()
+    do_job(todo)
 end
 
 if basename(PROGRAM_FILE) == basename(@__FILE__)
+    conf = ARGS[1]
     if ARGS[2] == "setup"
-        write_mdps()
+        todo = write_mdps()
         open("solve.sbatch", "w") do f
-            kws = if startswith(EXPERIMENT, "webofcash-2")
-                (minutes=30, memory=10000)
-            else
-                (minutes=30, memory=3000)
-            end
+            kws = (minutes=20, memory=5000)
 
-            write("solve.sbatch", sbatch_script(length(all_mdps); kws...))
+            write("solve.sbatch", sbatch_script(conf, length(todo); kws...))
         end
-        open("solve.sh", "w") do f
-            write(f, bash_script(length(all_mdps)))
-        end
-        println(length(all_mdps), " mdps to solve with solve.sbatch or solve.sh")
+        println(length(all_mdps), " mdps to solve with solve.sbatch")
     else  # solve an MDP (or several)
         if ARGS[2] == "all"
             write_mdps()

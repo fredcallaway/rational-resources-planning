@@ -81,23 +81,32 @@ function make_rewards(g::Graph, kind::Symbol, factor, p1, p2)
     end
 end
 
+map(1:100000) do i
+    R = rand.(m.rewards)
+    map(paths(m)) do pth
+        sum(R[pth])
+    end |> maximum
+end |> mean
+
 function make_mdp(branching, kind, factor, p1, p2)
     g = tree(branching)
     rewards = make_rewards(g, kind, factor, p1, p2)
     MetaMDP(g, rewards, 0., -Inf, true)
 end
 
+function save(m::MetaMDP)
+    f = "mdps/base/$(id(m))"
+    serialize(f, m)
+    println("Wrote ", f)
+end
+
 function write_trials(name::String, m::MetaMDP)
+    save(m)
     trials = map(1:300) do i
         rewards = rand.(m.rewards)
         tid = id(m) * "-" * string(hash(rewards); base=62)
         (trial_id=tid, stateRewards=rewards)
     end
-
-    f = "mdps/base/$(id(m))"
-    serialize(f, m)
-    println("Wrote ", f)
-    
     f = "$base/rewards/$name.json"
     write(f, json(trials))
     println("Wrote ", f)
@@ -106,3 +115,11 @@ end
 write_trials("41111_increasing", make_mdp([4,1,1,1,1], :depth, 20, 1/2, 2/3))
 write_trials("41111_decreasing", make_mdp([4,1,1,1,1], :breadth, 20, 1/2, 3/5))
 write_trials("41111_constant", make_mdp([4,1,1,1,1], :constant, NaN, NaN, NaN))
+write_trials("412_constant", make_mdp([4,1,2], :constant, NaN, NaN, NaN))
+# %% --------
+m = MetaMDP(tree([4,1,2]), DNP([-10, -5, 5, 10]), 0., -Inf, true)
+m1 = make_mdp([4,1,2], :constant, NaN, NaN, NaN)
+
+
+
+
