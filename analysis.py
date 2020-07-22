@@ -3,11 +3,12 @@
 
 from analysis_utils import *
 
-EXPERIMENT = 'prolific'
+EXPERIMENT = 1
+VERSION = 'exp1'
 MODELS = ['BreadthFirst',  'DepthFirst', 'BestFirst', 'Optimal']
 VARIANCES = ['decreasing', 'constant', 'increasing']
 
-pdf, tdf = load_data(EXPERIMENT)
+pdf, tdf = load_data(VERSION)
 pdf.variance = pd.Categorical(pdf.variance, categories=VARIANCES)
 
 # Drop incomplete
@@ -19,25 +20,26 @@ mdp2var = {}
 for x in tdf[['variance', 'mdp']].itertuples():
     mdp2var[x.mdp] = x.variance
 
-figs = Figures(f'figs/{EXPERIMENT}')
+figs = Figures(f'figs/{VERSION}')
 figs.add_names({
     'backward': 'Proportion Planning Backward',
+    'BestFirstNoBestNext': 'Satisficing\nBestFirst',
+    'BestFirst': 'Adaptive\nBestFirst'
 })
 figure = figs.figure; show = figs.show; figs.watch()
 
 tdf['i'] = list(tdf.trial_index - tdf.trial_index.groupby('wid').min() + 1)
 assert all(tdf.groupby(['wid', 'i']).apply(len) == 1)
-trial_features = pd.read_json(f'model/results/{EXPERIMENT}/trial_features.json').set_index(['wid', 'i'])
+trial_features = pd.read_json(f'model/results/{VERSION}/trial_features.json').set_index(['wid', 'i'])
 tdf = tdf.join(trial_features, on=['wid', 'i'])
 
-MODELS = 'Optimal BestFirst BreadthFirst DepthFirst '.split()
-variances = ['decreasing', 'constant', 'increasing']
+if EXPERIMENT == 1:
+    variances = ['constant']
+    MODELS = ['Optimal', 'BestFirst', 'BestFirstNoBestNext']
+else:
+    MODELS = 'Optimal BestFirst BreadthFirst DepthFirst '.split()
+    variances = ['decreasing', 'constant', 'increasing']
 
-print("SIMULATE EXPERIMENT 1")
-pdf = pdf.query('variance == "constant"')
-tdf = tdf.loc[list(pdf.index)]
-variances = ['constant']
-MODELS = ['Optimal', 'BestFirst']
 
 # %% ==================== PAYMENT ====================
 
@@ -89,11 +91,14 @@ model_pareto.rename(columns={'clicks': 'n_click', 'reward': 'term_reward'}, inpl
 def plot_model(variance, model):
     plt.plot('n_click', 'term_reward', data=model_pareto.loc[model, variance], label=model, marker='.')
 
+def setup_variance_plot(nrow=1):
+    ncol = len(variances)
+    return plt.subplots(nrow, ncol, figsize=(4*ncol,4), squeeze=False)
+
 @figure()
 def pareto():
     X = tdf.reset_index().set_index('variance')
-    ncol = len(variances)
-    fig, axes = plt.subplots(1, ncol, figsize=(4*ncol,4), squeeze=False)
+    fig, axes = setup_variance_plot()
     for i, v in enumerate(variances):
         plt.sca(axes.flat[i])
         for model in MODELS:
@@ -108,7 +113,7 @@ def pareto():
             plt.title(f'{v.title()} Variance')
         plt.ylabel("Expected Reward")
         plt.xlabel("Number of Clicks")
-        if i == 0:
+        if i == 0 and len(variances) > 1:
             plt.legend()
 
 # %% --------
@@ -118,6 +123,7 @@ optimal = model_pareto.loc['Optimal'].set_index('mdp').loc[mdps].set_index('cost
 human = tdf.groupby('wid')[['n_click', 'term_reward']].mean()
 
 def pareto_loss(row, var):
+    ## TODO linear interpolation
     cost = abs(optimal.n_click - row.n_click).idxmin()
     opt_val = optimal.loc[cost].drop(var).values[0]
     return row.drop(var).values[0] - opt_val
@@ -131,28 +137,16 @@ for var in ['n_click', 'term_reward']:
 
 # %% ==================== MODEL COMPARISON ====================
 
-MODELS = 'BreadthFirst DepthFirst BestFirst Optimal'.split()
-fits = load_fits(EXPERIMENT, MODELS)
+fits = load_fits(VERSION, MODELS)
 fits = fits.join(pdf[['variance', 'click_delay']], on='wid')
 pdf['cost'] = fits.query('model == "Optimal"').set_index('wid').cost.clip(upper=5)
 
-cf = pd.read_json(f'model/results/{EXPERIMENT}/click_features.json').set_index('wid')
+cf = pd.read_json(f'model/results/{VERSION}/click_features.json').set_index('wid')
 res = cf.apply(lambda d: {k: p[d.c] for k, p in d.predictions.items()}, axis=1)
 logp = np.log(pd.DataFrame(list(res.values)))[MODELS]
 logp.set_index(cf.index, inplace=True)
 logp['variance'] = pdf.variance
-
-# %% --------
-X = pd.DataFrame({
-    'full': fits.set_index(['model', 'wid']).cv_nll / 25,
-    'drop10': fits10.set_index(['model', 'wid']).cv_nll / 15
-})
-
-sns.scatterplot('full', 'drop10', data=X)
-plt.plot([0, 40], [0, 40])
-show()
-
-
+logp['Random'] = np.log(cf.p_rand)
 # %% --------
 
 @figure()
@@ -189,17 +183,35 @@ def bbd_individual_likelihood():
 # %% --------
 
 def plot_models(L, ylabel, axes=None, title=True):
+    L = L.copy()
     if axes is None:
-        fig, axes = plt.subplots(1, 3, figsize=(12,4))
+        fig, axes = setup_variance_plot()
     for i, v in enumerate(variances):
-        plt.sca(axes[i])
-        L.loc[v].plot.bar(color=[f'C{i}' for i in range(len(MODELS))], rot=30)
+        plt.sca(axes.flat[i])
+
+        L.pop('Random').loc[v]
+        L.loc[v].plot.line(color=[f'C{i}' for i in range(len(MODELS))], rot=30)
+        # plt.axhline(L.pop('Random').loc[v], c='k')
+        # L.loc[v].plot.bar(color=[f'C{i}' for i in range(len(MODELS))], rot=30)
+        
         plt.xlabel('')
         if i == 0:
             plt.ylabel(ylabel)
-        if title:
+        if len(variances) > 1 and title:
             plt.title(f'{v.title()} Variance')
 
+@figure()
+def average_predictive_accuracy(axes=None):
+    plot_models(
+        np.exp(logp.groupby(['variance', 'wid']).mean()).groupby('variance').mean(),
+        "Average Predictive Accuracy",
+        axes
+    )
+
+L = np.exp(logp.groupby(['variance', 'wid']).mean()).groupby('variance').mean()
+L.loc['constant'].round(3)
+
+# %% --------
 @figure()
 def full_likelihood(axes=None):
     plot_models(
@@ -216,13 +228,6 @@ def geometric_mean_likelihood(axes=None):
         axes
     )
 
-@figure()
-def average_predictive_accuracy(axes=None):
-    plot_models(
-        np.exp(logp.groupby(['variance', 'wid']).mean()).groupby('variance').mean(),
-        "Average Predictive Accuracy",
-        axes
-    )
 
 
 # %% --------
@@ -267,7 +272,7 @@ def backwards():
 
 # %% ==================== TERMINATION ====================
 
-df = pd.read_csv(f'model/results/{EXPERIMENT}/features.csv')
+df = pd.read_csv(f'model/results/{VERSION}/features.csv')
 df.term_reward = df.term_reward.apply(int)
 
 def get_agent(wid):
@@ -367,7 +372,7 @@ fits.set_index(['wid', 'model']).cost
 
 # %% ==================== PARAMETERS ====================
 
-cv_fits = pd.concat([pd.read_csv(f'model/results/{EXPERIMENT}/mle/{model}-cv.csv') 
+cv_fits = pd.concat([pd.read_csv(f'model/results/{VERSION}/mle/{model}-cv.csv') 
                      for model in models], sort=False).set_index('wid')
 
 cv_fits['click_delay'] = pdf.click_delay
@@ -588,8 +593,8 @@ plt.savefig('individual_likelihood.pdf')
 
 
 import json
-# EXPERIMENT = 'webofcash-pilot-1.1'
-EXPERIMENT = 'webofcash-1.2'
+# VERSION = 'webofcash-pilot-1.1'
+VERSION = 'webofcash-1.2'
 def load_trials(experiment):
     with open(f'data/{experiment}/trials.json') as f:
         data = json.load(f)
@@ -599,7 +604,7 @@ def load_trials(experiment):
             t['wid'] = wid
             yield t
             
-data = pd.DataFrame(load_trials(EXPERIMENT))
+data = pd.DataFrame(load_trials(VERSION))
 data['n_click'] = data.reveals.apply(len)
 data['raw_reward'] = data.score + data.n_click  # assumes cost = 1
 

@@ -14,6 +14,7 @@ def str_join(args, sep=' '):
 def load_data(exp):
     tdf = pd.read_pickle(f'data/{exp}/trials.pkl').query('block == "test"')
     pdf = pd.read_pickle(f'data/{exp}/participants.pkl')
+    pdf.rename(columns={'clickDelay': 'click_delay'}, inplace=True)
     tdf['click_delay'] = pdf['click_delay'] = pdf.click_delay.apply(lambda x: str(x/1000)+'s')
     if 'variance' not in pdf:
         pdf['variance'] = 'constant'

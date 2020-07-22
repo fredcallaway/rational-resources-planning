@@ -212,22 +212,22 @@ function get_logp(M::Type, d::Datum)
     log(action_dist(model, d.t.m, d.b)[d.c+1])
 end
 
-# namedtuple(Dict(name(M) => get_logp(M, d) for M in MODELS))...,
-
 # %% --------
+
+
 
 click_features(d) = (
     wid=d.t.wid,
     i=d.t.i,
     b=d.b,
     c=d.c,
+    p_rand=1/sum(allowed(d.t.m, d.b)),
     predictions = Dict(name(M) => action_dist(get_model(M, d.t), d) for M in MODELS),
     n_revealed=sum(observed(d.b)) - 1,
     term_reward=term_reward(d.t.m, d.b)
 )
 
 click_features.(all_data) |> JSON.json |> write("$results_path/click_features.json")
-run(`du -h $results_path/click_features.json`);
 
 # %% --------
 term_reward(t::Trial) = term_reward(t.m, t.bs[end])
@@ -239,7 +239,6 @@ trial_features(t::Trial) = (
 )
 
 trial_features.(flat_trials) |> JSON.json |> write("$results_path/trial_features.json")
-run(`du -h $results_path/trial_features.json`);
 
 # %% --------
 function demo_trial(t)
