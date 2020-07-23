@@ -17,6 +17,13 @@ function softmax!(x)
 end
 softmax(x) = softmax!(copy(x))
 
+function softmax!(x, i)
+    x .= exp.(x .- maximum(x))
+    x[i] / sum(x)
+end
+
+
+
 dictkeys(d::Dict) = (collect(keys(d))...,)
 dictvalues(d::Dict) = (collect(values(d))...,)
 

@@ -35,7 +35,7 @@ function Base.display(model::Heuristic{H,T}) where {H, T}
     end
 end
 
-function features(::Type{M}, m::MetaMDP, b::Belief) where M <: Heuristic
+function features(::Type{Heuristic{H,T}}, m::MetaMDP, b::Belief) where {H,T}
     frontier = get_frontier(m, b)
     (
         frontier = frontier,

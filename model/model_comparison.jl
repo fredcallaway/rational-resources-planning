@@ -53,6 +53,7 @@ include("Q_table.jl")
 
 MODELS = [
     Optimal,
+    OptimalPlus,
     Heuristic{:BestFirst},
     Heuristic{:BestFirstNoBestNext},
     # Heuristic{:DepthFirst},
@@ -67,11 +68,12 @@ MODELS = [
 ]
 
 # %% ==================== FIT MODELS TO FULL DATASET ====================
-# @everywhere include("likelihood.jl")
+@everywhere include("likelihood.jl")
 
 @sync begin
-    @spawnat 2 @time fit(Optimal, all_trials |> values |> first)
-    @spawnat 3 @time fit(Heuristic{:BreadthFirst}, all_trials |> values |> first)
+    @spawnat 2 @time fit(Heuristic{:BreadthFirst}, all_trials |> values |> first)
+    @spawnat 3 @time fit(Optimal, all_trials |> values |> first)
+    @spawnat 4 @time fit(OptimalPlus, all_trials |> values |> first)
 end
 
 # %% --------
@@ -213,7 +215,6 @@ function get_logp(M::Type, d::Datum)
 end
 
 # %% --------
-
 
 
 click_features(d) = (

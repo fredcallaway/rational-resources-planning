@@ -54,17 +54,18 @@ function bfgs_random_restarts(loss, lower, upper, n_restart; max_err=n_restart/2
             optimize(loss, lower, upper, x0, algo, autodiff=:forward)
         catch err
             err isa InterruptException && rethrow(err)
-            @warn "First BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name
+            # @warn "First BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name
             # try the other line search method
             algo = first(algorithms)  # this cycles
             try
                 optimize(loss, lower, upper, x0, algo, autodiff=:forward)
             catch err
                 err isa InterruptException && rethrow(err)
-                @error "Second BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name
+                @warn "Second BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name
                 n_err += 1
                 if n_err >= max_err
-                    error("Too many optimization errors")
+                    @error "Too many optimization errors"
+                    rethrow(err)
                 end
                 return missing
             end

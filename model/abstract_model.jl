@@ -1,5 +1,6 @@
 abstract type AbstractModel{T} end
 
+
 # these three methods are the core of a model defition
 
 "Defines search bounds."
@@ -82,7 +83,7 @@ end
 features(::Type{M}, d::Datum) where M <: AbstractModel = features(M, d.t.m, d.b)
 
 
-# Common code and model-related utilities
+# Shared code and model-related utilities
 
 function create_model(::Type{M}, x::Vector{T}, z, space::Space) where M where T
     xs = Iterators.Stateful(x)
@@ -99,6 +100,9 @@ function create_model(::Type{M}, x::Vector{T}, z, space::Space) where M where T
     end
     M{T}(args...)
 end
+
+name(model::M) where M <: AbstractModel = string(M.name)
+name(::Type{M}) where M <: AbstractModel = string(M)
 
 function get_frontier(m, b::Belief)
     findall(1:length(b)) do i
