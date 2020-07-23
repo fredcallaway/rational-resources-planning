@@ -39,30 +39,7 @@ function Base.display(model::Heuristic{H,T}) where {H, T}
 end
 
 function action_dist!(p::Vector{T}, model::Heuristic{H,T}, φ::NamedTuple) where {H, T}
-    p .= 0.
-    if length(φ.frontier) == 0
-        p[1] = 1.
-        return p
-    end
-
-    ε = model.ε
-    p_rand = ε / (1+length(φ.frontier))
-    p_term = termination_probability(model, φ)
-    p[1] = p_rand + (1-ε) * p_term
-
-    # Note: we assume that p[i] is zero for all non-frontier nodes
-    p_select = selection_probability(model, φ)
-    for i in eachindex(p_select)
-        c = φ.frontier[i] + 1
-        p[c] = p_rand + (1-ε) * (1-p_term) * p_select[i]
-    end
-    p
-end
-
-function action_dist(model::Heuristic{H,T}, m::MetaMDP, b::Belief) where {H, T}
-    φ = features(Heuristic{H,T}, m, b)
-    p = zeros(T, length(b) + 1)
-    action_dist!(p, model, φ)
+    term_select_action_dist!(p, model, φ)
 end
 
 function features(::Type{Heuristic{H,T}}, m::MetaMDP, b::Belief) where {H, T}
@@ -151,7 +128,7 @@ default_space(::Type{Heuristic{:Foobar}}) = _modify(:Full, θ_depth_limit=0, θ_
 
 # ---------- Selection rule ---------- #
 
-function selection_probability(model, φ)
+function selection_probability(model::Heuristic, φ)
     p = φ.tmp  # use pre-allocated array for memory efficiency
     @. p = model.β_best * φ.frontier_values + model.β_depth * φ.frontier_depths
     softmax!(p)
@@ -185,7 +162,7 @@ end
 
 # ---------- Stopping rule---------- #
 
-function termination_probability(model, φ)
+function termination_probability(model::Heuristic, φ)
     v = model.θ_term + 
         model.β_satisfice * φ.term_reward +
         model.β_best_next * φ.best_vs_next +
