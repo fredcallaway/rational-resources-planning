@@ -116,7 +116,6 @@ function bfgs_random_restarts(loss, lower, upper, n_restart; max_err=20)
     opts = map(get_sobol(lower, upper, n_restart)) do x0
         try
             optimize(loss, lower, upper, x0, algo, autodiff=:forward)
-            optimize(loss, lower, upper, x0, algo)
         catch err
             err isa InterruptException && rethrow(err)
             @warn "First BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name
