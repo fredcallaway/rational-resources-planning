@@ -145,8 +145,11 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_res
     @assert all(space_size .> 0)
 
     L = Likelihood(trials)
+
+    n_call = 0
     function make_loss(z)
         x -> begin
+            n_call += 1
             model = create_model(M, x, z, space)
             # L1 = sum(abs.(x) ./ space_size)
             -logp(L, model) #+ 10 * L1
@@ -172,6 +175,7 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_res
         @error("Could not fit $M to $(trials[1].wid)")
         error("Fitting error")
     end
+    @info "fitting complete" n_call
     models, losses = invert(results)
     i = argmin(losses)
     models[i], -logp(L, models[i])
