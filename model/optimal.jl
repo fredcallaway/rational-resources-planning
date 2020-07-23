@@ -43,7 +43,6 @@ end
 features(::Type{Optimal{T}}, d::Datum) where T = (
     options = [0; get_frontier(d.t.m, d.b)],
     q = Q_TABLE[hash(d)],
-    tmp = zeros()
 )
 
 # for simulation: just get the q value you need.
