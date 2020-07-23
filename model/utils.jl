@@ -78,3 +78,12 @@ function struct_equal(s1::T, s2::T) where T
     all(getfield(s1, f) == getfield(s2, f)
         for f in fieldnames(T))
 end
+
+function print_tracked(x)
+    if x[1] isa Float64
+        xx = x
+    else
+        xx = getfield.(x, :value)
+    end
+    println(round.(xx; sigdigits=6))
+end

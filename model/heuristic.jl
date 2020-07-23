@@ -10,11 +10,8 @@ struct Heuristic{H,T} <: AbstractModel{T}
     β_satisfice::T
     β_best_next::T
     β_depth_limit::T
+    # Stopping rule threshold
     θ_term::T
-    # Stopping rule thresholds
-    # θ_satisfice::T
-    # θ_best_next::T
-    # θ_depth_limit::T
     # Lapse rate
     ε::T
 end
@@ -38,11 +35,7 @@ function Base.display(model::Heuristic{H,T}) where {H, T}
     end
 end
 
-function action_dist!(p::Vector{T}, model::Heuristic{H,T}, φ::NamedTuple) where {H, T}
-    term_select_action_dist!(p, model, φ)
-end
-
-function features(::Type{Heuristic{H,T}}, m::MetaMDP, b::Belief) where {H, T}
+function features(::Type{M}, m::MetaMDP, b::Belief) where M <: Heuristic
     frontier = get_frontier(m, b)
     (
         frontier = frontier,
@@ -55,25 +48,8 @@ function features(::Type{Heuristic{H,T}}, m::MetaMDP, b::Belief) where {H, T}
     )
 end
 
-function logp(L::Likelihood, model::Heuristic{H,T}) where {H, T}
-    φ = memo_map(L) do d
-        features(Heuristic{H,T}, d.t.m, d.b)
-    end
-
-    tmp = zeros(T, n_action(L))
-    total = zero(T)
-    for i in eachindex(L.data)
-        a = L.data[i].c + 1
-        p = action_dist!(tmp, model, φ[i])
-        if !(sum(p) ≈ 1)
-            println("\n\n")
-            display(model)
-            println("\n\n")
-        end
-        @assert sum(p) ≈ 1
-        total += log(p[a])
-    end
-    total
+function action_dist!(p::Vector{T}, model::Heuristic{H,T}, φ::NamedTuple) where {H, T}
+    term_select_action_dist!(p, model, φ)
 end
 
 # ---------- Define parameter ranges and special cases ---------- #
@@ -87,10 +63,6 @@ default_space(::Type{Heuristic{:Full}}) = Space(
     :β_depth_limit => (1e-6, 3),
 
     :θ_term => (-30, 30),
-    # :θ_satisfice => (0, MAX_THETA),
-    # :θ_best_next => (0, MAX_THETA),
-    # :θ_depth_limit => (0, 4),
-
     :ε => (1e-3, 1)
 )
 
@@ -126,7 +98,7 @@ default_space(::Type{Heuristic{:Foobar}}) = _modify(:Full, θ_depth_limit=0, θ_
 
 # ---------- Selection rule ---------- #
 
-function selection_probability(model::Heuristic, φ)
+function selection_probability(model::Heuristic, φ::NamedTuple)
     p = φ.tmp  # use pre-allocated array for memory efficiency
     @. p = model.β_best * φ.frontier_values + model.β_depth * φ.frontier_depths
     softmax!(p)
@@ -160,7 +132,7 @@ end
 
 # ---------- Stopping rule---------- #
 
-function termination_probability(model::Heuristic, φ)
+function termination_probability(model::Heuristic, φ::NamedTuple)
     v = model.θ_term + 
         model.β_satisfice * φ.term_reward +
         model.β_best_next * φ.best_vs_next +

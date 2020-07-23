@@ -1,37 +1,11 @@
 abstract type AbstractModel{T} end
 
-function create_model(::Type{M}, x::Vector{T}, z, space::Space) where M where T
-    xs = Iterators.Stateful(x)
-    zs = Iterators.Stateful(z)
-    args = map(fieldnames(M)) do fn
-        spec = space[fn]
-        if spec isa Tuple
-            first(xs)
-        elseif spec isa Vector
-            first(zs)
-        else
-            T(spec)
-        end
-    end
-    M{T}(args...)
+# these three methods are the core of a model defition
+
+"Defines search bounds."
+function default_space(::Type{M}) where M <: AbstractModel
+    error("Not implemented")
 end
-
-# function preference(model::M, m::MetaMDP, b::Belief, c::Int) where M <: AbstractModel
-#     error("preference")
-#     phi = features(M, m, b)
-#     preference(model, phi, c)
-# end
-
-# function preferences(model::M, m::MetaMDP, b::Belief) where M <: AbstractModel
-#     error("preference")
-#     phi = features(M, m, b)
-#     map(0:length(b)) do c
-#         preference(model, phi, c)
-#     end
-# end
-
-# preference(model::AbstractModel, d::Datum) = preference(model, d.t.m, d.b, d.c)
-
 
 "Computes features that don't depend on model parameters."
 function features(::Type{M}, m::MetaMDP, b::Belief) where M <: AbstractModel
@@ -42,6 +16,9 @@ end
 function action_dist!(p::Vector{T}, model::AbstractModel{T}, φ) where T
     error("Not implemented")
 end
+
+
+# there are two standard ways to compute action_dist!
 
 "Simple one-step softmax model."
 function softmax_action_dist!(p::Vector{T}, model::AbstractModel{T}, φ::NamedTuple) where T
@@ -81,17 +58,47 @@ function term_select_action_dist!(p::Vector{T}, model::AbstractModel{T}, φ) whe
     p
 end
 
-# This is used for simulation and can be overridden if necessary
+preference(model::AbstractModel, φ::NamedTuple) = error("Not implemented.")
+termination_probability(model::AbstractModel, φ::NamedTuple) = error("Not implemented.")
+selection_probability(model::AbstractModel, φ::NamedTuple) = error("Not implemented.")
+
+
+# Additional calling conventions. The first is most general and allows
+# for simulation. The second is necessary for the Optimal model to 
+# make predictions quickly.
+
 function action_dist(model::M, m::MetaMDP, b::Belief) where M <: AbstractModel
+    p = zeros(length(b) + 1)
     φ = features(M, m, b)
-    p = zeros(T, length(b) + 1)
     action_dist!(p, model, φ)
 end
 
-# Convenience
-features(::Type{M}, d::Datum) where M <: AbstractModel = features(M, d.t.m, d.b)
-action_dist(model::AbstractModel, d::Datum) = action_dist(model, d.t.m, d.b)
+function action_dist(model::M, d::Datum) where M <: AbstractModel
+    p = zeros(length(d.b) + 1)
+    φ = features(M, d)
+    action_dist!(p, model, φ)
+end
 
+features(::Type{M}, d::Datum) where M <: AbstractModel = features(M, d.t.m, d.b)
+
+
+# Common code and model-related utilities
+
+function create_model(::Type{M}, x::Vector{T}, z, space::Space) where M where T
+    xs = Iterators.Stateful(x)
+    zs = Iterators.Stateful(z)
+    args = map(fieldnames(M)) do fn
+        spec = space[fn]
+        if spec isa Tuple
+            first(xs)
+        elseif spec isa Vector
+            first(zs)
+        else
+            T(spec)
+        end
+    end
+    M{T}(args...)
+end
 
 function get_frontier(m, b::Belief)
     findall(1:length(b)) do i
