@@ -34,25 +34,34 @@ end
 
 
 "Computes features that don't depend on model parameters."
-function features(::Type{M}, d::Datum) where M <: AbstractModel
+function features(::Type{M}, m::MetaMDP, b::Belief) where M <: AbstractModel
     error("Not implemented")
 end
 
 "Computes action probabilities."
-function action_dist!(p::Vector{T}, model::AbstractModel{T}, φ::NamedTuple) where T
+function action_dist!(p::Vector{T}, model::AbstractModel{T}, φ) where T
     error("Not implemented")
 end
 
 "Simple one-step softmax model."
-function softmax_action_dist!(p::Vector{T}, q::Vector{T}, model::AbstractModel{T}) where T
-    possible = allowed(m, b)
-    h = q .+ .!possible .* -Inf
-    p_rand = model.ε .* rand_prob(m, b) .* possible
-    p_rand .+ (1-model.ε) .* softmax(h)
+function softmax_action_dist!(p::Vector{T}, model::AbstractModel{T}, φ::NamedTuple) where T
+    p .= NOT_ALLOWED
+    for c in φ.options
+        p[c+1] = preference(model, φ, c)
+    end
+    softmax!(p)
+    
+    ε = model.ε
+    p .*= (1 - ε)
+    p_rand = ε / length(φ.options)
+    for i in φ.options
+        p[i+1] += p_rand
+    end
+    p
 end
 
 "Two-step terminate-then-select model."
-function term_select_action_dist!(p::Vector{T}, model::AbstractModel{T}, φ::NamedTuple) where T
+function term_select_action_dist!(p::Vector{T}, model::AbstractModel{T}, φ) where T
     p .= 0.
     if length(φ.frontier) == 0
         p[1] = 1.
@@ -80,5 +89,12 @@ function action_dist(model::M, m::MetaMDP, b::Belief) where M <: AbstractModel
 end
 
 # Convenience
-features(::Type{M}, d::Datum) where M <: AbstractModel = features(T, d.t.m, d.b)
+features(::Type{M}, d::Datum) where M <: AbstractModel = features(M, d.t.m, d.b)
 action_dist(model::AbstractModel, d::Datum) = action_dist(model, d.t.m, d.b)
+
+
+function get_frontier(m, b::Belief)
+    findall(1:length(b)) do i
+        allowed(m, b, i)
+    end
+end

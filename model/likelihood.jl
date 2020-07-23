@@ -40,32 +40,54 @@ function logp(model::AbstractModel, trials::Vector{Trial})
     logp(L, model)
 end
 
+# function logp(L::Likelihood, model::M)::T where M <: AbstractModel{T} where T <: Real
+#     H = initial_pref(L, T)
+#     p_rand = memo_map(rand_prob, L)
+#     chosen = chosen_actions(L)
+#     phi = memo_map(L) do d
+#         features(M, d)
+#     end
+
+#     all_actions = 1:n_action(L)
+#     tmp = zeros(T, n_action(L))
+
+#     total = zero(T)
+#     for i in eachindex(L.data)
+#         h = H[i]
+#         for a in all_actions
+#             if h[a] != NOT_ALLOWED
+#                 # h[c] = foo_pref(nv[i], tr[i], c, x)
+#                 h[a] = preference(model, phi[i], a-1)
+#             end
+#         end
+#         p = model.ε * p_rand[i] + (1-model.ε) * softmax(tmp, h, chosen[i])
+#         total += log(p)
+#     end
+#     total
+# end
+
+
 function logp(L::Likelihood, model::M)::T where M <: AbstractModel{T} where T <: Real
-    H = initial_pref(L, T)
-    p_rand = memo_map(rand_prob, L)
-    chosen = chosen_actions(L)
-    phi = memo_map(L) do d
+    φ = memo_map(L) do d
         features(M, d)
     end
 
-    all_actions = 1:n_action(L)
     tmp = zeros(T, n_action(L))
-
     total = zero(T)
     for i in eachindex(L.data)
-        h = H[i]
-        for a in all_actions
-            if h[a] != NOT_ALLOWED
-                # h[c] = foo_pref(nv[i], tr[i], c, x)
-                h[a] = preference(model, phi[i], a-1)
-            end
+        a = L.data[i].c + 1
+        p = action_dist!(tmp, model, φ[i])
+        if !(sum(p) ≈ 1)
+            @error "bad probability vector" p sum(p)
+            println("\n\n")
+            display(model)
+            println("\n\n")
         end
-        p = model.ε * p_rand[i] + (1-model.ε) * softmax(tmp, h, chosen[i])
-        total += log(p)
+        @assert sum(p) ≈ 1
+        total += log(p[a])
     end
     total
 end
-# %% --------
 
 
 function print_tracked(x)
@@ -83,16 +105,18 @@ end
     x0s = [next!(seq) for i in 1:n]
 end
 
-function bfgs_random_restarts(loss, lower, upper, n_restart)
+function bfgs_random_restarts(loss, lower, upper, n_restart; max_err=20)
     algorithms = [
         Fminbox(LBFGS()),
         Fminbox(LBFGS(linesearch=Optim.LineSearches.BackTracking())),
     ] |> Iterators.cycle |> Iterators.Stateful
     algo = first(algorithms)
+    n_err = 0
 
     opts = map(get_sobol(lower, upper, n_restart)) do x0
         try
             optimize(loss, lower, upper, x0, algo, autodiff=:forward)
+            optimize(loss, lower, upper, x0, algo)
         catch err
             err isa InterruptException && rethrow(err)
             @warn "First BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name
@@ -103,6 +127,10 @@ function bfgs_random_restarts(loss, lower, upper, n_restart)
             catch err
                 err isa InterruptException && rethrow(err)
                 @error "Second BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name
+                n_err += 1
+                if n_err >= max_err
+                    error("Too many optimization errors")
+                end
                 return missing
             end
         end
@@ -127,7 +155,7 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_res
 
     results = map(combinations(space)) do z
         loss = make_loss(z)
-        
+
         opt = begin
             if method == :samin
                 x0 = lower .+ rand(length(lower)) .* space_size

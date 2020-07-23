@@ -43,9 +43,7 @@ function action_dist!(p::Vector{T}, model::Heuristic{H,T}, φ::NamedTuple) where
 end
 
 function features(::Type{Heuristic{H,T}}, m::MetaMDP, b::Belief) where {H, T}
-    frontier = findall(1:length(b)) do i
-        allowed(m, b, i)
-    end
+    frontier = get_frontier(m, b)
     (
         frontier = frontier,
         frontier_values = node_values(m, b)[frontier],
