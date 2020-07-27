@@ -109,3 +109,5 @@ function get_frontier(m, b::Belief)
         allowed(m, b, i)
     end
 end
+get_frontier(d::Datum) = get_frontier(d.t.m, d.b)
+

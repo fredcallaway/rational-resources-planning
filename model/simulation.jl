@@ -12,13 +12,13 @@ function best_path(m, b)
     paths(m)[i]
 end
 
-function simulate(sim::Simulator, wid::String)
+function simulate(pol::Policy, wid::String)
     bs = Belief[]
     cs = Int[]
-    rollout(sim) do b, c
+    rollout(pol) do b, c
         push!(bs, deepcopy(b)); push!(cs, c)
     end
-    Trial(sim.m, wid, bs, cs, NaN, [], best_path(sim.m, bs[end]))
+    Trial(pol.m, wid, -1, bs, cs, term_reward(pol.m, bs[end]), [], best_path(pol.m, bs[end]))
 end
 
-simulate(model::AbstractModel, m::MetaMDP; wid=string(typeof(model).name)) = simulate(Simulator(model, m), wid)
+simulate(model::AbstractModel, m::MetaMDP; wid=name(model)) = simulate(Simulator(model, m), wid)

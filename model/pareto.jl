@@ -9,9 +9,11 @@ using Glob
 end
 
 mkpath("mdps/pareto")
-# %% ==================== Setup ====================
 
-@everywhere function mean_reward_clicks(pol; N=100000)
+N_SIM = 100000
+mdps = map(deserialize, glob("mdps/base/*"))
+
+@everywhere function mean_reward_clicks(pol; N=N_SIM)
     @assert pol.m.cost == 0
     reward, clicks = N \ mapreduce(+, 1:N) do i
         roll = rollout(pol)
@@ -22,7 +24,7 @@ end
 
 # %% ==================== Optimal ====================
 let
-    FORCE = true
+    # FORCE = true
     @time pmap(readdir("mdps/withcost")) do i
         f = "mdps/pareto/$i-Optimal.csv"
         if !FORCE && isfile(f)
@@ -39,7 +41,8 @@ let
     end
 end
 
-# %% ==================== Heuristic ====================
+
+# %% ==================== Other ====================
 
 function sample_models(M, n)
     space = default_space(M)
@@ -54,7 +57,13 @@ function sample_models(M, n)
     end
 end
 
-function pareto_front(M, m; n_candidate=10000, n_eval=100000)
+function sample_models(::Type{RandomSelection}, n)
+    # ignore n...
+    map(RandomSelection, range(0, 1, length=201))
+end
+
+
+function pareto_front(M, m; n_candidate=10000, n_eval=N_SIM)
     candidates = pmap(sample_models(M, n_candidate)) do model
         mrc = mean_reward_clicks(Simulator(model, m), N=n_eval)
         (model=name(M), mdp=id(m), namedtuple(model)..., mrc...)
@@ -72,15 +81,19 @@ end
 Hs = [:BestFirst, :BestFirstNoBestNext, :BreadthFirst, :DepthFirst,
       # :BestFirstNoBestNext, :BreadthFirstNoBestNext, :DepthFirstNoBestNext
       ]
+models = [RandomSelection]
+# models = [RandomSelection; [Heuristic{H} for H in Hs]]
 
-mdps = map(deserialize, glob("mdps/base/*"))
-
-for H in Hs, m in mdps
-    f = "mdps/pareto/$(id(m))-$H.csv"
+for M in models, m in mdps
+    f = "mdps/pareto/$(id(m))-$(name(M)).csv"
     if isfile(f)
         println("$f already exists")
     else
-        pareto_front(Heuristic{H}, m) |> CSV.write(f)
+        println("Creating ", f)
+        pareto_front(M, m) |> CSV.write(f)
         println("Wrote ", f)
     end
 end
+
+
+

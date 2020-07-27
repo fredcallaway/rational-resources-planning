@@ -1,5 +1,5 @@
 
-# %% ==================== LOAD DATA ====================
+# %% ==================== LOAD DATA AND SET UP ====================
 
 from analysis_utils import *
 
@@ -27,6 +27,7 @@ figs.add_names({
     'BestFirst': 'Adaptive\nBestFirst'
 })
 figure = figs.figure; show = figs.show; figs.watch()
+write_tex = TeX(path=f'stats/{EXPERIMENT}').write
 
 tdf['i'] = list(tdf.trial_index - tdf.trial_index.groupby('wid').min() + 1)
 assert all(tdf.groupby(['wid', 'i']).apply(len) == 1)
@@ -35,12 +36,21 @@ tdf = tdf.join(trial_features, on=['wid', 'i'])
 
 if EXPERIMENT == 1:
     variances = ['constant']
-    MODELS = ['Optimal', 'BestFirst', 'BestFirstNoBestNext']
+    MODELS = ['RandomSelection', 'Optimal', 'OptimalPlus', 'BestFirst', 'BestFirstNoBestNext']
 else:
     MODELS = 'Optimal BestFirst BreadthFirst DepthFirst '.split()
     variances = ['decreasing', 'constant', 'increasing']
 
+keep = tdf.groupby('wid').n_click.mean() >= 1
+tdf = tdf.loc[keep]
+pdf = pdf.loc[keep]
 
+# %% --------
+lb, db, lg, dg, lr, dr, lo, do, *_ = sns.color_palette("Paired")
+gray = (0.5, 0.5, 0.5)
+pal = [gray, db, lb, dg, lg]
+palette = dict(zip(MODELS, pal))
+palette['Human'] = '#333333'
 # %% ==================== PAYMENT ====================
 
 pdf['total_time'] = total_time = (pdf.time_end - pdf.time_start) / 1000 / 60
@@ -79,17 +89,24 @@ sns.catplot('click_delay', 'wage', data=pdf, kind='swarm',
            order='1.0s 2.0s 3.0s 4.0s'.split())
 show()
 
+
 # %% ==================== PARETO FRONT ====================
 
 model_pareto = pd.concat((pd.read_csv(f) for f in glob('model/mdps/pareto/*')), sort=True)
+model_pareto = model_pareto.set_index('mdp').loc[tdf.mdp.unique()].reset_index()
 model_pareto['variance'] = model_pareto.mdp.apply(mdp2var.get)
 model_pareto.set_index(['model', 'variance'], inplace=True)
 model_pareto.sort_values('cost', inplace=True)
 model_pareto.rename(columns={'clicks': 'n_click', 'reward': 'term_reward'}, inplace=True)
+model_pareto.index.unique()
+
 # %% --------
 
+plt.rc('legend', fontsize=10, handlelength=2)
+
 def plot_model(variance, model):
-    plt.plot('n_click', 'term_reward', data=model_pareto.loc[model, variance], label=model, marker='.')
+    plt.plot('n_click', 'term_reward', data=model_pareto.loc[model, variance], 
+        label=model, marker='.', color=palette[model])
 
 def setup_variance_plot(nrow=1):
     ncol = len(variances)
@@ -102,10 +119,15 @@ def pareto():
     for i, v in enumerate(variances):
         plt.sca(axes.flat[i])
         for model in MODELS:
+            if model == 'OptimalPlus':
+                continue
             plot_model(v, model)
             
         g = X.loc[v].groupby('wid'); x = 'n_click'; y = 'term_reward'
-        plt.scatter(g[x].mean(), g[y].mean(), color='#333333', s=5, label='Human')
+        sns.regplot(g[x].mean(), g[y].mean(), lowess=True, color=palette['Human'], label='Human',
+                   scatter=False).set_zorder(20)
+        plt.scatter(g[x].mean(), g[y].mean(), color=palette['Human'], s=5).set_zorder(21)
+
         # plt.errorbar(g[x].mean(), g[y].mean(), yerr=g[y].sem(), xerr=g[x].sem(), 
         #              label='Human', fmt='.', color='#333333', elinewidth=.5)
 
@@ -113,27 +135,50 @@ def pareto():
             plt.title(f'{v.title()} Variance')
         plt.ylabel("Expected Reward")
         plt.xlabel("Number of Clicks")
-        if i == 0 and len(variances) > 1:
-            plt.legend()
+        if i == 0:
+            plt.legend(loc='lower right')
 
 # %% --------
+
+def linear_interpolate(x1, x2, y1, y2, x):
+    d = (x - x1) / (x2 - x1)
+    return y1 + d * (y2 - y1)
+
+# x1, x2, y1, y2 = 1, 4, 2, 6
+# plt.plot([x1, x2], [y1, y2])
+# x = 2
+# plt.plot([x], [linear_interpolate(x1, x2, y1, y2, x)], 'o')
+# show()
 
 mdps = tdf.mdp.unique()
 optimal = model_pareto.loc['Optimal'].set_index('mdp').loc[mdps].set_index('cost')[['n_click', 'term_reward']]
 human = tdf.groupby('wid')[['n_click', 'term_reward']].mean()
 
-def pareto_loss(row, var):
-    ## TODO linear interpolation
-    cost = abs(optimal.n_click - row.n_click).idxmin()
-    opt_val = optimal.loc[cost].drop(var).values[0]
-    return row.drop(var).values[0] - opt_val
+def pareto_loss(row):
+    xvar = 'n_click'; yvar = 'term_reward'
+    xvar = human.columns.drop(yvar)[0]
+    x_diff = (optimal[xvar] - row[xvar]).values
 
-for var in ['n_click', 'term_reward']:
-    loss = human.apply(pareto_loss, axis=1, var=var).mean()
-    if var == 'n_click':
-        loss *= -1
-    write_tex(f'pareto_loss_{var}', f'{loss:.2f}')
+    cross_point = (x_diff < 0).argmax()
+    assert cross_point > 0
+    assert x_diff[cross_point - 1] > 0
+    opt = optimal.iloc[cross_point-1:cross_point+1]
+    opt_xs = list(opt[xvar])
+    hum_x = row[xvar]
 
+    assert opt_xs[0] > hum_x > opt_xs[1]
+        
+    opt_ys = list(opt[yvar])
+    opt_y = linear_interpolate(*opt_xs, *opt_ys, hum_x)
+    hum_y = row[yvar]
+
+    if opt_y == 0:
+        return np.nan
+    d = opt_y - hum_y
+    return d, d / opt_y
+
+loss, pct_loss = human.apply(pareto_loss, axis=1, result_type='expand').mean().values.T
+write_tex(f'pareto_loss', f'{loss:.2f} ({pct_loss*100:.0f}\%)')
 
 # %% ==================== MODEL COMPARISON ====================
 
@@ -147,20 +192,17 @@ logp = np.log(pd.DataFrame(list(res.values)))[MODELS]
 logp.set_index(cf.index, inplace=True)
 logp['variance'] = pdf.variance
 logp['Random'] = np.log(cf.p_rand)
+assert set(MODELS) < set(logp.columns)
 # %% --------
 
 @figure()
 def bbd_individual_likelihood():
-    MODELS = ['BreadthFirst', 'BestFirst', 'DepthFirst']
-    variances = ['decreasing', 'constant', 'increasing']
-    cds = '1.0s 2.0s 3.0s'.split()
-    palette = dict(zip(cds, sns.color_palette('viridis')[0:-1:2]))
-
     def plot_participants(val, fits, MODELS):
         sns.swarmplot(y='model', x=val, data=fits, order=MODELS,
-                      hue='click_delay', hue_order=cds, palette=palette)
+                      palette=palette)
         for w, d in fits.groupby('wid'):
-            c = palette[pdf.click_delay[w]]
+            # c = palette[pdf.click_delay[w]]
+            c = 'k'
             plt.plot(d.set_index('model').loc[MODELS][val], MODELS, color=c, lw=2, alpha=0.5)
         plt.ylabel('')
         plt.xlabel('Log Likelihood')
@@ -189,10 +231,9 @@ def plot_models(L, ylabel, axes=None, title=True):
     for i, v in enumerate(variances):
         plt.sca(axes.flat[i])
 
-        L.pop('Random').loc[v]
-        L.loc[v].plot.line(color=[f'C{i}' for i in range(len(MODELS))], rot=30)
-        # plt.axhline(L.pop('Random').loc[v], c='k')
-        # L.loc[v].plot.bar(color=[f'C{i}' for i in range(len(MODELS))], rot=30)
+        # L.loc[v].plot.line(color=[f'C{i}' for i in range(len(MODELS))], rot=30)
+        plt.axhline(L.pop('RandomSelection').loc[v], c='k')
+        L.loc[v].plot.bar(color=[f'C{i}' for i in range(len(MODELS))], rot=30)
         
         plt.xlabel('')
         if i == 0:
@@ -202,14 +243,33 @@ def plot_models(L, ylabel, axes=None, title=True):
 
 @figure()
 def average_predictive_accuracy(axes=None):
+    # fig, axes = plt.subplots(1, 1, squeeze=False, figsize=(6,4))
     plot_models(
         np.exp(logp.groupby(['variance', 'wid']).mean()).groupby('variance').mean(),
         "Average Predictive Accuracy",
         axes
     )
 
-L = np.exp(logp.groupby(['variance', 'wid']).mean()).groupby('variance').mean()
-L.loc['constant'].round(3)
+# %% --------
+@figure()
+def individual_predictive_accuracy():
+    L = np.exp(logp.groupby('wid').mean())
+    L = L.loc[keep]
+
+    lm = L.mean().loc[MODELS]
+    plt.scatter(lm, lm.index, s=100, color=[palette[m] for m in MODELS]).set_zorder(20)
+
+    sns.stripplot(y='Model', x='value',
+        data=pd.melt(L, var_name='Model'),
+        order=MODELS,  jitter=False, 
+        palette=palette,
+        alpha=0.1)
+
+    for wid, row in L.iterrows():
+        # c = palette[pdf.click_delay[w]]
+        c = 'k'
+        plt.plot(row.loc[MODELS], MODELS, color=c, lw=1, alpha=0.1)
+    plt.xlabel('Predictive Accuracy')
 
 # %% --------
 @figure()
@@ -227,8 +287,6 @@ def geometric_mean_likelihood(axes=None):
         "Geometric Mean Likelihood",
         axes
     )
-
-
 
 # %% --------
 
@@ -258,6 +316,7 @@ def pareto_fit(reformat_legend=False):
         plt.ylabel("Average Predictive Accuracy")
 
 
+
 # %% ==================== BACKWARD ====================
 
 leaves = {20, 15, 10, 5}
@@ -270,82 +329,112 @@ def backwards():
     sns.swarmplot('variance', 'backward', data=pdf)
     plt.xlabel('a')
 
-# %% ==================== TERMINATION ====================
-
-df = pd.read_csv(f'model/results/{VERSION}/features.csv')
-df.term_reward = df.term_reward.apply(int)
-
-def get_agent(wid):
-    return wid.split('-')[0] if '-' in wid else 'Human'
-
-df['agent'] = df.wid.apply(get_agent)
+# %% ==================== BEST FIRST ====================
+best_first = get_result(VERSION, 'bestfirst.json')
+bfo = pd.Series(best_first['optimal'])
+bfo.index = bfo.index.astype(float)
+bfo = bfo.sort_index().iloc[:-1]  # drop 100
+pdf['best_first'] = pd.Series(best_first['human'])
 
 
-# In[32]:
+def mean_std(x, digits=1, pct=False):
+    if pct:
+        x *= 100
+        return fr'{x.mean().round(digits)}\% \pm {x.std().round(digits)}\%'
+    else:
+        return fr'{x.mean().round(digits)} \pm {x.std().round(digits)}'
+
+write_tex("best_first", f"{pdf.best_first.mean()*100:.1f}\\%")
+
+# %% --------
+rdf = pdf[['cost', 'best_first']]
+import rpy2.robjects as ro
+from rpy2.robjects import pandas2ri
+pandas2ri.activate()
+%load_ext rpy2.ipython
+
+# %% --------
+%%R -i rdf
+summary(lm(best_first ~ cost, data=rdf))
 
 
-def savefig(name):
-    plt.tight_layout()
-    plt.savefig(f'figs/{name}.png', dpi=300)
+# %% --------o
+ut.head()
 
+def write_lm_var(model, var, name):
+    beta = np.round(model.params[var], 2)
+    se = np.round(model.bse[var], 2)
+    p = model.pvalues[var]
+    if p <.001:
+        p_desc = 'p < 0.001'
+    elif p < .01:
+        p_desc = 'p = {}'.format(np.round(p, 3))
+    else :
+        p_desc = 'p = {}'.format(np.round(p, 3))
 
-# In[21]:
-
-
-sns.catplot('n_revealed', 'is_term', data=df, kind='point', hue='agent', ci=False)
-savefig('term_revealed')
-
-
-# In[25]:
-
-
-sns.catplot('term_reward', 'is_term', data=df, kind='point', hue='agent', ci=False)
-savefig('term_reward')
-
-
-# In[33]:
-
-
-# x = df.groupby(['etr', 'n_revealed']).is_term.mean().reset_index()
-def robust_mean(x):
-    return np.mean(x)
-    if len(x) < 5:
-        return np.nan
-    return np.mean(x)
-
-# lims = {''}
-
-def plot_adaptive(df, **kws):
-    X = df.groupby(['term_reward', 'n_revealed']).is_term.apply(robust_mean).unstack()
-    # X = df.groupby(['etr', 'n_revealed']).apply(len).unstack()
-    sns.heatmap(X, cmap='Blues', linewidths=1, **kws).invert_yaxis()
-    plt.xlabel('Number of Clicks Made')
-#     plt.ylim(*lims['y'])
-#     plt.xlim(*lims['x'])
-
+    writevar('{}_BETA'.format(name), beta)
+    writevar('{}_SE'.format(name), se)
+    writevar('{}_P'.format(name), p)
     
-fig, axes = plt.subplots(1, 4, figsize=(12, 3),
-                         gridspec_kw={'width_ratios': [15, 15, 15, 1]})
+    writevar(
+        '{}_RESULT'.format(name),
+        r'$\\beta = %s,\\ \\text{SE} = %s,\\ %s$' % (beta, se, p_desc)
+    )
 
-# fig, axes = plt.subplots(1, 2, figsize=(8,4))
+# %% --------
 
-plt.sca(axes[0])
-plot_adaptive(df.query('agent == "Optimal"'), cbar_ax=axes[3])
-plt.ylabel("Best Expected Path Value")
-plt.title("Optimal")
+@figure()
+def cost_best_first():
+    bfo.plot(label="Optimal", color=palette["Optimal"], lw=2)
+    # sns.regplot('cost', 'best_first', lowess=True, data=pdf, color=palette["Human"])
+    plt.scatter('cost', 'best_first', data=pdf, color=palette["Human"])
+    plt.ylabel('Proportion of Clicks on Best Path')
+    plt.xlabel('Click Cost')
+    plt.legend()
 
-plt.sca(axes[1])
-plot_adaptive(df.query('agent == "Human"'), cbar=False)
-plt.title("Human")
-plt.ylabel("")
-plt.yticks(())
 
-plt.sca(axes[2])
-plot_adaptive(df.query('agent == "BestFirst"'), cbar=False)
-plt.title("Best First")
-plt.ylabel("")
-plt.yticks(())
-savefig('adaptive_satisficing')
+# %% --------
+"""
+- perecent best first (human/optimal)
+- errors broken down by termination
+    - terminate early vs late?
+- action error rate
+- interaction for adaptive satisficing
+"""
+
+# %% ==================== TERMINATION ====================
+import json
+with open(f'model/results/{VERSION}/termination.json') as f:
+    termination = json.load(f)
+
+termination.keys()
+etrs = list(map(int, termination['etrs']))
+idx = 1+np.arange(len(etrs))
+idx = idx[0::2]
+etrs = etrs[0::2]
+# %% --------
+
+@figure()
+def adaptive_satisficing():
+    cols = ['Optimal', 'Human', 'Heuristic']
+
+    fig, axes = plt.subplots(1, 4, figsize=(12, 3),
+                             gridspec_kw={'width_ratios': [15, 15, 15, 1]})
+
+    for i, col in enumerate(cols):
+        plt.sca(axes[i])
+        X, N = map(np.array, termination[col])
+        if i == 0:
+            sns.heatmap(X.T/N.T, cmap='viridis', linewidths=1, cbar_ax=axes[3])
+            plt.yticks(idx, etrs, rotation='horizontal')
+            plt.ylabel("Expected Value")
+        else:
+            sns.heatmap(X.T/N.T, cmap='viridis', linewidths=1, cbar=False)
+            plt.yticks(())
+        axes[i].invert_yaxis()
+        plt.xlabel('Number of Clicks Made')
+        plt.title('Satisficing BestFirst' if col == "Heuristic" else col)
+        # plt.title(col)
 
 
 
@@ -373,13 +462,18 @@ fits.set_index(['wid', 'model']).cost
 # %% ==================== PARAMETERS ====================
 
 cv_fits = pd.concat([pd.read_csv(f'model/results/{VERSION}/mle/{model}-cv.csv') 
-                     for model in models], sort=False).set_index('wid')
+                     for model in MODELS], sort=False).set_index('wid')
 
 cv_fits['click_delay'] = pdf.click_delay
 cv_fits['variance'] = pdf.variance
 # cv_fits.to_csv('cv_fits.csv')
 # cv_fits.rename(columns=lambda x: x.replace('ε', 'eps').replace('β', 'beta').replace('θ', 'theta')).to_csv('cv_fits.csv')
+# %% --------
 
+sns.scatterplot('β_term', 'β_select', data=fits.query('model == "OptimalPlus"'))
+plt.plot([0,50], [0,50], c='k')
+plt.axis('square')
+show()
 
 # %% --------
 f = cv_fits.query('model == "Optimal"')

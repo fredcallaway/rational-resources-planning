@@ -1,186 +1,118 @@
-using Distributed
-using StatsBase
+using Query
 
-isempty(ARGS) && push!(ARGS, "web")
+isempty(ARGS) && push!(ARGS, "exp1")
 include("conf.jl")
-@everywhere begin
-    using Glob
-    using Serialization
-    using CSV
-    include("base.jl")
-    include("models.jl")
-    # include("simulation.jl")
-end
-@everywhere results_path = "$results/$EXPERIMENT"
-mkpath(results_path)
-mkpath("$base_path/fits")
-mkpath("$base_path/sims")
 
-# %% ==================== Load data ====================
-
-all_trials = load_trials(EXPERIMENT);
+all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
 flat_trials = flatten(values(all_trials));
-println(length(flat_trials), " trials")
 all_data = all_trials |> values |> flatten |> get_data;
 
-# %% ====================  ====================
-models = [Optimal, BestFirst]
-fits = map(models) do M
-    M => @time pmap(all_trials) do wid, trials
-        fit(M, trials)
-    end
-end |> Dict
+@time all_sims = map(collect(keys(all_trials))) do wid
+    deserialize("$base_path/sims/$wid")
+end |> invert;
 
-# %% ====================  ====================
+MODELS = deserialize("$base_path/models")
 
-X = map(models) do M
-    [f[2] for f in fits[M]]
-end |> combinedims
 
-total = sum(X; dims=1)
-best_fit = counts([p.I[2] for p in argmin(X; dims=2)][:], 1:length(models))
+# file = f"{self.path}/{name}.tex"
+# with open(file, "w+") as f:
+#     f.write(str(tex) + r"\unskip")
+# print(f'wrote "{tex}" to "{file}"')
 
-# %% ====================  ====================
-let
-    println("Model        Likelihood   Best Fit")
-    for i in eachindex(models)
-        @printf "%-10s         %d         %d\n" models[i] total[i] best_fit[i]
+
+mkpath("../stats/$EXPERIMENT")
+function write_tex(name, x)
+    f = "../stats/$EXPERIMENT/$name.tex"
+    println(x, " > ", f)
+    write(f, string(x, "\\unskip"))
+end
+write_pct(name, x; digits=1) = write_tex(name, string(round(100 * x; digits=digits), "\\%"))
+# %% ==================== pure optimal simulations ====================
+mdps = unique(getfield.(flat_trials, :m))
+N_SIM = 10000
+@everywhere GC.gc()
+@time opt_sims = pmap(Iterators.product(mdps, COSTS)) do (m, cost)
+    V = load_V_nomem(id(mutate(m, cost=cost)))
+    map(1:N_SIM) do i
+        simulate(OptimalPolicy(V), "PureOptimal")
     end
 end
 
+# %% --------
+
+function viz_sim(t::Trial)
+    (
+        stateRewards = t.bs[end],
+        demo = (
+            clicks = t.cs[1:end-1] .- 1,
+            path = t.path .- 1,
+            # parameters = Dict(name(M) => get_params(M, t) for M in MODELS)
+            # predictions = Dict(name(M) => get_preds(M, t) for M in MODELS),
+        )
+    )
+end
+
+map(zip(COSTS, opt_sims)) do (cost, sim)
+    name = "Optimal-$cost"
+    viz_sim.(sim[1:50]) |> json |> write("$results_path/viz/$name.json")
+    (cost = cost, name=name)
+end |> json |> write("$results_path/viz/optimal-table.json")
+
+# %% ==================== adaptive satisficing ====================
+include("binning.jl")
+
+etrs = -30.:5:30
+bins = Dict(zip(etrs, 1:100))
+
+function termination_matrices(trials)
+    X = zeros(length(bins), 17)
+    N = zeros(length(bins), 17)
+    for t in trials
+        for (n_click, b, c) in zip(1:100, t.bs, t.cs)
+            bin = bins[term_reward(t.m, b)]
+            X[bin, n_click] += (c == TERM)
+            N[bin, n_click] += 1
+        end
+    end
+    X, N
+end
+
+tmats = map(all_sims) do msim
+    name = split(msim[1][1].wid, "-")[1]
+    name => termination_matrices(flatten(msim))
+end
+
+# TODO this doesn't exclude properly!!
+h = "Human" => termination_matrices(flatten(values(all_trials)))
+write("$results_path/termination.json",
+      json(Dict(tmats..., h, "etrs"=>collect(etrs))))
+
+# %% ==================== best first ====================
+
+_bf = Heuristic{:BestFirst,Float64}(10., 0., 0., 0., 0., -1e10, 0.)
+is_bestfirst(d::Datum) = action_dist(_bf, d)[d.c+1] > 1e-2
+
+function best_first_rate(trials)
+    trials |>
+    get_data |> 
+    @filter(_.c != TERM) |> 
+    @map(is_bestfirst) |> 
+    (x -> isempty(x) ? NaN : mean(x))
+end
+
+opt_bfr = map(best_first_rate, opt_sims)
+(
+    optimal = Dict(zip(COSTS, opt_bfr)),
+    human = valmap(best_first_rate, all_trials)
+) |> json |> write("$results_path/bestfirst.json")
+
+is_bestfirst(all_data)
 
 
+# %% ==================== path choice ====================
 
-
-# # %% ==================== Fit models ====================
-
-# function write_fit(model, biased, path; parallel=true)
-#     fits, t = @timed fit_model(model; biased=biased, parallel=parallel)
-#     serialize(path, fits)
-#     println("Wrote $path ($(round(t)) seconds)")
-#     return fits
-# end
-
-# function get_fits(models; overwrite=false)
-#     bias_opts = FIT_BIAS ? [false, true] : [false]
-#     combos = Iterators.product(models, bias_opts)
-#     asyncmap(combos; ntasks=3) do (model, biased)
-#         k = biased ? :biased : :default
-#         path = "$base_path/fits/$model-$k"
-#         if isfile(path) && !overwrite
-#             fits = deserialize(path)
-#         else
-#             fits = write_fit(model, biased, path; parallel=(model != Optimal))
-#         end
-#         (model, k) => fits
-#     end |> Dict
-# end
-
-
-# models = [Optimal, MetaGreedy, BestFirst, Random]
-# fits = get_fits(models)
-
-# # get_fits([Random]; overwrite=true)
-
-
-# # %% ==================== Likelihood ====================
-
-# function total_logp(fits::OrderedDict)
-#     mapreduce(+, values(fits)) do pf
-#         pf.logp
-#     end
-# end
-
-# let
-#     println("---- Total likelihood ----")
-#     bias_opts = FIT_BIAS ? [:default, :biased] : [:default]
-#     for k in bias_opts
-#         println("  ",k)
-#         for m in models
-#             lp = mapreduce(+, values(fits[(m, k)])) do pf
-#                 pf.logp
-#             end
-#             println("    ", m, "  ", round(Int, lp))
-#         end
-#     end
-# end
-
-
-# # %% ==================== Features ====================
-
-# @everywhere function descrybe(d::Datum; skip_logp=true)
-#     (
-#         map="themap",
-#         wid=d.t.wid,
-#         logp=skip_logp ? NaN : logp(fits[Optimal, :default][d.t.wid], d),
-#         n_revealed=sum(observed(d.b)) - 1,
-#         is_term=d.c == TERM,
-#         term_reward=term_reward(d.t.m, d.b)
-#     )
-# end
-
-
-# using CSV
-# mkpath("$results_path/features")
-# map(descrybe, all_data) |> CSV.write("$results_path/features/Human.csv")
-
-
-# # %% ==================== Simulations ====================
-# sims = map(flat_trials) do t
-#     repeatedly(50) do
-#         simulate(bf_fits[t.wid], t.m)
-#     end
-# end |> flatten |> CSV.write("$results_path/features/$(dd[1].wid).csv")
-
-
-# # %% ====================  ====================
-# # mkpath("$base_path/sims")
-# # pmap(write_sim, readdir("$base_path/fits"));
-
-# @everywhere function write_features(model_id)
-#     path = "$results_path/features/$model_id.csv"
-#     # sims = deserialize("$base_path/sims/$model_id");
-#     sims = write_sim(model_id)
-#     map(get_data(flatten(sims))) do d
-#         descrybe(d; skip_logp=true)
-#     end |> CSV.write(path)
-#     println("Wrote $path")
-# end
-
-# map(write_features, readdir("$base_path/fits"));
-
-
-# # %% ==================== Map info ====================
-
-# map(first(values(all_trials))) do t
-#     m = MetaMDP(t, NaN)
-#     (
-#         map=t.map,
-#         shortest_path=minimum(map(length, paths(m))),
-#         n_node=length(initial_belief(m)) - 1,
-#     )
-# end |> unique |> CSV.write("$results_path/maps.csv")
-
-# # %% ==================== Expansion rate ====================
-
-# map(all_data) do d
-#     d.c == TERM && return missing
-#     observed(d.b, d.c) && error("Nope")
-#     has_observed_parent(d.t.graph, d.b, d.c)
-# end |> skipmissing |> collect |> mean
-
-# # %% ====================  ====================
-# skips = filter(all_data) do d
-#     d.c == TERM && return false
-#     !has_observed_parent(d.t.graph, d.b, d.c)
-# end
-
-# skips[1].b
-# skips[1].c
-
-
-
-
-
+path_loss(t::Trial) = term_reward(t.m, t.bs[end]) - path_value(t.m, t.bs[end], t.path)
+pl = path_loss.(flat_trials)
+write_pct("path_loss", mean(pl .== 0))
 
 

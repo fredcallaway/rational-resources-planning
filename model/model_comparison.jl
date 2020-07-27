@@ -52,6 +52,7 @@ include("Q_table.jl")
 @everywhere include("models.jl")
 
 MODELS = [
+    RandomSelection,
     Optimal,
     OptimalPlus,
     Heuristic{:BestFirst},
@@ -66,38 +67,41 @@ MODELS = [
     # Heuristic{:FullNoBestNext},
     # Heuristic{:FullNoDepthLimit},
 ]
+serialize("$base_path/models", MODELS)
 
 # %% ==================== FIT MODELS TO FULL DATASET ====================
-@everywhere include("likelihood.jl")
 
-@sync begin
-    @spawnat 2 @time fit(Heuristic{:BreadthFirst}, all_trials |> values |> first)
-    @spawnat 3 @time fit(Optimal, all_trials |> values |> first)
-    @spawnat 4 @time fit(OptimalPlus, all_trials |> values |> first)
+if false
+    @everywhere include("likelihood.jl")
+    @sync begin
+        @spawnat 2 @time fit(Heuristic{:BreadthFirst}, all_trials |> values |> first)
+        @spawnat 3 @time fit(Optimal, all_trials |> values |> first)
+        @spawnat 4 @time fit(OptimalPlus, all_trials |> values |> first)
+        @spawnat 5 fit(RandomSelection, all_trials |> values |> first)
+    end
 end
 
 # %% --------
+full_fits = let
+    full_jobs = Iterators.product(values(all_trials), MODELS);
+    @time full_fits = pmap(full_jobs) do (trials, M)
+        model, nll = fit(M, trials; method=OPT_METHOD)
+        (model=model, nll=nll)
+    end;
+    serialize("$base_path/full_fits", full_fits)
 
-full_jobs = Iterators.product(values(all_trials), MODELS);
-@time full_fits = pmap(full_jobs) do (trials, M)
-    model, nll = fit(M, trials; method=OPT_METHOD)
-    (model=model, nll=nll)
-end;
-serialize("$base_path/full_fits", full_fits)
+    function mle_table(M)
+        i = findfirst(MODELS .== M)
+        map(zip(keys(all_trials), full_fits[:, i])) do (wid, (model, nll))
+            (wid=wid, model=name(M), nll=nll, namedtuple(model)...)
+        end |> DataFrame
+    end
 
-function mle_table(M)
-    i = findfirst(MODELS .== M)
-    map(zip(keys(all_trials), full_fits[:, i])) do (wid, (model, nll))
-        (wid=wid, model=name(M), nll=nll, namedtuple(model)...)
-    end |> DataFrame
-end
-
-mkpath("$results_path/mle")
-for M in MODELS
-    mle_table(M) |> CSV.write("$results_path/mle/$(name(M)).csv")
-end
-
-let
+    mkpath("$results_path/mle")
+    for M in MODELS
+        mle_table(M) |> CSV.write("$results_path/mle/$(name(M)).csv")
+    end
+    
     nll = getfield.(full_fits, :nll)
     total = sum(nll; dims=1)
     best_model = [p.I[2] for p in argmin(nll; dims=2)]
@@ -106,8 +110,13 @@ let
     for i in eachindex(MODELS)
         @printf "%-22s       %4d         %d\n" name(MODELS[i]) total[i] n_fit[i]
     end
-end
 
+    full_fits
+end;
+
+
+
+    
 # %% ==================== CROSS VALIDATION ====================
 
 using Random: randperm
@@ -128,34 +137,35 @@ end
 n_trial = length(all_trials |> values |> first)
 folds = kfold_splits(n_trial, FOLDS)
 cv_jobs = Iterators.product(values(all_trials), MODELS, folds);
-@time cv_fits = pmap(cv_jobs) do (trials, M, fold)
-    try
-        model, train_nll = fit(M, trials[fold.train]; method=OPT_METHOD)
-        (model=model, train_nll=train_nll, test_nll=-logp(model, trials[fold.test]))
-    catch e
-        println("Error fitting $M to $(trials[1].wid):  $e")
-        rethrow(e)
-        # (model=model, nll=NaN)
-    end
-end;
-serialize("$base_path/cv_fits", cv_fits)
 
-function cv_table(M)
-    mi = findfirst(MODELS .== M)
-    mapmany(enumerate(keys(all_trials))) do (wi, wid)
-        map(1:FOLDS) do fi
-            x = cv_fits[wi, mi, fi]
-            (wid=wid, model=name(M), fold=fi, train_nll=x.train_nll, test_nll=x.test_nll, namedtuple(x.model)...)
+cv_fits = let
+    @time cv_fits = pmap(cv_jobs) do (trials, M, fold)
+        try
+            model, train_nll = fit(M, trials[fold.train]; method=OPT_METHOD)
+            (model=model, train_nll=train_nll, test_nll=-logp(model, trials[fold.test]))
+        catch e
+            println("Error fitting $M to $(trials[1].wid):  $e")
+            rethrow(e)
+            # (model=model, nll=NaN)
         end
-    end |> DataFrame
-end
+    end
+    serialize("$base_path/cv_fits", cv_fits)
 
-mkpath("$results_path/mle")
-for M in MODELS
-    cv_table(M) |> CSV.write("$results_path/mle/$(name(M))-cv.csv")
-end
+    function cv_table(M)
+        mi = findfirst(MODELS .== M)
+        mapmany(enumerate(keys(all_trials))) do (wi, wid)
+            map(1:FOLDS) do fi
+                x = cv_fits[wi, mi, fi]
+                (wid=wid, model=name(M), fold=fi, train_nll=x.train_nll, test_nll=x.test_nll, namedtuple(x.model)...)
+            end
+        end |> DataFrame
+    end
 
-let
+    mkpath("$results_path/mle")
+    for M in MODELS
+        cv_table(M) |> CSV.write("$results_path/mle/$(name(M))-cv.csv")
+    end
+
     # Sum over the folds
     test_nll = sum(getfield.(cv_fits, :test_nll); dims=3) |> dropdims(3);
     train_nll = sum(getfield.(cv_fits, :train_nll); dims=3) |> dropdims(3);
@@ -168,13 +178,29 @@ let
     best_model = [p.I[2] for p in argmin(test_nll; dims=2)];
     n_fit = counts(best_model, 1:length(MODELS))
 
-    let
-        println("Model                   Train NLL   Test NLL    Best Fit")
-        for i in eachindex(MODELS)
-            @printf "%-22s  %4d  %10d  %8d\n" name(MODELS[i]) total_train[i] total_test[i] n_fit[i]
-        end
+    println("Model                   Train NLL   Test NLL    Best Fit")
+    for i in eachindex(MODELS)
+        @printf "%-22s  %4d  %10d  %8d\n" name(MODELS[i]) total_train[i] total_test[i] n_fit[i]
     end
-end
+    cv_fits
+end;
+
+
+
+# %% ==================== SIMULATION ====================
+
+include("simulate.jl")
+@everywhere all_trials = $all_trials
+@everywhere full_fits = $full_fits
+pmap(run_simulations, 1:length(all_trials))
+sims = process_simulations();
+run(`du -h $results_path/simulations.csv`);
+
+# %% --------
+
+group(sims, x->x.model)
+
+
 
 
 # %% ==================== SAVE MODEL PREDICTIONS ====================
@@ -229,6 +255,7 @@ click_features(d) = (
 )
 
 click_features.(all_data) |> JSON.json |> write("$results_path/click_features.json")
+
 
 # %% --------
 term_reward(t::Trial) = term_reward(t.m, t.bs[end])

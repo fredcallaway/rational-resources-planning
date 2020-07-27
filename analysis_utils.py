@@ -4,12 +4,20 @@ import pandas as pd
 import seaborn as sns
 import os
 from glob import glob
+import json
 
 sns.set_context('notebook', font_scale=1.3)
 sns.set_style('white')
 
 def str_join(args, sep=' '):
     return sep.join(map(str, args))
+
+def load_json(path):
+    with open(path) as f:
+        return json.load(f)
+
+def get_result(version, name):
+    return load_json(f'model/results/{version}/{name}')
 
 def load_data(exp):
     tdf = pd.read_pickle(f'data/{exp}/trials.pkl').query('block == "test"')

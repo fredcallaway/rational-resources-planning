@@ -3,16 +3,10 @@ using Distributed
 using Glob
 using CSV
 using DataFrames
-isempty(ARGS) && push!(ARGS, "exp2")
+isempty(ARGS) && push!(ARGS, "exp1")
 include("conf.jl")
-include("base.jl")
-include("models.jl")    
-
-
-# %% --------
-all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
-models = [Optimal, BestFirst, BreadthFirst, DepthFirst]
-full_fits = deserialize("$base_path/full_fits")
+@everywhere include("base.jl")
+@everywhere include("models.jl")
 
 # %% --------
 
@@ -42,25 +36,40 @@ function make_row(t::Trial)
     )
 end
 
-if ARGS[2] == "setup"
-    mkpath("$base_path/sims")
-    write("simulate.sbatch", sbatch_script(length(all_trials)))
-elseif ARGS[2] == "postprocess"
+@everywhere function run_simulations(i::Int; n_repeat=500)
+    wid = collect(keys(all_trials))[i]
+    trials = all_trials[wid]
+    sims = map(full_fits[i, :]) do fit
+        model_wid = name(model) * "-" * wid
+        map(repeat(trials, n_repeat)) do t
+            simulate(fit.model, t.m; wid=model_wid)
+        end
+    end
+    mkpath("$base_path/sims/")
+    serialize("$base_path/sims/$wid", sims)
+end
+
+function process_simulations()
     all_sims = map(collect(keys(all_trials))) do wid
         deserialize("$base_path/sims/$wid")
     end
     flat_sims = all_sims |> flatten |> flatten;
     map(make_row, flat_sims) |> CSV.write("$results_path/simulations.csv")
-else
-    job = parse(Int, ARGS[2])
-    wid = collect(keys(all_trials))[job]
-    trials = all_trials[wid]
+    return flat_sims
+end
 
-    sims = map(full_fits[job, :]) do fit
-        model_wid = string(typeof(fit.model).name) * "-" * wid
-        map(repeat(trials, 50)) do t
-            simulate(fit.model, t.m; wid=model_wid)
-        end
+if basename(PROGRAM_FILE) == basename(@__FILE__)
+    all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
+    full_fits = deserialize("$base_path/full_fits")
+    @everywhere all_trials = $all_trials
+    @everywhere full_fits = $full_fits
+
+    if ARGS[2] == "setup"
+        mkpath("$base_path/sims")
+        write("simulate.sbatch", sbatch_script(length(all_trials)))
+    elseif ARGS[2] == "postprocess"
+        process_simulations()
+    else
+        job = parse(Int, ARGS[2])
     end
-    serialize("$base_path/sims/$wid", sims)
 end

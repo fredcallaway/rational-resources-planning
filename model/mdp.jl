@@ -3,10 +3,15 @@ using Distributions
 import Base
 using Printf: @printf
 using Memoize
+# using LRUCache
 # using StatsFuns
 
 include("utils.jl")
 include("dnp.jl")
+
+x = 1
+sleep(5)
+y = 2
 
 const TERM = 0  # termination action
 # const NULL_FEATURES = -1e10 * ones(4)  # features for illegal computation
@@ -316,6 +321,9 @@ function load_V_nomem(i::String)
 end
 
 @memoize load_V(i::String) = load_V_nomem(i)
+Base.gc()
+load_V(m::MetaMDP) = load_V(id(m))
+# @memoize LRU{String, ValueFunction}(maxsize=2) load_V_lru(i::String) = load_V_nomem(i)
 
 
 # ========== Policy ========== #
