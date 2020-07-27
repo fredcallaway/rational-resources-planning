@@ -104,31 +104,6 @@ function selection_probability(model::Heuristic, φ::NamedTuple)
     softmax!(p)
 end
 
-"The maximum expected value of any path going through this node."
-function node_values(m::MetaMDP, b::Belief)
-    nv = fill(-Inf, length(m))
-    for p in paths(m)
-        v = path_value(m, b, p)
-        for i in p
-            nv[i] = max(nv[i], v)
-        end
-    end
-    nv
-end
-
-"Distance of each node from the start state."
-@memoize function node_depths(m::MetaMDP)
-    g = m.graph
-    result = zeros(Int, length(g))
-    function rec(i, d)
-        result[i] = d
-        for j in g[i]
-            rec(j, d+1)
-        end
-    end
-    rec(1, 0)
-    result
-end
 
 # ---------- Stopping rule---------- #
 
@@ -143,6 +118,7 @@ function termination_probability(model::Heuristic, φ::NamedTuple)
     logistic(v)
 end
 
+"Minimum depth of a frontier node"
 function min_depth(m::MetaMDP, b::Belief)
     nd = node_depths(m)
     # minimum(nd[c] for c in 1:length(b) if allowed(m, b, c))  # do this but handle fully revealed case
