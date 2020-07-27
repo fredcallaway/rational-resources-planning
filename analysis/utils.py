@@ -17,11 +17,11 @@ def load_json(path):
         return json.load(f)
 
 def get_result(version, name):
-    return load_json(f'model/results/{version}/{name}')
+    return load_json(f'../model/results/{version}/{name}')
 
 def load_data(exp):
-    tdf = pd.read_pickle(f'data/{exp}/trials.pkl').query('block == "test"')
-    pdf = pd.read_pickle(f'data/{exp}/participants.pkl')
+    tdf = pd.read_pickle(f'../data/{exp}/trials.pkl').query('block == "test"')
+    pdf = pd.read_pickle(f'../data/{exp}/participants.pkl')
     pdf.rename(columns={'clickDelay': 'click_delay'}, inplace=True)
     tdf['click_delay'] = pdf['click_delay'] = pdf.click_delay.apply(lambda x: str(x/1000)+'s')
     if 'variance' not in pdf:
@@ -36,24 +36,15 @@ def load_data(exp):
     return pdf, tdf
 
 def load_fits(exp, models, path='mle'):
-    cv_fits = pd.concat([pd.read_csv(f'model/results/{exp}/{path}/{model}-cv.csv') 
+    cv_fits = pd.concat([pd.read_csv(f'../model/results/{exp}/{path}/{model}-cv.csv') 
                          for model in models], sort=False)
-    fits = pd.concat([pd.read_csv(f'model/results/{exp}/{path}/{model}.csv')
+    fits = pd.concat([pd.read_csv(f'../model/results/{exp}/{path}/{model}.csv')
                       for model in models], sort=False)
     fits.set_index(['model', 'wid'], inplace=True)
     fits['cv_nll'] = cv_fits.groupby(['model', 'wid']).test_nll.sum()
     fits['overfitting'] = fits.cv_nll - fits.nll
     return fits.reset_index()
 
-
-def maybe_rm(p):
-    if os.path.exists(p):
-        os.unlink(p)
-
-def tmpfig(dpi=300):
-    maybe_rm('tmp.png')
-    plt.savefig('tmp.png', dpi=dpi, bbox_inches='tight')
-    plt.close('all')
 
 from datetime import datetime
 class Figures(object):
