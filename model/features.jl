@@ -8,6 +8,7 @@ function node_values(m::MetaMDP, b::Belief)
             nv[i] = max(nv[i], v)
         end
     end
+    nv[1] = maximum(nv)
     nv
 end
 
@@ -43,5 +44,6 @@ function max_node_values(m::MetaMDP, b::Belief)
             nv[i] = max(nv[i], v)
         end
     end
+    nv[1] = maximum(nv)
     nv
 end

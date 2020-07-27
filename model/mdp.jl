@@ -321,7 +321,6 @@ function load_V_nomem(i::String)
 end
 
 @memoize load_V(i::String) = load_V_nomem(i)
-Base.gc()
 load_V(m::MetaMDP) = load_V(id(m))
 # @memoize LRU{String, ValueFunction}(maxsize=2) load_V_lru(i::String) = load_V_nomem(i)
 

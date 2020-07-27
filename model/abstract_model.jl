@@ -1,6 +1,5 @@
 abstract type AbstractModel{T} end
 
-
 # these three methods are the core of a model defition
 
 "Defines search bounds."

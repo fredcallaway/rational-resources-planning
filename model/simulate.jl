@@ -5,8 +5,8 @@ using CSV
 using DataFrames
 isempty(ARGS) && push!(ARGS, "exp1")
 include("conf.jl")
-@everywhere include("base.jl")
-@everywhere include("models.jl")
+include("base.jl")
+include("models.jl")
 
 # %% --------
 
@@ -36,17 +36,18 @@ function make_row(t::Trial)
     )
 end
 
-@everywhere function run_simulations(i::Int; n_repeat=500)
+function run_simulations(i::Int; n_repeat=500)
     wid = collect(keys(all_trials))[i]
     trials = all_trials[wid]
     sims = map(full_fits[i, :]) do fit
-        model_wid = name(model) * "-" * wid
+        model_wid = name(fit.model) * "-" * wid
         map(repeat(trials, n_repeat)) do t
             simulate(fit.model, t.m; wid=model_wid)
         end
     end
     mkpath("$base_path/sims/")
     serialize("$base_path/sims/$wid", sims)
+    return sims
 end
 
 function process_simulations()

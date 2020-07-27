@@ -8,6 +8,7 @@ include("space.jl")
 include("abstract_model.jl")
 include("likelihood.jl")
 include("simulation.jl")
+include("features.jl")
 
 include("random.jl")
 include("heuristic.jl")
