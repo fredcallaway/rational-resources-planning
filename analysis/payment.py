@@ -1,6 +1,28 @@
+# %% ==================== Make bonus ====================
+prolific = pd.read_csv('prolific_export_5f0e7b7db485881bcb6b11b5.csv')
+pp = prolific.query('status == "APPROVED"')
+pp.columns
+
+full_pdf.workerId
+full_pdf
+total_score = tdf.loc[list(pdf.index)].query('block == "test"').groupby('wid').score.sum()
+# bonus = (total_score + 100) * .005
+# bonus = bonus.rename('bonus').round(2).to_frame()
+# bonus['workerid'] = pdf.workerid
+
+# %% --------
+from datetime import datetime
+pdf['start'] = pdf.time_start.dropna().apply(lambda x: datetime.fromtimestamp(x/1000))
+pdf = pdf.loc[pdf.start.dt.day == 15]
+bonus = pdf[['workerid', 'final_bonus']].dropna().query('final_bonus > 0')
+bonus.to_csv('bonus.csv', index=False, header=False)
+!cat bonus.csv | pbcopy
+# less bonus.csv
 
 
 # %% ==================== PAYMENT ====================
+
+
 
 pdf['total_time'] = total_time = (pdf.time_end - pdf.time_start) / 1000 / 60
 sns.distplot(pdf.total_time)

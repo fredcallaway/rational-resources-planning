@@ -1,3 +1,4 @@
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -6,6 +7,7 @@ import os
 from glob import glob
 import json
 
+matplotlib.use('Agg')
 sns.set_context('notebook', font_scale=1.3)
 sns.set_style('white')
 
@@ -71,12 +73,19 @@ class Figures(object):
 
     def reformat_labels(self, ax=None):
         ax = ax or plt.gca()
-        labels = [t.get_text() for t in ax.get_xticklabels()]
-        new_labels = [self.nice_name(lab) for lab in labels]
-        ax.set_xticklabels(new_labels)
-
         ax.set_ylabel(self.nice_name(ax.get_ylabel()))
         ax.set_xlabel(self.nice_name(ax.get_xlabel()))
+
+    def reformat_ticks(self, yaxis=False, ax=None):
+        ax = ax or plt.gca()
+        if yaxis:
+            labels = [t.get_text() for t in ax.get_yticklabels()]
+            new_labels = [self.nice_name(lab) for lab in labels]
+            ax.set_yticklabels(new_labels)
+        else:
+            labels = [t.get_text() for t in ax.get_xticklabels()]
+            new_labels = [self.nice_name(lab) for lab in labels]
+            ax.set_xticklabels(new_labels)
         
     def reformat_legend(self, ax=None):
         ax = ax or plt.gca()

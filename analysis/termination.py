@@ -1,31 +1,92 @@
-cf = pd.DataFrame(get_result(VERSION, 'click_features.json'))
-for k, v in cf.items():
-    if v.dtype == bool:
-        cf[k] = v.astype(int)
 
-cf['potential_gain'] = cf.max_competing - cf.term_reward
+bfs_cols = ['BestFirstBestNext', 'BestFirstDepth', 'BestFirstSatisficing', 'BestFirstRandomStopping']
+normal_cols = ['OptimalPlus', 'Human']
 
-# %% --------
-%%R -i cf
-summary(glm(is_term ~ n_revealed + term_reward + potential_gain, data=cf))
+def load_cf(k, group=True):
+    # VERSION = 'exp1' if k in bfs_cols or k in normal_cols else 'exp1-bfs'
+    mod = '' if k == 'Human' else k + '-'
+    if group and mod:
+        mod = 'group-' + mod
+    cf = pd.DataFrame(get_result(VERSION, f'{mod}click_features.json'))
+    cf['potential_gain'] = (cf.max_competing - cf.term_reward).clip(0)
+    cf['competing'] = cf.term_reward - cf.best_next
+    if k == 'Human':
+        cf = cf.set_index('wid').loc[keep]
+    for k, v in cf.items():
+        if v.dtype == float:
+            cf[k] = v.astype(int)
+    return cf
 
-# %% --------
+all_cfs = {k: load_cf(k) for k in [*bfs_cols, *normal_cols]}
+# cfs = {k: load_cf(k) for k in cols}
+
+# %% ==================== heatmaps ====================
+cfs = {k: all_cfs[k] for k in normal_cols}
+
 def robust_mean(x):
     return np.mean(x)
     if len(x) < 5:
         return np.nan
     return np.mean(x)
 
-def plot_adaptive(df, **kws):
-    X = df.groupby(['term_reward', 'n_revealed']).is_term.apply(robust_mean).unstack()
-    # X = df.groupby(['etr', 'n_revealed']).apply(len).unstack()
-    sns.heatmap(X, cmap='Blues', linewidths=1, **kws).invert_yaxis()
-    plt.xlabel('Number of Clicks Made')
-#     plt.ylim(*lims['y'])
-#     plt.xlim(*lims['x'])
+def plot_term(df, x, y, **kws):
+    base = matplotlib.cm.get_cmap('Blues', 512)
+    cmap = matplotlib.colors.ListedColormap(base(np.linspace(0.2, 1, 512 * 0.8)))
 
-plot_adaptive(cf)
+    # df = df.query('term_reward >= -10')
+    max_clicks = 16
+    df = df.query('n_revealed < @max_clicks')
+    X = df.groupby([y, x]).is_term.apply(robust_mean).unstack()
+    g = sns.heatmap(X, cmap=cmap, vmin=0, vmax=1, linewidths=1, **kws)
+    g.invert_yaxis()
+    figs.reformat_labels()
+    return g
+
+
+def termination(x, y, height=3):
+    nc = len(cfs)
+    fig, axes = plt.subplots(1, nc+1, figsize=(4*nc, height),
+                             gridspec_kw={'width_ratios': [*([15] * nc), 1]})
+
+    for i, (name, cf) in enumerate(cfs.items()):
+        plt.sca(axes[i])
+        if i == 0:
+            plot_term(cf, x, y, cbar_ax=axes[-1])
+        else:
+            plot_term(cf, x, y, cbar=False)
+            # plt.yticks(())
+            plt.ylabel("")
+        plt.title(figs.nice_name(name))
+    axes[-1].set_ylabel('Stopping Probability')
+
+@figure()
+def plot_termination():
+    termination('best_next', 'term_reward', height=4)
+
+
+
+# %% ==================== correlation ====================
+X = all_cfs['Human'][['n_revealed', 'term_reward', 'potential_gain']]
+sns.pairplot(X, kind='reg')
+show()
+
+# %% ==================== stats ====================
+# %load_ext rpy2.ipython
+# cf = all_cfs['OptimalPlus']
+m = "PureOptimal"
+cf = load_cf(m, group=False)
+for k, v in cf.items():
+    if v.dtype == bool:
+        cf[k] = v.astype(int)
+
+cf.to_csv(f'{m}-term.csv', index=False)
+print(f'{m}-term.csv')
+
 # %% --------
+sns.factorplot('best_next', )
+
+# %% ==================== ADAPTIVE SATISFICING ====================
+
 termination = get_result(VERSION, 'termination.json')
 etrs = list(map(int, termination['etrs']))
 idx = 1+np.arange(len(etrs))
@@ -54,7 +115,9 @@ def adaptive_satisficing():
         plt.title('Satisficing BestFirst' if col == "Heuristic" else col)
         # plt.title(col)
 
-# %% --------
+# %% ==================== EXPECTED VS MAX ====================
+
+
 evmv = get_result(VERSION, 'evmv.json')
 
 

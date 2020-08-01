@@ -14,78 +14,7 @@ def backwards():
     sns.swarmplot('variance', 'backward', data=pdf)
     plt.xlabel('a')
 
-# %% ==================== BEST FIRST ====================
-best_first = get_result(VERSION, 'bestfirst.json')
-bfo = pd.Series(best_first['optimal'])
-bfo.index = bfo.index.astype(float)
-bfo = bfo.sort_index().iloc[:-1]  # drop 100
-pdf['best_first'] = pd.Series(best_first['human'])
 
-
-def mean_std(x, digits=1, pct=False):
-    if pct:
-        x *= 100
-        return fr'{x.mean().round(digits)}\% \pm {x.std().round(digits)}\%'
-    else:
-        return fr'{x.mean().round(digits)} \pm {x.std().round(digits)}'
-
-write_tex("best_first", f"{pdf.best_first.mean()*100:.1f}\\%")
-
-# %% --------
-rdf = pdf[['cost', 'best_first']]
-import rpy2.robjects as ro
-from rpy2.robjects import pandas2ri
-pandas2ri.activate()
-%load_ext rpy2.ipython
-
-# %% --------
-%%R -i rdf
-summary(lm(best_first ~ cost, data=rdf))
-
-
-# %% --------o
-ut.head()
-
-def write_lm_var(model, var, name):
-    beta = np.round(model.params[var], 2)
-    se = np.round(model.bse[var], 2)
-    p = model.pvalues[var]
-    if p <.001:
-        p_desc = 'p < 0.001'
-    elif p < .01:
-        p_desc = 'p = {}'.format(np.round(p, 3))
-    else :
-        p_desc = 'p = {}'.format(np.round(p, 3))
-
-    writevar('{}_BETA'.format(name), beta)
-    writevar('{}_SE'.format(name), se)
-    writevar('{}_P'.format(name), p)
-    
-    writevar(
-        '{}_RESULT'.format(name),
-        r'$\\beta = %s,\\ \\text{SE} = %s,\\ %s$' % (beta, se, p_desc)
-    )
-
-# %% --------
-
-@figure()
-def cost_best_first():
-    bfo.plot(label="Optimal", color=palette["Optimal"], lw=2)
-    # sns.regplot('cost', 'best_first', lowess=True, data=pdf, color=palette["Human"])
-    plt.scatter('cost', 'best_first', data=pdf, color=palette["Human"])
-    plt.ylabel('Proportion of Clicks on Best Path')
-    plt.xlabel('Click Cost')
-    plt.legend()
-
-
-# %% --------
-"""
-- perecent best first (human/optimal)
-- errors broken down by termination
-    - terminate early vs late?
-- action error rate
-- interaction for adaptive satisficing
-"""
 
 
 

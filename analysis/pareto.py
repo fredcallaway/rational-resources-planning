@@ -2,6 +2,10 @@
 
 # %% ==================== PARETO FRONT ====================
 
+mdp2var = {}
+for x in tdf[['variance', 'mdp']].itertuples():
+    mdp2var[x.mdp] = x.variance
+
 model_pareto = pd.concat((pd.read_csv(f) for f in glob('model/mdps/pareto/*')), sort=True)
 model_pareto = model_pareto.set_index('mdp').loc[tdf.mdp.unique()].reset_index()
 model_pareto['variance'] = model_pareto.mdp.apply(mdp2var.get)
@@ -17,10 +21,6 @@ plt.rc('legend', fontsize=10, handlelength=2)
 def plot_model(variance, model):
     plt.plot('n_click', 'term_reward', data=model_pareto.loc[model, variance], 
         label=model, marker='.', color=palette[model])
-
-def setup_variance_plot(nrow=1):
-    ncol = len(variances)
-    return plt.subplots(nrow, ncol, figsize=(4*ncol,4), squeeze=False)
 
 @figure()
 def pareto():
