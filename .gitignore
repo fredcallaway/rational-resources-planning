@@ -1,3 +1,4 @@
+analysis/*.csv
 .ipynb_checkpoints/
 model/figs/
 model/notes.txt
@@ -35,3 +36,6 @@ old/
 bonus.csv
 dump.py
 fighist/
+.figs/
+model/test_fitting.jl
+model/old_analysis.jl
