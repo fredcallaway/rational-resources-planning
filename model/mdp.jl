@@ -316,6 +316,7 @@ function solve(m::MetaMDP, h=choose_hash(m))
 end
 
 function load_V_nomem(i::String)
+    println("Loading V $i")
     V = deserialize("mdps/V/$i")
     ValueFunction(V.m, choose_hash(V.m), V.cache)
 end

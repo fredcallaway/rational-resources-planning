@@ -1,12 +1,4 @@
-using StatsBase
-using Distributed
-using Glob
-using CSV
-using DataFrames
-isempty(ARGS) && push!(ARGS, "exp1")
-include("conf.jl")
-include("base.jl")
-include("models.jl")
+
 
 # %% --------
 
@@ -60,6 +52,16 @@ function process_simulations()
 end
 
 if basename(PROGRAM_FILE) == basename(@__FILE__)
+    using StatsBase
+    using Distributed
+    using Glob
+    using CSV
+    using DataFrames
+    isempty(ARGS) && push!(ARGS, "exp1")
+    include("conf.jl")
+    include("base.jl")
+    include("models.jl")
+    
     all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
     full_fits = deserialize("$base_path/full_fits")
     @everywhere all_trials = $all_trials

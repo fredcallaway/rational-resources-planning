@@ -95,7 +95,27 @@ default_space(::Type{Heuristic{:FullNoSatisfice}}) = _modify(:Full, β_satisfice
 default_space(::Type{Heuristic{:FullNoBestNext}}) = _modify(:Full, β_best_next=0, θ_best_next=0)
 default_space(::Type{Heuristic{:FullNoDepthLimit}}) = _modify(:Full, β_depth_limit=0, θ_depth_limit=0)
 
-default_space(::Type{Heuristic{:Foobar}}) = _modify(:Full, θ_depth_limit=0, θ_satisfice=0)
+default_space(::Type{Heuristic{:BestFirstRandomStopping}}) = Space(
+    :β_best => (1e-6, 3),
+    :β_depth => 0.,
+
+    :β_satisfice => 0.,
+    :β_best_next => 0.,
+    :β_depth_limit => 0.,
+
+    :θ_term => (-30, 30),
+    :ε => (1e-3, 1)
+)
+
+default_space(::Type{Heuristic{:BestFirstSatisficing}}) =_modify(:BestFirstRandomStopping,
+    β_satisfice = (1e-6, 3)
+)
+default_space(::Type{Heuristic{:BestFirstBestNext}}) =_modify(:BestFirstRandomStopping,
+    β_best_next = (1e-6, 3)
+)
+default_space(::Type{Heuristic{:BestFirstDepth}}) =_modify(:BestFirstRandomStopping,
+    β_depth_limit = (1e-6, 3)
+)
 
 # ---------- Selection rule ---------- #
 
@@ -130,6 +150,7 @@ end
 
 "How much better is the best path from its competitors?"
 function best_vs_next(m, b)
+    @assert m.expand_only  # because path[end]
     pvals = path_values(m, b)
     undetermined = [isnan(b[path[end]]) for path in paths(m)]
     # find best path, breaking ties in favor of undetermined
@@ -142,12 +163,11 @@ function best_vs_next(m, b)
         # best path is determined -> competing value is the best undetermined path
         vals = pvals[undetermined]
         if isempty(vals)
-            0.  # Doesn't matter, you have to terminate.
+            return NaN  # Doesn't matter, you have to terminate.
         else
             maximum(vals)
         end
     end
-    
     pvals[best] - competing_value
 end
 

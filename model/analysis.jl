@@ -1,23 +1,17 @@
 using Query
+using ProgressMeter
 
 isempty(ARGS) && push!(ARGS, "exp1")
 include("conf.jl")
+@everywhere include("base.jl")
+@everywhere include("models.jl")
 
 all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
 flat_trials = flatten(values(all_trials));
 all_data = all_trials |> values |> flatten |> get_data;
 
-
-# @time all_sims = pmap(1:length(all_trials)) do i
-    # run_simulations(i; n_repeat=50)
-# end |> invert;
-
-all_sims = map(collect(keys(all_trials))) do wid
-    deserialize("$base_path/sims/$wid")
-end |> invert;
-
-model_sims = Dict(zip(MODELS, all_sims))
-
+MODELS = deserialize("$base_path/models")
+# %% --------
 
 mkpath("../stats/$EXPERIMENT")
 function write_tex(name, x)
@@ -27,37 +21,21 @@ function write_tex(name, x)
 end
 write_pct(name, x; digits=1) = write_tex(name, string(round(100 * x; digits=digits), "\\%"))
 
-# %% ==================== pure optimal simulations ====================
-
-mdps = unique(getfield.(flat_trials, :m))
-N_SIM = 10000
-@everywhere GC.gc()
-@time opt_sims = pmap(Iterators.product(mdps, COSTS)) do (m, cost)
-    V = load_V_nomem(id(mutate(m, cost=cost)))
-    map(1:N_SIM) do i
-        simulate(OptimalPolicy(V), "PureOptimal")
-    end
-end
-
 # %% --------
+@everywhere include("simulate.jl")
+@everywhere all_trials = $all_trials
+@everywhere full_fits = $full_fits
 
-function viz_sim(t::Trial)
-    (
-        stateRewards = t.bs[end],
-        demo = (
-            clicks = t.cs[1:end-1] .- 1,
-            path = t.path .- 1,
-            # parameters = Dict(name(M) => get_params(M, t) for M in MODELS)
-            # predictions = Dict(name(M) => get_preds(M, t) for M in MODELS),
-        )
-    )
-end
+@time all_sims = pmap(1:length(all_trials)) do i
+    run_simulations(i; n_repeat=50)
+end |> invert;
 
-map(zip(COSTS, opt_sims)) do (cost, sim)
-    name = "Optimal-$cost"
-    viz_sim.(sim[1:50]) |> json |> write("$results_path/viz/$name.json")
-    (cost = cost, name=name)
-end |> json |> write("$results_path/viz/optimal-table.json")
+model_sims = map(all_sims) do sims
+    split(sims[1][1].wid, "-")[1] => sims
+end |> Dict
+# all_sims = map(collect(keys(all_trials))) do wid
+#     deserialize("$base_path/sims/$wid")
+# end |> invert;
 
 # %% ==================== generate features ====================
 
@@ -83,9 +61,124 @@ function click_features(d)
         term_reward=pv[best],
         max_path=max_path,
         max_competing=max_competing,
+        best_next=best_vs_next(m, b),
     )
 end
 click_features.(all_data) |> JSON.json |> write("$results_path/click_features.json")
+
+# %% --------
+thin(sims) = [s[1:100] for s in sims]
+for (nam, sims) in pairs(model_sims)
+    # M = MODELS[5]; sims = model_sims[M];
+    f = "$results_path/$nam-click_features.json"
+    sims |> thin |> flatten |> get_data .|> click_features |> JSON.json |> write(f)
+    println("Wrote $f")
+end
+
+# %% ==================== group simulations and features ====================
+
+function run_simulations(trials::Vector{Trial}, model::AbstractModel; n_repeat=10)
+    map(repeat(trials, n_repeat)) do t
+        model_wid = name(model) * "-" * t.wid
+        simulate(model, t.m; wid=model_wid)
+    end
+end
+
+group_fits = deserialize("$base_path/group_fits")
+
+@time group_sims = map(group_fits) do (model, _)
+    name(model) => run_simulations(flat_trials, model)
+end |> Dict
+
+for (nam, sims) in pairs(group_sims)
+    # M = MODELS[5]; sims = model_sims[M];
+    f = "$results_path/group-$nam-click_features.json"
+    sims |> get_data .|> click_features |> JSON.json |> write(f)
+    println("Wrote $f")
+end
+
+# %% ==================== path choice ====================
+
+path_loss(t::Trial) = term_reward(t.m, t.bs[end]) - path_value(t.m, t.bs[end], t.path)
+pl = path_loss.(flat_trials)
+write_pct("path_loss", mean(pl .== 0))
+
+# %% ==================== trial features ====================
+
+term_reward(t::Trial) = term_reward(t.m, t.bs[end])
+
+trial_features(t::Trial) = (
+    wid=t.wid,
+    i=t.i,
+    term_reward=term_reward(t),
+)
+
+trial_features.(flat_trials) |> JSON.json |> write("$results_path/trial_features.json")
+
+
+
+# %% ==================== pure optimal simulations ====================
+
+mdps = unique(getfield.(flat_trials, :m))
+@time opt_sims = pmap(Iterators.product(mdps, COSTS)) do (m, cost)
+    V = load_V_nomem(id(mutate(m, cost=cost)))
+    map(1:10000) do i
+        simulate(OptimalPolicy(V), "PureOptimal")
+    end
+end
+serialize("$base_path/opt_sims", opt_sims)
+
+
+# %% --------
+i = findfirst(isequal(group_fits[2][1].cost), COSTS)
+opt_sims[i] |> get_data .|> click_features |> JSON.json |> write("$results_path/group-PureOptimal-click_features.json")
+
+map(opt_sims) do sims
+    sims |> get_data .|> click_features
+end  |> JSON.json |> write("$results_path/PureOptimal-click_features.json")
+
+# %% --------
+
+function viz_sim(t::Trial)
+    (
+        stateRewards = t.bs[end],
+        demo = (
+            clicks = t.cs[1:end-1] .- 1,
+            path = t.path .- 1,
+            # parameters = Dict(name(M) => get_params(M, t) for M in MODELS)
+            # predictions = Dict(name(M) => get_preds(M, t) for M in MODELS),
+        )
+    )
+end
+
+map(zip(COSTS, opt_sims)) do (cost, sim)
+    name = "Optimal-$cost"
+    viz_sim.(sim[1:50]) |> json |> write("$results_path/viz/$name.json")
+    (cost = cost, name=name)
+end |> json |> write("$results_path/viz/optimal-table.json")
+
+
+# %% ==================== best first ====================
+
+_bf = Heuristic{:BestFirst,Float64}(10., 0., 0., 0., 0., -1e10, 0.)
+is_bestfirst(d::Datum) = action_dist(_bf, d)[d.c+1] > 1e-2
+
+function best_first_rate(trials)
+    trials |>
+    get_data |> 
+    @filter(_.c != TERM) |> 
+    @map(is_bestfirst) |> 
+    (x -> isempty(x) ? NaN : mean(x))
+end
+
+opt_bfr = map(best_first_rate, opt_sims)
+(
+    optimal = Dict(zip(COSTS, opt_bfr)),
+    human = valmap(best_first_rate, all_trials)
+) |> json |> write("$results_path/bestfirst.json")
+
+is_bestfirst(all_data)
+
 
 
 
@@ -117,77 +210,40 @@ write("$results_path/termination.json",
       json(Dict(tmats..., h, "etrs"=>collect(etrs))))
 
 # %% ==================== relative stopping rule ====================
-
 include("features.jl")
+vals = -60:5:60
+bins = Dict(zip(vals, 1:100))
 
-function evmv(d::Datum)
-    m = d.t.m; b = d.b;
-    pv = path_values(m, b)
-    mpv = [max_path_value(m, b, p) for p in paths(m)]
-    best = argmax(pv)
-    mpv[best] = -Inf
-    pv[best], maximum(mpv)
-end
-
-function evmv_matrices(trials)
+function termination_matrices(trials)
     X = zeros(length(bins), length(bins))
     N = zeros(length(bins), length(bins))
     for d in get_data(trials)
-        b, n = evmv(d)
-        i = bins[b]; j = bins[n]
+        all(observed(d.b)) && continue  # ignore forced terminations
+        i = bins[term_reward(d.t.m, d.b)]
+        j = bins[best_vs_next(d.t.m, d.b)]
         X[i, j] += (d.c == TERM)
         N[i, j] += 1
     end
     X, N
 end
+
 @time tmats = map(collect(model_sims)) do (model, sim)
-    name(model) => evmv_matrices(flatten(sim))
+    name(model) => termination_matrices(flatten(sim))
 end
 
-# TODO this doesn't exclude properly!!
-h = "Human" => evmv_matrices(flatten(values(all_trials)))
 
-write("$results_path/evmv.json",
+# TODO this doesn't exclude properly!
+# Same problem with the simulations!
+h = "Human" => termination_matrices(flatten(values(all_trials)))
+
+write("$results_path/termination.json",
       json(Dict(tmats..., h, "etrs"=>collect(etrs))))
 
-# %% ==================== best first ====================
-
-_bf = Heuristic{:BestFirst,Float64}(10., 0., 0., 0., 0., -1e10, 0.)
-is_bestfirst(d::Datum) = action_dist(_bf, d)[d.c+1] > 1e-2
-
-function best_first_rate(trials)
-    trials |>
-    get_data |> 
-    @filter(_.c != TERM) |> 
-    @map(is_bestfirst) |> 
-    (x -> isempty(x) ? NaN : mean(x))
-end
-
-opt_bfr = map(best_first_rate, opt_sims)
-(
-    optimal = Dict(zip(COSTS, opt_bfr)),
-    human = valmap(best_first_rate, all_trials)
-) |> json |> write("$results_path/bestfirst.json")
-
-is_bestfirst(all_data)
-
-
-# %% ==================== path choice ====================
-
-path_loss(t::Trial) = term_reward(t.m, t.bs[end]) - path_value(t.m, t.bs[end], t.path)
-pl = path_loss.(flat_trials)
-write_pct("path_loss", mean(pl .== 0))
-
-# %% --------
-term_reward(t::Trial) = term_reward(t.m, t.bs[end])
-
-trial_features(t::Trial) = (
-    wid=t.wid,
-    i=t.i,
-    term_reward=term_reward(t),
-)
-
-trial_features.(flat_trials) |> JSON.json |> write("$results_path/trial_features.json")
-
-
-
+# function evmv(d::Datum)
+#     m = d.t.m; b = d.b;
+#     pv = path_values(m, b)
+#     mpv = [max_path_value(m, b, p) for p in paths(m)]
+#     best = argmax(pv)
+#     mpv[best] = -Inf
+#     pv[best], maximum(mpv)
+# end

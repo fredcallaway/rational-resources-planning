@@ -35,7 +35,7 @@ for m in mdps
     println("Wrote ", f)
 end
 
-# %% ==================== SOLVE MDPS AND PRECOMPUTE Q LOOKUP TABLE ====================
+# # %% ==================== SOLVE MDPS AND PRECOMPUTE Q LOOKUP TABLE ====================
 
 include("solve.jl")
 todo = write_mdps()
@@ -48,18 +48,20 @@ include("Q_table.jl")
 @time serialize("$base_path/Q_table", make_Q_table(all_data));
 
 # %% ==================== LOAD MODEL CODE ====================
-
 @everywhere include("models.jl")
 
 MODELS = [
     RandomSelection,
-    Optimal,
     OptimalPlus,
+    MetaGreedy,
     Heuristic{:BestFirst},
     Heuristic{:BestFirstNoBestNext},
+    Heuristic{:BestFirstRandomStopping},
+    Heuristic{:BestFirstSatisficing},
+    Heuristic{:BestFirstBestNext},
+    Heuristic{:BestFirstDepth},
     # Heuristic{:DepthFirst},
     # Heuristic{:BreadthFirst},
-
     # Heuristic{:BestFirstNoSatisfice},
     # Heuristic{:BestFirstNoBestNext},
     # Heuristic{:BestFirstNoDepthLimit},
@@ -69,7 +71,18 @@ MODELS = [
 ]
 serialize("$base_path/models", MODELS)
 
+
+
 # %% ==================== FIT MODELS TO FULL DATASET ====================
+@everywhere flat_trials = $flat_trials
+@time group_fits = pmap(MODELS) do M
+    fit(M, flat_trials; method=OPT_METHOD)
+end
+serialize("$base_path/group_fits", group_fits)
+
+
+
+# %% ==================== FIT MODELS TO INDIVIDUALS ====================
 
 if false
     @everywhere include("likelihood.jl")
@@ -116,7 +129,6 @@ end;
 
 
 
-    
 # %% ==================== CROSS VALIDATION ====================
 
 using Random: randperm
