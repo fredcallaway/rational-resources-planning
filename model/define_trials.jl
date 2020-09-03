@@ -65,7 +65,7 @@ write("$base/structure/41111.json", json(spirals(4, [0, 1, -1, 1, 1])))
 # ---------- REWARDS ---------- #
 
 function make_rewards(g::Graph, kind::Symbol, factor, p1, p2)
-    @assert kind in [:breadth, :depth, :constant]
+    @assert kind in [:breadth, :depth, :constant, :increasing, :decreasing]
     map(eachindex(g)) do i
         i == 1 && return DiscreteNonParametric([0.])
         if kind == :constant
@@ -81,17 +81,28 @@ function make_rewards(g::Graph, kind::Symbol, factor, p1, p2)
     end
 end
 
-map(1:100000) do i
-    R = rand.(m.rewards)
-    map(paths(m)) do pth
-        sum(R[pth])
-    end |> maximum
-end |> mean
-
 function make_mdp(branching, kind, factor, p1, p2)
     g = tree(branching)
     rewards = make_rewards(g, kind, factor, p1, p2)
     MetaMDP(g, rewards, 0., -Inf, true)
+end
+
+function make_mdp_exp3(factor)
+    graph = tree([4,1,2])
+    if factor == 1
+        mult = 5
+    elseif factor < 1
+        mult = factor ^ -(length(paths(g)[1]) - 1)
+    else
+        mult = 1
+    end
+    base = mult .* Float64[-2, -1, 1, 2]
+    rewards = map(eachindex(graph)) do i
+        i == 1 && return DiscreteNonParametric([0.])
+        vs = round.(unique(base .*  factor ^ (depth(graph, i)-1)))
+        DiscreteNonParametric(vs)
+    end
+    MetaMDP(g, rewards, 0., -Inf, false)
 end
 
 function save(m::MetaMDP)
@@ -112,10 +123,18 @@ function write_trials(name::String, m::MetaMDP)
     println("Wrote ", f)
 end
 
-write_trials("41111_increasing", make_mdp([4,1,1,1,1], :depth, 20, 1/2, 2/3))
-write_trials("41111_decreasing", make_mdp([4,1,1,1,1], :breadth, 20, 1/2, 3/5))
-write_trials("41111_constant", make_mdp([4,1,1,1,1], :constant, NaN, NaN, NaN))
-write_trials("412_constant", make_mdp([4,1,2], :constant, NaN, NaN, NaN))
+# experiment 1
+write_trials("exp1_constant", make_mdp([4,1,2], :constant, NaN, NaN, NaN))
+# experiment 2
+write_trials("exp2_increasing", make_mdp([4,1,1,1,1], :depth, 20, 1/2, 2/3))
+write_trials("exp2_decreasing", make_mdp([4,1,1,1,1], :breadth, 20, 1/2, 3/5))
+write_trials("exp2_constant", make_mdp([4,1,1,1,1], :constant, NaN, NaN, NaN))
+# experiment 3
+write_trials("exp3_constant", make_mdp_exp3(1))
+write_trials("exp3_increasing", make_mdp_exp3(3))
+write_trials("exp3_decreasing", make_mdp_exp3(1/3))
+
+
 # %% --------
 m = MetaMDP(tree([4,1,2]), DNP([-10, -5, 5, 10]), 0., -Inf, true)
 m1 = make_mdp([4,1,2], :constant, NaN, NaN, NaN)

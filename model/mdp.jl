@@ -3,15 +3,11 @@ using Distributions
 import Base
 using Printf: @printf
 using Memoize
-# using LRUCache
-# using StatsFuns
+using LRUCache
+using DataStructures
 
 include("utils.jl")
 include("dnp.jl")
-
-x = 1
-sleep(5)
-y = 2
 
 const TERM = 0  # termination action
 # const NULL_FEATURES = -1e10 * ones(4)  # features for illegal computation
@@ -21,8 +17,6 @@ const N_FEATURE = 5
 Graph = Vector{Vector{Int}}
 Value = Float64
 Belief = Vector{Value}
-
-using DataStructures
 
 "Parameters defining a class of problems."
 @with_kw struct MetaMDP
@@ -38,7 +32,6 @@ import Base: ==
     (support(c1) == support(c2) || size(support(c1)) == size(support(c2)) && 
         all(support(c1) .== support(c2))) &&
     (probs(c1) == probs(c2) || all(probs(c1) .== probs(c2)))
-
 
 Base.show(io::IO, m::MetaMDP) = print(io, "M")
 id(m::MetaMDP) = string(hash(m); base=62)
@@ -58,7 +51,6 @@ function Base.hash(m::MetaMDP, h::UInt64)
         if x == -Inf
             x = "-Inf"  # hash(Inf) varies by machine!
         end
-
         hash(x, acc)
     end
 end
@@ -249,7 +241,8 @@ function choose_hash(m::MetaMDP)
     if m.graph == [[2, 6, 10], [3], [4, 5], [], [], [7], [8, 9], [], [], [11], [12, 13], [], []]
         hash_312
     elseif m.graph == [[2, 6, 10, 14], [3], [4, 5], [], [], [7], [8, 9], [], [], [11], [12, 13], [], [], [15], [16, 17], [], []]
-        if m.rewards[2] == m.rewards[3]
+        if length(unique(m.rewards[2:end])) == 1
+        # if m.rewards[2] == m.rewards[3]
             hash_412_iid
         else
             hash_412
@@ -322,8 +315,11 @@ function load_V_nomem(i::String)
 end
 
 @memoize load_V(i::String) = load_V_nomem(i)
-load_V(m::MetaMDP) = load_V(id(m))
-# @memoize LRU{String, ValueFunction}(maxsize=2) load_V_lru(i::String) = load_V_nomem(i)
+# load_V(m::MetaMDP) = load_V(id(m))
+
+_lru() = LRU{Tuple{String}, ValueFunction}(maxsize=1)
+@memoize _lru load_V_lru2(i::String) = load_V_nomem(i)
+
 
 
 # ========== Policy ========== #

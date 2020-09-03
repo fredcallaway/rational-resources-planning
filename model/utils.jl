@@ -22,8 +22,6 @@ function softmax!(x, i)
     x[i] / sum(x)
 end
 
-
-
 dictkeys(d::Dict) = (collect(keys(d))...,)
 dictvalues(d::Dict) = (collect(values(d))...,)
 
@@ -57,6 +55,14 @@ nanstd(x) = nanreduce(std, x)
 function Base.write(fn)
     obj -> open(fn, "w") do f
         write(f, string(obj))
+    end
+end
+
+function writev(fn)
+    x -> begin
+        write(fn, x)
+        run(`du -h $fn`)
+        x
     end
 end
 

@@ -10,39 +10,64 @@ all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
 flat_trials = flatten(values(all_trials));
 all_data = all_trials |> values |> flatten |> get_data;
 
-MODELS = deserialize("$base_path/models")
-# %% --------
+MODELS = eval(QUOTE_MODELS)
 
-mkpath("../stats/$EXPERIMENT")
+mkpath("$results_path/stats")
 function write_tex(name, x)
-    f = "../stats/$EXPERIMENT/$name.tex"
+    f = "$results_path/stats/$name.tex"
     println(x, " > ", f)
     write(f, string(x, "\\unskip"))
 end
 write_pct(name, x; digits=1) = write_tex(name, string(round(100 * x; digits=digits), "\\%"))
 
 # %% --------
-@everywhere include("simulate.jl")
-@everywhere all_trials = $all_trials
-@everywhere full_fits = $full_fits
 
-@time all_sims = pmap(1:length(all_trials)) do i
-    run_simulations(i; n_repeat=50)
-end |> invert;
+model_sims = let
+    all_sims = map(collect(keys(all_trials))) do wid
+        deserialize("$base_path/sims/$wid")
+    end |> invert
 
-model_sims = map(all_sims) do sims
-    split(sims[1][1].wid, "-")[1] => sims
-end |> Dict
-# all_sims = map(collect(keys(all_trials))) do wid
-#     deserialize("$base_path/sims/$wid")
-# end |> invert;
+    map(all_sims) do sims
+        split(sims[1][1].wid, "-")[1] => sims
+    end |> Dict
+end
 
-# %% ==================== generate features ====================
+
+# %% ==================== trial features ====================
+
+term_reward(t::Trial) = term_reward(t.m, t.bs[end])
+first_revealed(t) = t.cs[1] == 0 ? NaN : t.bs[end][t.cs[1]]
+
+function second_same(t)
+    t.m.expand_only || return NaN
+    length(t.cs) < 3 && return NaN
+    c1, c2 = t.cs
+    c2 in t.m.graph[c1] && return 1.
+    @assert c2 in t.m.graph[1]
+    return 0.
+end
+
+trial_features(t::Trial) = (
+    wid=t.wid,
+    i=t.i,
+    term_reward=term_reward(t),
+    first_revealed = first_revealed(t),
+    second_same=second_same(t),
+)
+trial_features.(flat_trials) |> JSON.json |> writev("$results_path/trial_features.json");
+
+for (nam, sims) in pairs(model_sims)
+    f = "$results_path/$nam-trial_features.json"
+    sims |> flatten .|> trial_features |> JSON.json |> writev(f)
+end
+
+# %% ==================== click features ====================
 
 _bf = Heuristic{:BestFirst,Float64}(10., 0., 0., 0., 0., -1e10, 0.)
 function is_bestfirst(d::Datum)
     (d.c != TERM) && action_dist(_bf, d)[d.c+1] > 1e-2
 end
+
 
 function click_features(d)
     m = d.t.m; b = d.b;
@@ -55,6 +80,8 @@ function click_features(d)
     (
         wid=d.t.wid,
         i=d.t.i,
+        ci=
+        depth = d.c == TERM ? -1 : depth(m.graph, d.c),
         is_term = d.c == TERM,
         is_best=is_bestfirst(d),
         n_revealed=sum(observed(d.b)) - 1,
@@ -64,7 +91,7 @@ function click_features(d)
         best_next=best_vs_next(m, b),
     )
 end
-click_features.(all_data) |> JSON.json |> write("$results_path/click_features.json")
+click_features.(all_data) |> JSON.json |> writev("$results_path/click_features.json");
 
 # %% --------
 thin(sims) = [s[1:100] for s in sims]
@@ -74,6 +101,28 @@ for (nam, sims) in pairs(model_sims)
     sims |> thin |> flatten |> get_data .|> click_features |> JSON.json |> write(f)
     println("Wrote $f")
 end
+
+# # %% ==================== depth curve ====================
+cummax(xs) = accumulate(max, xs)
+function cummaxdepth(t)
+    map(t.cs[1:end-1]) do c
+        depth(t.m, c)
+    end |> cummax
+end
+function depth_curve(trials)
+    mapmany(trials) do t
+        map(enumerate(cummaxdepth(t))) do (i, x)
+            (t.wid, i, x)
+        end
+    end
+end
+
+depth_curve(flat_trials) |> JSON.json |> writev("$results_path/depth_curve.json");
+for (nam, sims) in pairs(model_sims)
+    # M = MODELS[5]; sims = model_sims[M];
+    sims |> thin |> flatten |> depth_curve |> JSON.json |> writev("$results_path/$nam-depth_curve.json")
+end
+
 
 # %% ==================== group simulations and features ====================
 

@@ -23,13 +23,11 @@ function logp(L::Likelihood, model::M)::T where M <: AbstractModel{T} where T <:
     for i in eachindex(L.data)
         a = L.data[i].c + 1
         p = action_dist!(tmp, model, φ[i])
-        if !(sum(p) ≈ 1)
-            @error "bad probability vector" p sum(p)
-            println("\n\n")
-            display(model)
-            println("\n\n")
-        end
-        @assert sum(p) ≈ 1
+        # if !(sum(p) ≈ 1)
+        #     @error "bad probability vector" p sum(p)
+        # end
+        # @assert sum(p) ≈ 1
+        @assert isfinite(p[a])
         total += log(p[a])
     end
     total

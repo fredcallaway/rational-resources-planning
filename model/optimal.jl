@@ -40,7 +40,7 @@ end
 # For simulation
 
 function get_qs(m::MetaMDP, b::Belief, cost::Float64)
-    V = load_V(id(mutate(m, cost=cost)))
+    V = load_V_lru2(id(mutate(m, cost=cost)))
     Dict(cost => Q(V, b))
 end
 
@@ -60,6 +60,7 @@ struct OptimalPlus{T} <: AbstractModel{T}
     cost::Float64
     β_select::T
     β_term::T
+    β_expand::T
     ε::T
 end
 
@@ -67,21 +68,31 @@ default_space(::Type{OptimalPlus}) = Space(
     :cost => COSTS,
     :β_select => (1e-6, 50),
     :β_term => (1e-6, 50),
+    :β_expand => FIT_BIAS ? (1e-6, 50) : 0.,
     :ε => (1e-3, 1)
 )
 
+
 function features(::Type{OptimalPlus{T}}, d::Datum) where T
     qs = get_qs(d)
-    frontier = get_frontier(d.t.m, d.b)
-    _optplus_features(T, qs, frontier)
+    _optplus_features(T, d.t.m, d.b, qs)
 end
-_optplus_features(T, qs, frontier) = (
-    frontier=frontier, 
-    q_select=valmap(x->x[frontier.+1], qs),
-    q_term=valmap(x->x[[1; frontier.+1]], qs),
-    tmp_select=zeros(T, length(frontier)),
-    tmp_term=zeros(T, length(frontier)+1),
-)
+
+function _optplus_features(T, m, b, qs)
+    frontier = get_frontier(m, b)
+    expansion = map(frontier) do c
+        has_observed_parent(m.graph, b, c)
+    end
+    (
+        frontier=frontier, 
+        expansion=expansion,
+        q_select=valmap(x->x[frontier.+1], qs),
+        q_term=valmap(x->x[[1; frontier.+1]], qs),
+        tmp_select=zeros(T, length(frontier)),
+        tmp_term=zeros(T, length(frontier)+1),
+    )
+end
+
 
 function action_dist!(p::Vector{T}, model::OptimalPlus{T}, φ::NamedTuple) where T
     term_select_action_dist!(p, model, φ)
@@ -89,7 +100,7 @@ end
 
 function selection_probability(model::OptimalPlus, φ::NamedTuple)
     q = φ.tmp_select
-    q .= model.β_select .* φ.q_select[model.cost]
+    @. q = model.β_select * φ.q_select[model.cost] + model.β_expand * φ.expansion
     softmax!(q)
 end
 
@@ -103,7 +114,7 @@ end
 
 function action_dist(model::OptimalPlus, m::MetaMDP, b::Belief)
     p = zeros(length(b) + 1)
-    φ = _optplus_features(Float64, get_qs(m, b, model.cost), get_frontier(m, b))
+    φ = _optplus_features(Float64, m, b, get_qs(m, b, model.cost))
    action_dist!(p, model, φ)
 end
 

@@ -9,16 +9,19 @@ function depth(g, i)
     @assert false
 end
 
-function make_rewards(graph, mult, depth_factor)
+function make_rewards(graph, mult, factor)
+    if factor < 1
+        mult *= factor ^ -(length(paths(g)[1]) - 1)
+    end
     base = mult * Float64[-2, -1, 1, 2]
     map(eachindex(graph)) do i
         i == 1 && return DiscreteNonParametric([0.])
-        vs = round.(unique(base .*  depth_factor ^ (depth(graph, i)-1)))
+        vs = round.(unique(base .*  factor ^ (depth(graph, i)-1)))
         DiscreteNonParametric(vs)
     end
 end
 
-function make_rewards(g::Graph, variance::AbstractString)
+function make_rewards(g::Graph, variance::AbstractString, factor)
     mult = 1
     factor = Dict("increasing" => 3, "decreasing" => 1//3, "constant" => 1)[variance]
     if factor == 1
@@ -35,6 +38,9 @@ function variance_structure(m::MetaMDP)
     v2 = var(m.rewards[final])
     v2 > v1 ? "increasing" : v2 < v1 ? "decreasing" : "constant"
 end
+
+
+
 
 # function reward_distributions(reward_structure, graph)
 #     if reward_structure == "constant"

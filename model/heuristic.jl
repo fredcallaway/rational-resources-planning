@@ -79,6 +79,9 @@ default_space(::Type{Heuristic{:BestFirst}}) = _modify(:Full, β_depth=0)
 default_space(::Type{Heuristic{:DepthFirst}}) = _modify(:Full, β_best=0, β_depth=(0, 3))
 default_space(::Type{Heuristic{:BreadthFirst}}) = _modify(:Full, β_best=0, β_depth=(-3, 0))
 
+default_space(::Type{Heuristic{:BestPlusDepth}}) = _modify(:Full, β_depth=(0, 3))
+default_space(::Type{Heuristic{:BestPlusBreadth}}) = _modify(:Full, β_depth=(-3, 0))
+
 default_space(::Type{Heuristic{:BestFirstNoSatisfice}}) = _modify(:BestFirst, β_satisfice=0, θ_satisfice=0)
 default_space(::Type{Heuristic{:BestFirstNoBestNext}}) = _modify(:BestFirst, β_best_next=0, θ_best_next=0)
 default_space(::Type{Heuristic{:BestFirstNoDepthLimit}}) = _modify(:BestFirst, β_depth_limit=0, θ_depth_limit=0)
@@ -150,9 +153,10 @@ end
 
 "How much better is the best path from its competitors?"
 function best_vs_next(m, b)
-    @assert m.expand_only  # because path[end]
     pvals = path_values(m, b)
-    undetermined = [isnan(b[path[end]]) for path in paths(m)]
+    undetermined = map(paths(m)) do path
+        any(isnan(b[i]) for i in path)
+    end
     # find best path, breaking ties in favor of undetermined
     best = argmax(collect(zip(pvals, undetermined)))
     

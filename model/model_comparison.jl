@@ -5,96 +5,53 @@ using CSV
 using DataFrames
 
 isempty(ARGS) && push!(ARGS, "exp1")
+# ARGS[1] = "exp3"
 include("conf.jl")
 
 @everywhere include("base.jl")
-mkpath(results_path)
-FOLDS = 5
-CV_METHOD = :random  # :stratified
-OPT_METHOD = :bfgs  # :samin
-
 
 # %% ==================== LOAD DATA ====================
 
 all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
 flat_trials = flatten(values(all_trials));
-
 println(length(flat_trials), " trials")
 all_data = all_trials |> values |> flatten |> get_data;
 
 @assert length(unique(hash.(flat_trials))) == length(flat_trials)
 @assert length(unique(hash.(all_data))) == length(all_data)
 
-# %% ==================== WRITE MDPS ====================
-# this only applies if we changed the MDP when loading it (e.g. adding/removing expand_only)
-mdps = unique(getfield.(flat_trials, :m))
+# %% ==================== SOLVE MDPS AND PRECOMPUTE Q LOOKUP TABLE ====================
 
-for m in mdps
-    f = "mdps/base/$(id(m))"
-    serialize(f, m)
-    println("Wrote ", f)
-end
+# include("solve.jl")
+# todo = write_mdps()
+# if !isempty(todo)
+#     println("Solving $(length(todo)) mdps....")
+#     @time do_jobs(todo)
+# end
 
-# # %% ==================== SOLVE MDPS AND PRECOMPUTE Q LOOKUP TABLE ====================
-
-include("solve.jl")
-todo = write_mdps()
-if !isempty(todo)
-    println("Solving $(length(todo)) mdps....")
-    @time do_jobs(todo)
-end
-
-include("Q_table.jl")
-@time serialize("$base_path/Q_table", make_Q_table(all_data));
+# include("Q_table.jl")
+# @time serialize("$base_path/Q_table", make_Q_table(all_data));
 
 # %% ==================== LOAD MODEL CODE ====================
+
 @everywhere include("models.jl")
 
-MODELS = [
-    RandomSelection,
-    OptimalPlus,
-    MetaGreedy,
-    Heuristic{:BestFirst},
-    Heuristic{:BestFirstNoBestNext},
-    Heuristic{:BestFirstRandomStopping},
-    Heuristic{:BestFirstSatisficing},
-    Heuristic{:BestFirstBestNext},
-    Heuristic{:BestFirstDepth},
-    # Heuristic{:DepthFirst},
-    # Heuristic{:BreadthFirst},
-    # Heuristic{:BestFirstNoSatisfice},
-    # Heuristic{:BestFirstNoBestNext},
-    # Heuristic{:BestFirstNoDepthLimit},
-    # Heuristic{:FullNoSatisfice},
-    # Heuristic{:FullNoBestNext},
-    # Heuristic{:FullNoDepthLimit},
-]
-serialize("$base_path/models", MODELS)
-
-
+MODELS = eval(QUOTE_MODELS)
+# serialize("$base_path/models", MODELS)
 
 # %% ==================== FIT MODELS TO FULL DATASET ====================
-@everywhere flat_trials = $flat_trials
-@time group_fits = pmap(MODELS) do M
-    fit(M, flat_trials; method=OPT_METHOD)
+
+@async begin
+    @everywhere flat_trials = $flat_trials
+    @time group_fits = pmap(MODELS) do M
+        fit(M, flat_trials; method=OPT_METHOD)
+    end
+    serialize("$base_path/group_fits", group_fits)
+    println("Wrote $base_path/group_fits")
 end
-serialize("$base_path/group_fits", group_fits)
-
-
 
 # %% ==================== FIT MODELS TO INDIVIDUALS ====================
 
-if false
-    @everywhere include("likelihood.jl")
-    @sync begin
-        @spawnat 2 @time fit(Heuristic{:BreadthFirst}, all_trials |> values |> first)
-        @spawnat 3 @time fit(Optimal, all_trials |> values |> first)
-        @spawnat 4 @time fit(OptimalPlus, all_trials |> values |> first)
-        @spawnat 5 fit(RandomSelection, all_trials |> values |> first)
-    end
-end
-
-# %% --------
 full_fits = let
     full_jobs = Iterators.product(values(all_trials), MODELS);
     @time full_fits = pmap(full_jobs) do (trials, M)
@@ -197,24 +154,6 @@ cv_fits = let
     cv_fits
 end;
 
-
-
-# %% ==================== SIMULATION ====================
-
-include("simulate.jl")
-@everywhere all_trials = $all_trials
-@everywhere full_fits = $full_fits
-pmap(run_simulations, 1:length(all_trials))
-sims = process_simulations();
-run(`du -h $results_path/simulations.csv`);
-
-# %% --------
-
-group(sims, x->x.model)
-
-
-
-
 # %% ==================== SAVE MODEL PREDICTIONS ====================
 
 @memoize function get_fold(i::Int)
@@ -252,35 +191,16 @@ function get_logp(M::Type, d::Datum)
     log(action_dist(model, d.t.m, d.b)[d.c+1])
 end
 
-# %% --------
+map(all_data) do d
+    (wid = d.t.wid, 
+     c=d.c,
+    predictions = Dict(name(M) => action_dist(get_model(M, d.t), d) for M in MODELS))
+end |> JSON.json |> write("$results_path/predictions.json")
 
 
-click_features(d) = (
-    wid=d.t.wid,
-    i=d.t.i,
-    b=d.b,
-    c=d.c,
-    p_rand=1/sum(allowed(d.t.m, d.b)),
-    predictions = Dict(name(M) => action_dist(get_model(M, d.t), d) for M in MODELS),
-    n_revealed=sum(observed(d.b)) - 1,
-    term_reward=term_reward(d.t.m, d.b)
-)
-
-click_features.(all_data) |> JSON.json |> write("$results_path/click_features.json")
+# %% ==================== GENERATE VISUALIZATION JSON ====================
 
 
-# %% --------
-term_reward(t::Trial) = term_reward(t.m, t.bs[end])
-
-trial_features(t::Trial) = (
-    wid=t.wid,
-    i=t.i,
-    term_reward=term_reward(t),
-)
-
-trial_features.(flat_trials) |> JSON.json |> write("$results_path/trial_features.json")
-
-# %% --------
 function demo_trial(t)
     (
         stateRewards = t.bs[end],
@@ -310,3 +230,4 @@ end |> sorter |> JSON.json |> write("$results_path/viz/table.json")
 foreach(collect(all_trials)) do (wid, trials)
     demo_trial.(trials) |> JSON.json |> write("$results_path/viz/$wid.json")
 end
+

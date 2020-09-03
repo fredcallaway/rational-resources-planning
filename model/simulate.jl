@@ -1,6 +1,29 @@
+using StatsBase
+using Distributed
+using Glob
+using CSV
+using DataFrames
+include("conf.jl")
 
+@everywhere include("base.jl")
+@everywhere include("models.jl")
 
-# %% --------
+@everywhere function run_simulations(i::Int; n_repeat=10)
+    wid = collect(keys(all_trials))[i]
+    trials = all_trials[wid]
+    sims = map(full_fits[i, :]) do fit
+        model_wid = name(fit.model) * "-" * wid
+        map(repeat(trials, n_repeat)) do t
+            simulate(fit.model, t.m; wid=model_wid)
+        end
+    end
+    # sims[model_index][trial_index]
+    mkpath("$base_path/sims/")
+    serialize("$base_path/sims/$wid", sims)
+    GC.gc()
+    return sims
+end
+
 
 function sbatch_script(n; minutes=5, memory=10000)
     """
@@ -28,20 +51,6 @@ function make_row(t::Trial)
     )
 end
 
-function run_simulations(i::Int; n_repeat=500)
-    wid = collect(keys(all_trials))[i]
-    trials = all_trials[wid]
-    sims = map(full_fits[i, :]) do fit
-        model_wid = name(fit.model) * "-" * wid
-        map(repeat(trials, n_repeat)) do t
-            simulate(fit.model, t.m; wid=model_wid)
-        end
-    end
-    mkpath("$base_path/sims/")
-    serialize("$base_path/sims/$wid", sims)
-    return sims
-end
-
 function process_simulations()
     all_sims = map(collect(keys(all_trials))) do wid
         deserialize("$base_path/sims/$wid")
@@ -51,17 +60,7 @@ function process_simulations()
     return flat_sims
 end
 
-if basename(PROGRAM_FILE) == basename(@__FILE__)
-    using StatsBase
-    using Distributed
-    using Glob
-    using CSV
-    using DataFrames
-    isempty(ARGS) && push!(ARGS, "exp1")
-    include("conf.jl")
-    include("base.jl")
-    include("models.jl")
-    
+if basename(PROGRAM_FILE) == basename(@__FILE__)   
     all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
     full_fits = deserialize("$base_path/full_fits")
     @everywhere all_trials = $all_trials
@@ -73,6 +72,11 @@ if basename(PROGRAM_FILE) == basename(@__FILE__)
     elseif ARGS[2] == "postprocess"
         process_simulations()
     else
-        job = parse(Int, ARGS[2])
+        if ARGS[2] == "all"
+            jobs = 1:length(all_trials)
+        else
+            jobs = eval(Meta.parse(ARGS[2]))
+        end
+        pmap(run_simulations, jobs)
     end
 end
