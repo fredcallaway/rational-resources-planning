@@ -5,13 +5,12 @@ using CSV
 using DataFrames
 
 isempty(ARGS) && push!(ARGS, "exp1")
-# ARGS[1] = "exp3"
+println("Running model comparison for ", ARGS[1])
 include("conf.jl")
 
 @everywhere include("base.jl")
 
 # %% ==================== LOAD DATA ====================
-
 all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
 flat_trials = flatten(values(all_trials));
 println(length(flat_trials), " trials")
@@ -23,11 +22,7 @@ all_data = all_trials |> values |> flatten |> get_data;
 # %% ==================== SOLVE MDPS AND PRECOMPUTE Q LOOKUP TABLE ====================
 
 # include("solve.jl")
-# todo = write_mdps()
-# if !isempty(todo)
-#     println("Solving $(length(todo)) mdps....")
-#     @time do_jobs(todo)
-# end
+# @time solve_all()
 
 # include("Q_table.jl")
 # @time serialize("$base_path/Q_table", make_Q_table(all_data));
@@ -37,6 +32,7 @@ all_data = all_trials |> values |> flatten |> get_data;
 @everywhere include("models.jl")
 
 MODELS = eval(QUOTE_MODELS)
+
 # serialize("$base_path/models", MODELS)
 
 # %% ==================== FIT MODELS TO FULL DATASET ====================
@@ -197,9 +193,7 @@ map(all_data) do d
     predictions = Dict(name(M) => action_dist(get_model(M, d.t), d) for M in MODELS))
 end |> JSON.json |> write("$results_path/predictions.json")
 
-
 # %% ==================== GENERATE VISUALIZATION JSON ====================
-
 
 function demo_trial(t)
     (

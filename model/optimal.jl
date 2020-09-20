@@ -56,7 +56,7 @@ end
 
 # ---------- Souped up Optimal model ---------- #
 
-struct OptimalPlus{T} <: AbstractModel{T}
+struct OptimalPlus{H,T} <: AbstractModel{T}
     cost::Float64
     β_select::T
     β_term::T
@@ -64,16 +64,24 @@ struct OptimalPlus{T} <: AbstractModel{T}
     ε::T
 end
 
-default_space(::Type{OptimalPlus}) = Space(
+OptimalPlus(args...) = OptimalPlus{:Default}(args...)
+_optname(H) = "OptimalPlus" * (H == :Default ? "" : String(H))
+name(::Type{OptimalPlus{H}}) where H = _optname(H)
+name(::Type{OptimalPlus{H,T}}) where {H,T} = _optname(H)
+name(::OptimalPlus{H,T}) where {H,T} = _optname(H)
+
+default_space(::Type{OptimalPlus{:Default}}) = Space(
     :cost => COSTS,
     :β_select => (1e-6, 50),
     :β_term => (1e-6, 50),
-    :β_expand => FIT_BIAS ? (1e-6, 50) : 0.,
+    :β_expand => 0.,
     :ε => (1e-3, 1)
 )
 
+default_space(::Type{OptimalPlus{:Expand}}) = 
+    change_space(OptimalPlus{:Default}, β_expand=(1e-6, 50))
 
-function features(::Type{OptimalPlus{T}}, d::Datum) where T
+function features(::Type{OptimalPlus{H,T}}, d::Datum) where {H,T}
     qs = get_qs(d)
     _optplus_features(T, d.t.m, d.b, qs)
 end
@@ -93,8 +101,7 @@ function _optplus_features(T, m, b, qs)
     )
 end
 
-
-function action_dist!(p::Vector{T}, model::OptimalPlus{T}, φ::NamedTuple) where T
+function action_dist!(p::Vector{T}, model::OptimalPlus{H,T}, φ::NamedTuple) where {H,T}
     term_select_action_dist!(p, model, φ)
 end
 

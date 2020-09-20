@@ -46,17 +46,30 @@ function bfgs_random_restarts(loss, lower, upper, n_restart; max_err=n_restart/2
     ] |> Iterators.cycle |> Iterators.Stateful
     algo = first(algorithms)
     n_err = 0
+    n_time = 0
+
+    function do_opt(algo, x0)
+        res = optimize(loss, lower, upper, x0, algo, Optim.Options(time_limit=60); autodiff=:forward)
+        if !(res.f_converged || res.g_converged) && res.time_run > res.time_limit
+            @warn "Timed out" res.iterations res.f_calls
+            n_time += 1
+            if n_time >= max_err
+                error("Too many timeouts")
+            end
+        end
+        res
+    end
 
     opts = map(get_sobol(lower, upper, n_restart)) do x0
         try
-            optimize(loss, lower, upper, x0, algo, autodiff=:forward)
+            do_opt(algo, x0)
         catch err
             err isa InterruptException && rethrow(err)
             # @warn "First BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name
             # try the other line search method
             algo = first(algorithms)  # this cycles
             try
-                optimize(loss, lower, upper, x0, algo, autodiff=:forward)
+                do_opt(algo, x0)
             catch err
                 err isa InterruptException && rethrow(err)
                 @warn "Second BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name

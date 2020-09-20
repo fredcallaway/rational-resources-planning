@@ -62,7 +62,6 @@ function writev(fn)
     x -> begin
         write(fn, x)
         run(`du -h $fn`)
-        x
     end
 end
 

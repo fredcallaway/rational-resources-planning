@@ -238,6 +238,7 @@ end
 default_hash(m::MetaMDP, b::Belief) = hash(b)
 
 function choose_hash(m::MetaMDP)
+    length(m) == 11 && return ((m, b) -> hash(b))  # this is a hack for the road trip mdps which have little symmetry to exploit
     if m.graph == [[2, 6, 10], [3], [4, 5], [], [], [7], [8, 9], [], [], [11], [12, 13], [], []]
         hash_312
     elseif m.graph == [[2, 6, 10, 14], [3], [4, 5], [], [], [7], [8, 9], [], [], [11], [12, 13], [], [], [15], [16, 17], [], []]

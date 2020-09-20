@@ -6,6 +6,7 @@ if myid() == 1  # only run on the master process
     conf = ARGS[1]
     @everywhere begin
         # defaults
+        COSTS = [0:0.05:4; 100]
         FOLDS = 5
         CV_METHOD = :random  # :stratified
         OPT_METHOD = :bfgs

@@ -1,11 +1,6 @@
-EXPERIMENT = "exp3"
+EXPERIMENT = "exp4"
 EXPAND_ONLY = false
-
-MDP_IDS = [
-    "6oCv6ld5V89",
-    "IXcheAhOWH7",
-    "95YVmaymRm9",
-]
+FOLDS = 7
 
 QUOTE_MODELS = quote 
     [

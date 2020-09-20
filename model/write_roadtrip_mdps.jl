@@ -1,3 +1,10 @@
+include("mdp.jl")
+using JSON
+
+const SCALING = -0.1
+const MAX_COST = 300
+const PRICES = [25,35,50,100]
+
 function parse_edges(t)
     edges = map(t["edges"]) do (x, y)
         Int(x) + 1, Int(y) + 1
@@ -10,13 +17,12 @@ function parse_edges(t)
     graph
 end
 
-data = open(JSON.parse, "../data/roadtrip-2.0/trials.json")
+data_path = "/Users/fred/heroku/roadtriptask/data/processed/v4.0/"
+trials = open(JSON.parse, "$data_path/trials.json")
 
-lookup = map(first(values(data))) do t
-    m = MetaMDP(parse_edges(t), DNP([25,35,50,100]), 0., -300., false)
-    serialize("mdps/base/$(id(m))", m)
-    map_id = t["map"][13:end-4]
-    map_id => id(m)
-    # serialize("mdps/$mid", m)
+lookup = map(first(values(trials))) do t
+    m = MetaMDP(parse_edges(t), DNP(SCALING .* PRICES), 0., SCALING * MAX_COST, false)
+    serialize("mdps/base/$(id(m))", m) 
+    t["map"] => id(m)
 end |> Dict
-serialize("mdps/roadtrip_lookup", lookup)
+write("$data_path/mdp_id_lookup.json", JSON.json(lookup))

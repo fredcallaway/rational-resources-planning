@@ -32,44 +32,14 @@ Base.hash(d::Datum, h::UInt64) = hash(d.c, hash(d.t, h))
 is_roadtrip(t::Dict) = startswith(get(t, "map", ""), "fantasy")
 
 function get_mdp(t::Dict)
-    mdp_id = is_roadtrip(t) ? t["map"][13:end-4] : t["mdp"]
-    return _load_mdp(mdp_id)
+    return _load_mdp(t["mdp"])
 end
 
 @memoize function _load_mdp(mdp_id)
     m = deserialize("mdps/base/$mdp_id")
     mutate(m, expand_only=EXPAND_ONLY)
-
-    # if startswith(mdp_id, "fantasy")
-    #     error("TODO")
-    #         # min_reward = -300
-    # else
-    #     branching, variance = split(map_name, "-")
-    #     g = tree(parse.(Int, collect(branching)))
-    #     MetaMDP(g, make_rewards(g, variance), NaN, -Inf, EXPAND_ONLY)
-    # end
 end
 
-
-function parse_edges(t)
-    edges = map(t["edges"]) do (x, y)
-        Int(x) + 1, Int(y) + 1
-    end
-    n_node = maximum(flatten(edges))
-    graph = [Int[] for _ in 1:n_node]
-    for (a, b) in edges
-        push!(graph[a], b)
-    end
-    graph
-end
-
-# get_reward_structure(map) = startswith(map, "fantasy") ? "roadtrip" : split(map, "-")[end]
-
-# @memoize Dict function make_meta_mdp(graph, rstruct, cost)
-#     min_reward = rstruct == "roadtrip" ? -300 : -Inf
-#     rewards = reward_distributions(rstruct, graph)
-#     MetaMDP(graph, rewards, cost, min_reward, EXPAND_ONLY)
-# end
 
 function Trial(wid::String, i::Int, t::Dict{String,Any})
     m = get_mdp(t)
@@ -88,9 +58,6 @@ function Trial(wid::String, i::Int, t::Dict{String,Any})
         # value is known to be 0 (it is irrelevant to the decision).
         # it actually shouldn't be allowed in the experiment...
         if c != 1
-            if is_roadtrip(t)  # road trip experiment uses units of cost
-                value *= -1
-            end
             b[c] = value
         end
     end
@@ -102,7 +69,7 @@ function Trial(wid::String, i::Int, t::Dict{String,Any})
 end
 
 # this is memoized for the sake of future memoization based on object ID
-@memoize function get_data(t::Trial)
+function get_data(t::Trial)
     map(eachindex(t.bs)) do i
         # c_last = i == 1 ? nothing : t.cs[i-1]
         # tmp = zeros(length(t.bs)+1)
@@ -122,7 +89,7 @@ end
 
 # end
 
-@memoize function load_trials(experiment)::Dict{String,Vector{Trial}}
+function load_trials(experiment)::Dict{String,Vector{Trial}}
     data = open(JSON.parse, "../data/$experiment/trials.json")
     data |> values |> first |> first
     map(data) do wid, tt

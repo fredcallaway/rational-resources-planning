@@ -1,7 +1,5 @@
-using Query
-using ProgressMeter
-
-isempty(ARGS) && push!(ARGS, "exp1")
+using Distributed
+isempty(ARGS) && push!(ARGS, "exp4")
 include("conf.jl")
 @everywhere include("base.jl")
 @everywhere include("models.jl")
@@ -22,21 +20,20 @@ write_pct(name, x; digits=1) = write_tex(name, string(round(100 * x; digits=digi
 
 # %% --------
 
-model_sims = let
-    all_sims = map(collect(keys(all_trials))) do wid
-        deserialize("$base_path/sims/$wid")
-    end |> invert
-
-    map(all_sims) do sims
-        split(sims[1][1].wid, "-")[1] => sims
-    end |> Dict
-end
-
+model_sims = map([name.(MODELS); "OptimalPlusPure"]) do mname
+    mname => map(collect(keys(all_trials))) do wid
+        deserialize("$base_path/sims/$mname-$wid")
+    end
+end |> Dict;
 
 # %% ==================== trial features ====================
 
 term_reward(t::Trial) = term_reward(t.m, t.bs[end])
 first_revealed(t) = t.cs[1] == 0 ? NaN : t.bs[end][t.cs[1]]
+
+leaves(m::MetaMDP) = Set([i for (i, children) in enumerate(m.graph) if isempty(children)])
+get_leaves = Dict(id(m) => leaves(m) for m in unique(getfield.(flat_trials, :m)))
+is_backward(t::Trial) = t.cs[1] in get_leaves[id(t.m)]
 
 function second_same(t)
     t.m.expand_only || return NaN
@@ -53,21 +50,25 @@ trial_features(t::Trial) = (
     term_reward=term_reward(t),
     first_revealed = first_revealed(t),
     second_same=second_same(t),
+    backward=is_backward(t),
+    n_click=length(t.cs)-1,
 )
-trial_features.(flat_trials) |> JSON.json |> writev("$results_path/trial_features.json");
 
+trial_features.(flat_trials) |> JSON.json |> writev("$results_path/trial_features.json")
+
+# %% --------
 for (nam, sims) in pairs(model_sims)
+    nam != "OptimalPlusPure" && continue
     f = "$results_path/$nam-trial_features.json"
     sims |> flatten .|> trial_features |> JSON.json |> writev(f)
 end
 
 # %% ==================== click features ====================
 
-_bf = Heuristic{:BestFirst,Float64}(10., 0., 0., 0., 0., -1e10, 0.)
+_bf = Heuristic{:BestFirst,Float64}(10., 0.,0., 0., 0., 0., -1e10, 0.)
 function is_bestfirst(d::Datum)
     (d.c != TERM) && action_dist(_bf, d)[d.c+1] > 1e-2
 end
-
 
 function click_features(d)
     m = d.t.m; b = d.b;
@@ -80,8 +81,8 @@ function click_features(d)
     (
         wid=d.t.wid,
         i=d.t.i,
-        ci=
-        depth = d.c == TERM ? -1 : depth(m.graph, d.c),
+        expanding = has_observed_parent(d.t.m.graph, d.b, d.c),
+        # depth = d.c == TERM ? -1 : depth(m.graph, d.c),
         is_term = d.c == TERM,
         is_best=is_bestfirst(d),
         n_revealed=sum(observed(d.b)) - 1,
@@ -98,26 +99,35 @@ thin(sims) = [s[1:100] for s in sims]
 for (nam, sims) in pairs(model_sims)
     # M = MODELS[5]; sims = model_sims[M];
     f = "$results_path/$nam-click_features.json"
-    sims |> thin |> flatten |> get_data .|> click_features |> JSON.json |> write(f)
-    println("Wrote $f")
+    sims |> thin |> flatten |> get_data .|> click_features |> JSON.json |> writev(f)
 end
 
 # # %% ==================== depth curve ====================
 cummax(xs) = accumulate(max, xs)
+
 function cummaxdepth(t)
     map(t.cs[1:end-1]) do c
         depth(t.m, c)
     end |> cummax
 end
+
 function depth_curve(trials)
-    mapmany(trials) do t
-        map(enumerate(cummaxdepth(t))) do (i, x)
-            (t.wid, i, x)
+    rows = mapmany(trials) do t
+        cs = t.cs[1:end-1]
+        dpth = map(cs) do c
+            depth(t.m, c)
+        end
+        click = eachindex(cs)
+        map(zip(click, dpth, cummax(dpth))) do x
+            (t.wid, x...)
         end
     end
+    Dict(["wid", "click", "depth", "cumdepth"] .=> invert(rows))
 end
 
+
 depth_curve(flat_trials) |> JSON.json |> writev("$results_path/depth_curve.json");
+# %% --------
 for (nam, sims) in pairs(model_sims)
     # M = MODELS[5]; sims = model_sims[M];
     sims |> thin |> flatten |> depth_curve |> JSON.json |> writev("$results_path/$nam-depth_curve.json")
@@ -151,40 +161,6 @@ end
 path_loss(t::Trial) = term_reward(t.m, t.bs[end]) - path_value(t.m, t.bs[end], t.path)
 pl = path_loss.(flat_trials)
 write_pct("path_loss", mean(pl .== 0))
-
-# %% ==================== trial features ====================
-
-term_reward(t::Trial) = term_reward(t.m, t.bs[end])
-
-trial_features(t::Trial) = (
-    wid=t.wid,
-    i=t.i,
-    term_reward=term_reward(t),
-)
-
-trial_features.(flat_trials) |> JSON.json |> write("$results_path/trial_features.json")
-
-
-
-# %% ==================== pure optimal simulations ====================
-
-mdps = unique(getfield.(flat_trials, :m))
-@time opt_sims = pmap(Iterators.product(mdps, COSTS)) do (m, cost)
-    V = load_V_nomem(id(mutate(m, cost=cost)))
-    map(1:10000) do i
-        simulate(OptimalPolicy(V), "PureOptimal")
-    end
-end
-serialize("$base_path/opt_sims", opt_sims)
-
-
-# %% --------
-i = findfirst(isequal(group_fits[2][1].cost), COSTS)
-opt_sims[i] |> get_data .|> click_features |> JSON.json |> write("$results_path/group-PureOptimal-click_features.json")
-
-map(opt_sims) do sims
-    sims |> get_data .|> click_features
-end  |> JSON.json |> write("$results_path/PureOptimal-click_features.json")
 
 # %% --------
 

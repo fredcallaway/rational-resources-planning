@@ -110,3 +110,10 @@ function get_frontier(m, b::Belief)
 end
 get_frontier(d::Datum) = get_frontier(d.t.m, d.b)
 
+function change_space(::Type{M}; kws...) where M
+    space = default_space(M)
+    for (k,v) in kws
+        space[k] = v
+    end
+    space
+end

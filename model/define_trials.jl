@@ -92,7 +92,7 @@ function make_mdp_exp3(factor)
     if factor == 1
         mult = 5
     elseif factor < 1
-        mult = factor ^ -(length(paths(g)[1]) - 1)
+        mult = factor ^ -(length(paths(graph)[1]) - 1)
     else
         mult = 1
     end
@@ -102,7 +102,7 @@ function make_mdp_exp3(factor)
         vs = round.(unique(base .*  factor ^ (depth(graph, i)-1)))
         DiscreteNonParametric(vs)
     end
-    MetaMDP(g, rewards, 0., -Inf, false)
+    MetaMDP(graph, rewards, 0., -Inf, false)
 end
 
 function save(m::MetaMDP)
@@ -124,7 +124,7 @@ function write_trials(name::String, m::MetaMDP)
 end
 
 # experiment 1
-write_trials("exp1_constant", make_mdp([4,1,2], :constant, NaN, NaN, NaN))
+write_trials("exp1_constant", maket_mdp([4,1,2], :constant, NaN, NaN, NaN))
 # experiment 2
 write_trials("exp2_increasing", make_mdp([4,1,1,1,1], :depth, 20, 1/2, 2/3))
 write_trials("exp2_decreasing", make_mdp([4,1,1,1,1], :breadth, 20, 1/2, 3/5))
