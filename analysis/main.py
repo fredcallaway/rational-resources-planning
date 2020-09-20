@@ -1,19 +1,171 @@
-%run setup
+# %%
+%run setup 3
+# figs.nosave = True
+if EXPERIMENT == 2:
+    %run -i breadth_depth
+%run -i pareto
+%run -i model_comparison
+figs.nosave = False
 
+
+# %% ==================== Basic stuff ====================
+write_tex("recruited", len(full_pdf))
+
+write_tex("excluded", "TODO")
+write_tex("incomplete", "TODO")
+write_tex("N", len(pdf))
+
+write_tex("bonus", mean_std(pdf.bonus, fmt='$'))
+write_tex("time", mean_std(pdf['total_time']))
+
+# %% --------
+
+wage = 60 * (pdf.bonus + 1.50) / pdf.total_time
+pdf['wage'] = wage
+np.mean(pdf.wage < pdf.set_index('worker_id').loc['5f4912fc3c25512e73761c48'].wage)
+
+# %% ==================== Main figures  ====================
+
+@figure()
+def exp2_main():
+    fig, axes = setup_variance_plot(2)
+    for v, ax in zip(VARIANCES, axes[0, :]):
+        ax.imshow(task_image(v))
+        ax.axis('off')
+    plot_second_click(axes[1, :], 
+        # models=['OptimalPlus', 'BestFirst']
+        )
+
+@figure()
+def pareto_fit():
+    fig, axes = setup_variance_plot(2, label_offset=-0.4)
+    plot_pareto(axes[0, :], legend=False, fit_reg=False)
+    plot_average_predictive_accuracy(axes[1, :])
+    # figs.reformat_ticks(yaxis=True, ax=axes[1,0])
 
 
 # %% ==================== BACKWARD ====================
 
-leaves = {20, 15, 10, 5}
-tdf['first_click'] = tdf.clicks.apply(lambda x: x[0] if x else 0)
-tdf['backward'] = tdf.first_click.isin(leaves)
-pdf['backward'] = tdf.groupby('wid').backward.mean()
+tf = model_trial_features('OptimalPlusPure')
+d = pd.DataFrame([pdf.variance, tf.groupby('wid').backward.mean()]).T
+d.backward = d.backward.astype(int)
+d.query('variance == "increasing"').join(pdf.query('variance == "increasing"').cost)
+
+# %% --------
+pdf['optimal_backward'] = model_trial_features('OptimalPlusPure').groupby('wid').backward.mean()
 
 @figure(reformat_labels=True)
 def backwards():
-    sns.swarmplot('variance', 'backward', data=pdf)
-    plt.xlabel('a')
+    sns.stripplot('variance', 'backward', data=pdf, order=VARIANCES,
+        size=3, color=palette['Human'], alpha=0.5)
+    sns.pointplot('variance', 'backward', data=pdf, order=VARIANCES, color=palette['Human'])
+    plt.plot([0,1,2], [0, 0, 1], lw=2, ls='--', color=palette['Optimal'], label='Optimal')
+    plt.plot([0,1,2], [0, 0, 0], lw=2, ls='--', color=palette['BreadthFirst'], label='Forward')
+    plt.plot([0,1,2], [1, 1, 1], lw=2, ls='--', color=palette['DepthFirst'], label='Backward')
+    plt.plot([0,1,2], [.5, .5, .5] , lw=2, ls='--', color=palette['RandomSelection'], label='Random')
+    plt.xlabel('')
 
+# %% --------
+
+@figure(reformat_labels=True)
+def backwards():
+    sns.stripplot('variance', 'backward', data=pdf, order=VARIANCES,
+        size=3, color=palette['Human'], alpha=0.5)
+
+    for m in ['OptimalPlus']:
+        y = model_trial_features(m).groupby('variance').backward.mean().loc[VARIANCES]
+        y.plot(lw=2, ls='--', color=palette[m], label=figs.nice_name(m))
+    
+    sns.pointplot('variance', 'backward', data=pdf, order=VARIANCES, color=palette['Human'])
+
+    plt.xlabel('')
+
+# %% --------
+opt_back = model_trial_features('OptimalPlus').groupby('wid').backward.mean()
+opt_pure_back = model_trial_features('OptimalPlusPure').groupby('wid').backward.mean()
+
+@figure()
+def backwards_complex():
+    fig, axes = setup_variance_plot()
+    for ax, (_, d) in zip(axes.flat, tdf.groupby(['variance'])):
+        plt.sca(ax)
+        g = d.backward.groupby('wid')
+
+        est = g.mean()
+        lo, hi = proportion_confint(g.apply(sum), g.apply(len))
+        err = np.vstack([(est - lo).values, (hi - est).values])
+        idx = np.argsort(est)
+        plt.errorbar(np.arange(len(est)), est[idx], yerr=err[:, idx], color=palette['Human'], label='Humans')
+        plt.plot(np.arange(len(est)), opt_back[est.index][idx], color=palette['Optimal'], label='Optimal')
+        plt.plot(np.arange(len(est)), opt_pure_back[est.index][idx], color=lb, label='Optimal')
+        plt.xticks([])
+        plt.xlabel("Participant")
+        plt.ylabel('Backward Planning Rate')
+        plt.ylim(-0.05, 1.05)
+        plt.axhline(0, label='Forward Search', color=palette['BreadthFirst'])
+        plt.axhline(1, label='Backward Search', color=palette['DepthFirst'])
+    axes.flat[0].legend()
+
+
+# %% ==================== EXPANSION ====================
+from statsmodels.stats.proportion import proportion_confint
+
+# cf = pd.DataFrame(get_result(VERSION, 'click_features.json')) \
+#     .set_index('wid').loc[keep]
+
+
+x = load_cf('OptimalPlusPure')
+
+
+
+
+fig, axes = setup_variance_plot()
+x = pdf[['variance', 'n_click']].join(x.groupby('wid').expand.mean()).set_index('variance')
+for ax, var in zip(axes.flat, VARIANCES):
+    ax.scatter('n_click', 'expand', data=x.loc[var])
+
+show()
+
+
+
+# %% --------
+
+opt_exp = load_cf('OptimalPlus').groupby('wid').expand.mean()
+opt_pure_exp = load_cf('OptimalPlusPure').groupby('wid').expand.mean()
+cf = load_cf('Human')
+@figure()
+def expansion():
+    fig, axes = setup_variance_plot()
+    for ax, (_, d) in zip(axes.flat, cf.groupby(['variance'])):
+        plt.sca(ax)
+        g = d.expand.groupby('wid')
+        est = g.mean()
+        lo, hi = proportion_confint(g.apply(sum), g.apply(len))
+        err = np.vstack([(est - lo).values, (hi - est).values])
+        idx = np.argsort(est)
+        plt.errorbar(np.arange(len(est)), est[idx], yerr=err[:, idx], color='k', label='Humans')
+        
+        plt.plot(np.arange(len(est)), opt_exp[est.index][idx], color=palette['Optimal'], label='Optimal')
+        plt.plot(np.arange(len(est)), opt_pure_exp[est.index][idx], color=lb, label='Pure Optimal')
+
+        plt.xticks([])
+        plt.xlabel("Participant")
+        plt.ylim(-0.05, 1.05)
+        plt.ylabel('Expansion Rate')
+        plt.axhline(1, label='Forward Search', color=palette['BreadthFirst'])
+    axes.flat[0].legend()
+
+# %% --------
+
+pdf['expanding'] = cf.groupby('wid')['expanding'].mean()
+sns.swarmplot('variance', 'expanding', data=pdf, size=3)
+plt.ylabel('Expansion Rate')
+show()
+# %% --------
+
+# for w, x in :
+    # proportion_confint(x.sum(), len(x))
+    # cf.groupby('wid')
 
 
 
@@ -41,9 +193,10 @@ fits.set_index(['wid', 'model']).cost
 
 # %% ==================== PARAMETERS ====================
 
-cv_fits = pd.concat([pd.read_csv(f'model/results/{VERSION}/mle/{model}-cv.csv') 
+cv_fits = pd.concat([pd.read_csv(f'../model/results/{VERSION}/mle/{model}-cv.csv') 
                      for model in MODELS], sort=False).set_index('wid')
 
+cv_fits.query('model == "OptimalPlus"').columns
 cv_fits['click_delay'] = pdf.click_delay
 cv_fits['variance'] = pdf.variance
 # cv_fits.to_csv('cv_fits.csv')
@@ -78,16 +231,26 @@ show()
 # %% --------
 
 
+sns.distplot(pdf.n_click); show()
 # %% ==================== CLICK DELAY ====================
 
 @figure()
 def click_delay_click():
     sns.swarmplot('click_delay', 'n_click', data=pdf,
         hue='variance',
-        order='1.0s 2.0s 3.0s'.split())
+        order='1.0s 2.0s 3.0s 4.0s'.split())
 
     plt.xlabel('Click Delay')
     plt.ylabel('Number of Clicks')
+
+@figure()
+def click_delay_time():
+    sns.swarmplot('click_delay', 'test_time', data=pdf,
+        hue='variance',
+        order='1.0s 2.0s 3.0s 4.0s'.split())
+
+    plt.xlabel('Click Delay')
+    plt.ylabel('Test Time')
 
 
 
@@ -100,135 +263,6 @@ sns.lineplot('i', 'score', hue='variance', data=tdf)
 show()
 
 # %% ==================== BREADTH DEPTH ====================
-
-
-
-# # In[611]:
-
-
-# def unroll(df):
-#     rows = []
-#     for row in df.itertuples():
-#         cm = pd.Series(depth[c] for c in row.clicks).cummax()
-#         for i, c in enumerate(cm):
-#             rows.append([row.variance, i,])
-#     return pd.DataFrame(rows, columns=['variance', 'idx', 'depth'])
-
-# clicks = unroll(df)
-
-
-# # In[614]:
-
-
-# sns.lineplot('idx', 'depth', hue='variance', data=clicks)
-# plt.xlabel('Click Number')
-# plt.ylabel('Maximum Depth Clicked')
-# savefig('maxdepth')
-
-
-# # In[488]:
-
-
-# tree = [[1, 5, 9, 13], [2], [3, 4], [], [], [6], [7, 8], [], [], [10], [11, 12], [], [], [14], [15, 16], [], []]
-depth = [0, 1, 2, 3, 3, 1, 2, 3, 3, 1, 2, 3, 3, 1, 2, 3, 3]
-
-def first_revealed(row):
-    if len(row.clicks) < 1:
-        return 0
-    return row.state_rewards[row.clicks[0]]
-    
-def second_click(row):
-    if len(row.clicks) < 2:
-        return 'none'
-    c1 = row.clicks[1]
-    if depth[c1] == 1:
-        return 'breadth'
-    if depth[c1] == 2:
-        return 'depth'
-
-tdf['second_click'] = tdf.apply(second_click, axis=1)
-tdf['first_revealed'] = tdf.apply(first_revealed, axis=1)
-X = tdf.groupby(['variance', 'first_revealed', 'second_click']).apply(len)
-N = tdf.groupby(['variance', 'first_revealed']).apply(len)
-X = (X / N).rename('rate').reset_index()
-
-fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharey=True)
-order = ['decreasing', 'constant', 'increasing']
-for i, (var, d) in enumerate(X.query('second_click != "none"').groupby('variance')):
-    i = order.index(var)
-    ax = axes[i]; plt.sca(ax)
-    sns.barplot('first_revealed', 'rate', hue='second_click', data=d)
-    plt.title(f'{var.title()} Variance')
-    plt.xlabel('First Revealed Value')
-    if i == 0:
-        plt.ylabel('Proportion')
-    else:
-        plt.ylabel('')
-    if i == 2:
-        ax.legend().set_label('Second Click')
-    else:
-        ax.legend().remove()
-savefig('breadth-depth')
-
-
-# In[ ]:
-
-
-import json
-
-def parse_sim_clicks(x):
-    if x == "Int64[]":
-        return []
-    else:
-        return json.loads(x)
-    
-sdf = pd.concat(
-    pd.read_csv(f"model/results/{code}/simulations.csv")
-    for code in CODES
-)
-sdf['clicks'] = sdf.clicks.apply(parse_sim_clicks)
-sdf.state_rewards = sdf.state_rewards.apply(json.loads)
-sdf['second_click'] = sdf.apply(second_click, axis=1)
-sdf['first_revealed'] = sdf.apply(first_revealed, axis=1)
-sdf['model'] =  sdf.wid.str.split('-').str[0]
-
-sdf.set_index('mdp', inplace=True)
-sdf['variance'] = mdps.variance
-sdf.reset_index(inplace=True)
-sdf.set_index('model', inplace=True)
-
-
-# In[547]:
-
-
-def plot_breadth_depth_model(model):
-    df = sdf.loc[model]
-    X = df.groupby(['variance', 'first_revealed', 'second_click']).apply(len)
-    N = df.groupby(['variance', 'first_revealed']).apply(len)
-    X = (X / N).rename('rate').reset_index()
-
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharey=True)
-    order = ['decreasing', 'constant', 'increasing']
-    for i, (var, d) in enumerate(X.query('second_click != "none"').groupby('variance')):
-        i = order.index(var)
-        ax = axes[i]; plt.sca(ax)
-        sns.barplot('first_revealed', 'rate', hue='second_click', data=d)
-        plt.title(f'{var.title()} Variance')
-        plt.xlabel('First Revealed Value')
-        if i == 0:
-            plt.ylabel(f'{model} Proportion')
-        else:
-            plt.ylabel('')
-        if i == 2:
-            ax.legend().set_label('Second Click')
-        else:
-            ax.legend().remove()
-    savefig(f'breadth-depth-{model}')
-
-# plot_breadth_depth_model('Optimal')
-# plot_breadth_depth_model('BestFirst')
-plot_breadth_depth_model('BreadthFirst')
-plot_breadth_depth_model('DepthFirst')
 
 
 

@@ -2,20 +2,20 @@
 bfs_cols = ['BestFirstBestNext', 'BestFirstDepth', 'BestFirstSatisficing', 'BestFirstRandomStopping']
 normal_cols = ['OptimalPlus', 'Human']
 
-def load_cf(k, group=True):
-    # VERSION = 'exp1' if k in bfs_cols or k in normal_cols else 'exp1-bfs'
-    mod = '' if k == 'Human' else k + '-'
-    if group and mod:
-        mod = 'group-' + mod
-    cf = pd.DataFrame(get_result(VERSION, f'{mod}click_features.json'))
-    cf['potential_gain'] = (cf.max_competing - cf.term_reward).clip(0)
-    cf['competing'] = cf.term_reward - cf.best_next
-    if k == 'Human':
-        cf = cf.set_index('wid').loc[keep]
-    for k, v in cf.items():
-        if v.dtype == float:
-            cf[k] = v.astype(int)
-    return cf
+# def load_cf(k, group=True):
+#     # VERSION = 'exp1' if k in bfs_cols or k in normal_cols else 'exp1-bfs'
+#     mod = '' if k == 'Human' else k + '-'
+#     if group and mod:
+#         mod = 'group-' + mod
+#     cf = pd.DataFrame(get_result(VERSION, f'{mod}click_features.json'))
+#     cf['potential_gain'] = (cf.max_competing - cf.term_reward).clip(0)
+#     cf['competing'] = cf.term_reward - cf.best_next
+#     if k == 'Human':
+#         cf = cf.set_index('wid').loc[keep]
+#     for k, v in cf.items():
+#         if v.dtype == float:
+#             cf[k] = v.astype(int)
+#     return cf.rename(columns={'expanding': 'expand'})
 
 all_cfs = {k: load_cf(k) for k in [*bfs_cols, *normal_cols]}
 # cfs = {k: load_cf(k) for k in cols}

@@ -5,14 +5,7 @@ bfo.index = bfo.index.astype(float)
 bfo = bfo.sort_index().iloc[:-1]  # drop 100
 pdf['best_first'] = pd.Series(best_first['human'])
 
-def mean_std(x, digits=1, pct=False):
-    if pct:
-        x = x * 100
-        return fr'{x.mean().round(digits)}\% $\pm$ {x.std().round(digits)}\%'
-    else:
-        return fr'{x.mean().round(digits)} $\pm$ {x.std().round(digits)}'
-
-write_tex("best_first", mean_std(pdf.best_first, pct=True))
+write_tex("best_first", mean_std(pdf.best_first, fmt='pct'))
 
 # %% ==================== plot ====================
 

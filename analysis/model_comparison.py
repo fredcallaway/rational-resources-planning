@@ -1,57 +1,51 @@
-
 # %% ==================== MODEL COMPARISON ====================
-
-
-cf = pd.DataFrame(get_result(VERSION, 'predictions.json')).set_index('wid')
-res = cf.apply(lambda d: {k: p[d.c] for k, p in d.predictions.items()}, axis=1)
+preds = pd.DataFrame(get_result(VERSION, 'predictions.json')).set_index('wid')
+res = preds.apply(lambda d: {k: p[d.c] for k, p in d.predictions.items()}, axis=1)
+# logp = np.log(pd.DataFrame(list(res.values)))
+# assert not set(MODELS) - set(logp.columns)
 logp = np.log(pd.DataFrame(list(res.values)))[MODELS]
-logp.set_index(cf.index, inplace=True)
+logp.set_index(preds.index, inplace=True)
 logp['variance'] = pdf.variance
-logp['Random'] = np.log(cf.p_rand)
+logp = logp.loc[keep]
+# logp['Random'] = np.log(preds.p_rand)
 assert set(MODELS) < set(logp.columns)
-# %% --------
-logp = np.log(pd.DataFrame(list(res.values)))
-L = np.exp(logp.groupby(['variance', 'wid']).mean()).groupby('variance').mean()
-L
-
 
 # %% --------
 
-def plot_models(L, ylabel, axes=None, title=True):
-    L = L.copy()
+def plot_model_performance(L, ylabel, axes=None):
+    if EXPERIMENT == 4:
+        fig, axes = plt.subplots(1, 1, figsize=(6,4), squeeze=False)
     if axes is None:
         fig, axes = setup_variance_plot()
     for i, v in enumerate(VARIANCES):
         plt.sca(axes.flat[i])
 
-        # L.loc[v].plot.line(color=[f'C{i}' for i in range(len(MODELS))], rot=30)
-        plt.axhline(L.pop('RandomSelection').loc[v], c='k')
-        L.loc[v].plot.bar(color=[f'C{i}' for i in range(len(MODELS))], rot=30)
+        # plt.axhline(L.pop('RandomSelection').loc[v], c='k')
+        pal = [palette[m] for m in MODELS]
+        L.loc[v].loc[MODELS].plot.barh(color=pal)
         
-        plt.xlabel('')
-        if i == 0:
-            plt.ylabel(ylabel)
-        if len(VARIANCES) > 1 and title:
-            plt.title(f'{v.title()} Variance')
+        plt.xlabel('Predictive Accuracy')
+        if i != 0:
+            plt.yticks(())
+    figs.reformat_ticks(yaxis=True, ax=axes.flat[0])
+
 
 @figure()
 def plot_average_predictive_accuracy(axes=None):
     # fig, axes = plt.subplots(1, 1, squeeze=False, figsize=(6,4))
-    plot_models(
-        np.exp(logp.groupby(['variance', 'wid']).mean()).groupby('variance').mean(),
+    # X = logp.loc[list(pdf.query("click_delay == '3.0s'").index)]
+    X = logp
+    plot_model_performance(
+        np.exp(X.groupby(['variance', 'wid']).mean()).groupby('variance').mean(),
         "Average Predictive Accuracy",
-        axes
+        axes,
     )
 
 # %% --------
-figs.add_names({
-    'BestFirstNoBestNext': 'Simple\nBest-First',
-    'BestFirst': 'Augmented\nBest-First',
-    'OptimalPlus': 'Optimal',
-    'RandomSelection': 'Random'
-})
+
 @figure()
 def individual_predictive_accuracy():
+    models = MODELS
     fig = plt.figure(figsize=(8,4))
     L = np.exp(logp.groupby('wid').mean())
     L = L.loc[keep]
@@ -74,48 +68,26 @@ def individual_predictive_accuracy():
     figs.reformat_ticks(yaxis=True)
 
 # %% --------
-@figure()
-def full_likelihood(axes=None):
-    plot_models(
-        -logp.groupby('variance').sum(),
-        'Cross Validated\nNegative Log-Likelihood',
-        axes
-    )
 
-@figure()
-def geometric_mean_likelihood(axes=None):
-    plot_models(
-        np.exp(logp.groupby('variance').mean()),
-        "Geometric Mean Likelihood",
-        axes
-    )
 
 # %% --------
-
-fits.query('variance == "increasing"').set_index(['wid', 'model']).sort_index()
-
-@figure()
-def pareto_fit(reformat_legend=False):
-    X = tdf.reset_index().set_index('variance')
-    L = np.exp(logp.groupby(['variance', 'wid']).mean()).groupby('variance').mean()
-    fig, axes = plt.subplots(2, 3, figsize=(12,8))
-    for i, v in enumerate(VARIANCES):
-        plt.sca(axes[0, i])
-        for model in MODELS:
-            plot_model(v, model, title=False)
+    # for i, v in enumerate(VARIANCES):
+        # plt.sca(axes[0, i])
+        # for model in MODELS:
+        #     plot_model(v, model, title=False)
             
-        # g = X.loc[v].groupby('wid'); x = 'n_click'; y = 'term_reward'
-        # plt.errorbar(g[x].mean(), g[y].mean(), yerr=g[y].sem(), xerr=g[x].sem(), 
-        #              label='Human', fmt='.', color='#333333', elinewidth=.5)
+        # # g = X.loc[v].groupby('wid'); x = 'n_click'; y = 'term_reward'
+        # # plt.errorbar(g[x].mean(), g[y].mean(), yerr=g[y].sem(), xerr=g[x].sem(), 
+        # #              label='Human', fmt='.', color='#333333', elinewidth=.5)
 
-        plt.title(f'{v.title()} Variance')
-        plt.ylabel("Expected Reward")
-        plt.xlabel("Number of Clicks")
+        # plt.title(f'{v.title()} Variance')
+        # plt.ylabel("Expected Reward")
+        # plt.xlabel("Number of Clicks")
 
-        plt.sca(axes[1, i])
-        L.loc[v].plot.bar(color=[f'C{i}' for i in range(len(MODELS))], rot=30)
-        plt.xlabel('')
-        plt.ylabel("Average Predictive Accuracy")
+        # plt.sca(axes[1, i])
+        # L.loc[v].plot.bar(color=[f'C{i}' for i in range(len(MODELS))], rot=30)
+        # plt.xlabel('')
+        # plt.ylabel("Average Predictive Accuracy")
 
 # %% --------
 
@@ -145,3 +117,22 @@ def bbd_individual_likelihood():
         plt.title(f'{v.title()} Variance')
         if i != len(VARIANCES) - 1:
             plt.xlabel('')
+
+# %% --------
+@figure()
+def full_likelihood(axes=None):
+    plot_model_performance(
+        -logp.groupby('variance').sum(),
+        'Cross Validated\nNegative Log-Likelihood',
+        axes
+    )
+
+@figure()
+def geometric_mean_likelihood(axes=None):
+    plot_model_performance(
+        np.exp(logp.groupby('variance').mean()),
+        "Geometric Mean Likelihood",
+        axes
+    )
+
+# %% --------

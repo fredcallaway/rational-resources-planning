@@ -21,6 +21,17 @@ def load_json(path):
 def get_result(version, name):
     return load_json(f'../model/results/{version}/{name}')
 
+def mean_std(x, digits=1, fmt=None):
+    mean = x.mean().round(digits)
+    std = x.std().round(digits)
+    if fmt == 'pct':
+        x = x * 100
+        return fr'{mean}\% $\pm$ {std}\%'
+    elif fmt == '$':
+        return fr'\${mean:.2f} $\pm$ \${std:.2f}'
+    else:
+        return fr'{mean} $\pm$ {std}'
+
 def load_data(exp):
     tdf = pd.read_pickle(f'../data/{exp}/trials.pkl').query('block == "test"')
     pdf = pd.read_pickle(f'../data/{exp}/participants.pkl')
@@ -28,7 +39,8 @@ def load_data(exp):
     tdf['click_delay'] = pdf['click_delay'] = pdf.click_delay.apply(lambda x: str(x/1000)+'s')
     if 'variance' not in pdf:
         pdf['variance'] = 'constant'
-    tdf['mdp'], tdf['trial_id'] = tdf.trial_id.str.split('-', expand=True).values.T
+    if 'trial_id' in tdf:
+        tdf['mdp'], tdf['trial_id'] = tdf.trial_id.str.split('-', expand=True).values.T
     tdf['variance'] = pdf.variance
     tdf['n_click'] = tdf.clicks.apply(len)
 
@@ -51,12 +63,13 @@ def load_fits(exp, models, path='mle'):
 from datetime import datetime
 class Figures(object):
     """Plots and saves figures."""
-    def __init__(self, path='figs', hist_path='fighist', dpi=300):
+    def __init__(self, path='figs', hist_path='fighist', dpi=200):
         self.path = path
         self.hist_path = hist_path
         self.dpi = dpi
         self.names = {}
         self._last = None
+        self.nosave = False
 
         os.makedirs(path, exist_ok=True)
         os.makedirs(hist_path, exist_ok=True)
@@ -72,12 +85,14 @@ class Figures(object):
         os.system(f'open {latest}')
 
     def reformat_labels(self, ax=None):
-        ax = ax or plt.gca()
+        if ax is None:
+            ax = plt.gca()
         ax.set_ylabel(self.nice_name(ax.get_ylabel()))
         ax.set_xlabel(self.nice_name(ax.get_xlabel()))
 
     def reformat_ticks(self, yaxis=False, ax=None):
-        ax = ax or plt.gca()
+        if ax is None:
+            ax = plt.gca()
         if yaxis:
             labels = [t.get_text() for t in ax.get_yticklabels()]
             new_labels = [self.nice_name(lab) for lab in labels]
@@ -88,7 +103,8 @@ class Figures(object):
             ax.set_xticklabels(new_labels)
         
     def reformat_legend(self, ax=None):
-        ax = ax or plt.gca()
+        if ax is None:
+            ax = plt.gca()
         if ax.legend_:
             handles, labels = ax.get_legend_handles_labels()
             new_labels = [self.names.get(l, l.title()).replace('\n', ' ') for l in labels]
@@ -112,6 +128,9 @@ class Figures(object):
             dt = datetime.now().strftime('%m-%d-%H-%M-%S')
             p = f'{dt}-{name}.png'
             tmp = f'{self.hist_path}/{p}'
+            if self.nosave:
+                return
+
             plt.savefig(tmp, dpi=self.dpi, bbox_inches='tight')
 
             if name != 'tmp':

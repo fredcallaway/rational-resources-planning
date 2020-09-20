@@ -1,3 +1,33 @@
+
+import hashlib
+def hash_id(worker_id):
+    return 'w' + hashlib.md5(worker_id.encode()).hexdigest()[:7]
+
+wid = hash_id('5f292bd0f94a2428215919a1')
+
+
+tdf.loc[wid]
+
+30 * 7 - tdf.score.clip(lower=-30).groupby('wid').sum()
+
+# %% --------
+trial_bonus = (30 - tdf.score).clip(lower=0) / 1000
+trial_bonus.groupby('wid').sum()
+tdf.score
+tdf.loc[wid]
+# %% --------
+@figure()
+def exp2_big():
+    fig, axes = setup_variance_plot(4, label_offset=-0.4)
+    for v, ax in zip(VARIANCES, axes[0, :]):
+        ax.imshow(task_image(v))
+        ax.axis('off')
+
+    plot_second_click(axes[1, :], models=['OptimalPlus', 'BestFirst'])
+    plot_pareto(axes[2, :], legend=False, fit_reg=False)
+    plot_average_predictive_accuracy(axes[3, :])
+    figs.reformat_ticks(yaxis=True, ax=axes[2,0])
+
 # %% ==================== compare cross validation ====================
 rand_cv = pd.concat([pd.read_csv(f'model/results/{EXPERIMENT}-randomfolds/mle/{model}-cv.csv')
                      for model in MODELS], sort=False)
