@@ -12,34 +12,95 @@ assert set(MODELS) < set(logp.columns)
 
 # %% --------
 
-def plot_model_performance(L, ylabel, axes=None):
+def plot_model_performance(L, label, axes=None):
+    if EXPERIMENT == 3:
+        return plot_model_performance_exp3(L, label,  axes)
     if EXPERIMENT == 4:
         fig, axes = plt.subplots(1, 1, figsize=(6,4), squeeze=False)
     if axes is None:
         fig, axes = setup_variance_plot()
     for i, v in enumerate(VARIANCES):
         plt.sca(axes.flat[i])
-
-        # plt.axhline(L.pop('RandomSelection').loc[v], c='k')
         pal = [palette[m] for m in MODELS]
         L.loc[v].loc[MODELS].plot.barh(color=pal)
         
-        plt.xlabel('Predictive Accuracy')
+        plt.xlabel(label)
         if i != 0:
             plt.yticks(())
     figs.reformat_ticks(yaxis=True, ax=axes.flat[0])
 
+# def plot_model_performance_exp3(L, label, axes=None):
+#     if axes is None:
+#         fig, axes = setup_variance_plot()
+    
+#     top_models = [m for m in MODELS if not m.endswith('Expand')]
+#     bottom_models = [m for m in MODELS if m.endswith('Expand')]
+#     # del top_models[0]
+#     for i, v in enumerate(VARIANCES):
+#         plt.sca(axes.flat[i])
+
+#         for models in [bottom_models, top_models]:
+#             pal = [palette[m] for m in models]
+#             ax = L.loc[v].loc[models].plot.barh(color=pal)
+
+#         plt.xlabel(label)
+#         plt.xlim(0, 0.33)
+#         if i == 0:
+#             figs.reformat_ticks(yaxis=True)
+#         else:
+#             plt.yticks(())
+
+def plot_model_performance_exp3(L, label, axes=None):
+    if axes is None:
+        fig, axes = setup_variance_plot(2, height=3)
+    
+    top_models = [m for m in MODELS if not m.endswith('Expand')]
+    bottom_models = [m for m in MODELS if m.endswith('Expand')]
+    model_sets = [top_models, bottom_models] if axes.shape[0] == 2 else [top_models]
+    for i, v in enumerate(VARIANCES):
+        for j, models in enumerate(model_sets):
+            plt.sca(axes[j, i])
+            pal = [palette[m] for m in models]
+            L.loc[v].loc[models].plot.barh(color=pal)
+
+            plt.xlabel(label)
+            plt.xlim(0, 0.33)
+            if i == 0:
+                figs.reformat_ticks(yaxis=True)
+                if j == 1:
+                    plt.ylabel('Expansion Bias')
+            else:
+                plt.yticks(())
 
 @figure()
 def plot_average_predictive_accuracy(axes=None):
-    # fig, axes = plt.subplots(1, 1, squeeze=False, figsize=(6,4))
-    # X = logp.loc[list(pdf.query("click_delay == '3.0s'").index)]
-    X = logp
     plot_model_performance(
-        np.exp(X.groupby(['variance', 'wid']).mean()).groupby('variance').mean(),
-        "Average Predictive Accuracy",
+        np.exp(logp.groupby(['variance', 'wid']).mean()).groupby('variance').mean(),
+        'Predictive Accuracy',
         axes,
     )
+
+# %% --------
+
+show()
+
+# %% --------
+top_models = [m for m in MODELS if not m.endswith('Expand')]
+bottom_models = [m for m in MODELS if m.endswith('Expand')]
+
+default = L.loc[v].loc[top_models]
+expand = L.loc[v].loc[bottom_models]
+expand.index = expand.index.str.replace('Expand', '')
+bottom_models.insert(0, 'RandomSelection')
+dd = pd.DataFrame({'default': default, 'expand': expand}).loc[top_models]
+color = [[palette[m] for m in top_models], [palette[m] for m in bottom_models]]
+dd.plot.barh(stacked=True, color=color, legend=False)
+show()
+# %% --------
+
+
+L.loc[v].loc[models].plot.barh(color=pal)
+L
 
 # %% --------
 
@@ -118,21 +179,21 @@ def bbd_individual_likelihood():
         if i != len(VARIANCES) - 1:
             plt.xlabel('')
 
-# %% --------
-@figure()
-def full_likelihood(axes=None):
-    plot_model_performance(
-        -logp.groupby('variance').sum(),
-        'Cross Validated\nNegative Log-Likelihood',
-        axes
-    )
+# # %% --------
+# @figure()
+# def full_likelihood(axes=None):
+#     plot_model_performance(
+#         -logp.groupby('variance').sum(),
+#         'Cross Validated\nNegative Log-Likelihood',
+#         axes
+#     )
 
-@figure()
-def geometric_mean_likelihood(axes=None):
-    plot_model_performance(
-        np.exp(logp.groupby('variance').mean()),
-        "Geometric Mean Likelihood",
-        axes
-    )
+# @figure()
+# def geometric_mean_likelihood(axes=None):
+#     plot_model_performance(
+#         np.exp(logp.groupby('variance').mean()),
+#         "Geometric Mean Likelihood",
+#         axes
+#     )
 
-# %% --------
+# # %% --------

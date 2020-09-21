@@ -102,12 +102,13 @@ class Figures(object):
             new_labels = [self.nice_name(lab) for lab in labels]
             ax.set_xticklabels(new_labels)
         
-    def reformat_legend(self, ax=None):
+    def reformat_legend(self, ax=None, **kws):
         if ax is None:
             ax = plt.gca()
         if ax.legend_:
             handles, labels = ax.get_legend_handles_labels()
-            new_labels = [self.names.get(l, l.title()).replace('\n', ' ') for l in labels]
+            names = {**self.names, **kws}
+            new_labels = [names.get(l, l.title()).replace('\n', ' ') for l in labels]
             ax.legend(handles=handles, labels=new_labels)
 
     def watch(self):

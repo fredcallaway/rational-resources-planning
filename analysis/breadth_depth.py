@@ -106,25 +106,14 @@ def depth_heat():
     plot_depth_heat('OptimalPlus', axes[1])
 
 # %% ==================== BARS ====================
-dd = pd.concat([load_depth_curve(h).query('click == 1') 
-    for h in ['Human', 'OptimalPlus']]).set_index(['variance']).depth
 
-fig, axes = setup_variance_plot(title=True)
-for i, (ax, var) in enumerate(zip(axes.flat, VARIANCES)):
-    dd.loc[var].value_counts().sort_index()
-
-    x = dd.loc[m, var].value_counts(sort=False)
-    x /= x.sum()
-    x.plot.bar(color=palette[m], ax=ax)
-    # sns.distplot(dd.loc[m, var], kde=False, norm_hist=True, ax=ax)
-show()
-
-
-# %% --------
 @figure()
-def first_click_depth():
+def first_click_depth(axes=None):
+    if axes is None:
+        fig, axes = setup_variance_plot(title=True)
+
     agents = ['Human', 'OptimalPlusExpand', 'OptimalPlus', ]
-    dd = pd.concat([load_depth_curve(h).query('click == 1') 
+    dd = pd.concat([load_depth_curve(h).query('click == 1')
         for h in agents]).set_index(['agent', 'variance']).depth
 
     def make_hist(m, var):
@@ -132,7 +121,6 @@ def first_click_depth():
         x /= x.sum()
         return x
 
-    fig, axes = setup_variance_plot(title=True)
     for i, (ax, var) in enumerate(zip(axes.flat, VARIANCES)):
         d = pd.DataFrame({m: make_hist(m, var) for m in agents})
         d.plot.bar(color=[palette[m] for m in agents], 
@@ -141,7 +129,7 @@ def first_click_depth():
         ax.set_xlabel('First Clicked Depth')
         if i == 0:
             ax.set_ylabel('Proportion of Trials')
-            figs.reformat_legend(ax=ax)
+            figs.reformat_legend(ax=ax, OptimalPlusExpand='Optimal + Expansion')
 
 # %% --------
 dd.groupby(['variance']).apply(make_hist)

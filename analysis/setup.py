@@ -9,13 +9,13 @@ print('Setting up experiment', EXPERIMENT)
 VERSION = f'exp{EXPERIMENT}'
 
 VARIANCES = ['decreasing', 'constant', 'increasing'] if EXPERIMENT in (2,3) else ['constant']
-MODELS = ['RandomSelection', 'MetaGreedy', 'OptimalPlus', 'BestFirst']
+MODELS = ['Random', 'MetaGreedy', 'OptimalPlus', 'BestFirst']
 if EXPERIMENT == 1:
     MODELS.append('BestFirstNoBestNext')
 else:
     MODELS.extend(['BreadthFirst', 'DepthFirst'])
 if EXPERIMENT >= 3:
-    MODELS.extend([m + 'Expand' for m in MODELS if not m.startswith('Random')])
+    MODELS.extend([m + 'Expand' for m in MODELS])
 
 MODELS
 
@@ -103,19 +103,27 @@ figs.add_names({
     'best_next': 'Best - Next Best Path Value',
     'term_reward': 'Best Path Value',
     
-    'RandomSelection': 'Random',
+    # 'RandomSelection': 'Random',
     'MetaGreedy': 'Meta-Greedy',
     'BestFirst': 'Best-First',
     'OptimalPlus': 'Optimal',
     'BreadthFirst': 'Breadth-First',
     'DepthFirst': 'Backward' if EXPERIMENT >= 3 else 'Depth-First',
+    # 'DepthFirst': 'Depth-First',
 
     'BestFirstNoBestNext': 'Simple\nBest-First',
-    'MetaGreedyExpand': 'Meta-Greedy + Expansion',
-    'BestFirstExpand': 'Best-First + Expansion',
-    'OptimalPlusExpand': 'Optimal + Expansion',
-    'BreadthFirstExpand': 'Breadth-First + Expansion',
-    'DepthFirstExpand': 'Depth-First + Expansion',
+
+    # 'MetaGreedyExpand': 'Meta-Greedy + Expansion',
+    # 'BestFirstExpand': 'Best-First + Expansion',
+    # 'OptimalPlusExpand': 'Optimal + Expansion',
+    # 'BreadthFirstExpand': 'Breadth-First + Expansion',
+    # 'DepthFirstExpand': 'Depth-First + Expansion',
+
+    'MetaGreedyExpand': 'Meta-Greedy',
+    'BestFirstExpand': 'Best-First',
+    'OptimalPlusExpand': 'Optimal',
+    'BreadthFirstExpand': 'Breadth-First',
+    'DepthFirstExpand': 'Depth-First',
 })
 
 figure = figs.figure; show = figs.show; figs.watch()
@@ -124,7 +132,7 @@ lb, db, lg, dg, lr, dr, lo, do, lp, dp, *_ = sns.color_palette("Paired")
 # lb, db, lg, dg, lr, dr, lo, do, *_ = 
 palette = {
     'Human': (0.1, 0.1, 0.1),
-    'RandomSelection': (0.5, 0.5, 0.5),
+    'Random': (0.5, 0.5, 0.5),
     'MetaGreedy': dr,
     'OptimalPlus': db,
     'Optimal': db,
@@ -133,20 +141,29 @@ palette = {
     'DepthFirst': dp,
     
     'BestFirstNoBestNext': lg,
-    'MetaGreedyExpand': lr,
-    'OptimalPlusExpand': lb,
-    'BestFirstExpand': lg,
-    'BreadthFirstExpand': lo,
-    'DepthFirstExpand': lp,
+
+    # 'RandomExpand': (0.7, 0.7, 0.7),
+    # 'MetaGreedyExpand': lr,
+    # 'OptimalPlusExpand': lb,
+    # 'BestFirstExpand': lg,
+    # 'BreadthFirstExpand': lo,
+    # 'DepthFirstExpand': lp,
+
+    'MetaGreedyExpand': dr,
+    'OptimalPlusExpand': db,
+    'BestFirstExpand': dg,
+    'BreadthFirstExpand': do,
+    'DepthFirstExpand': dp,
+    'RandomExpand': (.7, .7, .7)
 }
 plt.rc('legend', fontsize=10, handlelength=2)
 
 write_tex = TeX(path=f'stats/{EXPERIMENT}').write
 
-def setup_variance_plot(nrow=1, title=True, label=True, label_offset=-0.3, **kws):
+def setup_variance_plot(nrow=1, title=True, label=True, label_offset=-0.3, height=4, width=4, **kws):
     titlesize = kws.pop('titlesize', 20)
     ncol = len(VARIANCES)
-    fig, axes = plt.subplots(nrow, ncol, figsize=(4*ncol,4*nrow), squeeze=False, **kws)
+    fig, axes = plt.subplots(nrow, ncol, figsize=(width*ncol,height*nrow), squeeze=False, **kws)
     if len(VARIANCES) > 1 and title:
         for v, ax in zip(VARIANCES, axes[0, :]):
             ax.set_title(f'{v.title()} Variance', fontdict=dict(fontsize=titlesize))
