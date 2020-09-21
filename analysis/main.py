@@ -44,19 +44,12 @@ def pareto_fit():
     # figs.reformat_ticks(yaxis=True, ax=axes[1,0])
 
 # %% --------
+
 @figure()
 def exp3_main():
-    fig, axes = setup_variance_plot(3, height=3, label_offset=-0.5)
-    palette['OptimalPlusExpand'] = lb
+    fig, axes = setup_variance_plot(2, height=3, label_offset=-0.5)
     first_click_depth(axes[0])
-    palette['OptimalPlusExpand'] = db
-    plot_average_predictive_accuracy(axes[1:])
-
-# @figure()
-# def exp3_main():
-#     fig, axes = setup_variance_plot(2, height=3, label_offset=-0.5)
-#     first_click_depth(axes[0])
-#     plot_average_predictive_accuracy(axes[1])
+    plot_average_predictive_accuracy(axes[1])
 
 # %% ==================== BACKWARD ====================
 

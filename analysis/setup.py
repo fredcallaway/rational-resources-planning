@@ -108,8 +108,8 @@ figs.add_names({
     'BestFirst': 'Best-First',
     'OptimalPlus': 'Optimal',
     'BreadthFirst': 'Breadth-First',
-    'DepthFirst': 'Backward' if EXPERIMENT >= 3 else 'Depth-First',
-    # 'DepthFirst': 'Depth-First',
+    'DepthFirst': 'Depth-First',
+    # 'DepthFirst': 'Backward' if EXPERIMENT >= 3 else 'Depth-First',
 
     'BestFirstNoBestNext': 'Simple\nBest-First',
 
@@ -142,19 +142,19 @@ palette = {
     
     'BestFirstNoBestNext': lg,
 
-    # 'RandomExpand': (0.7, 0.7, 0.7),
-    # 'MetaGreedyExpand': lr,
-    # 'OptimalPlusExpand': lb,
-    # 'BestFirstExpand': lg,
-    # 'BreadthFirstExpand': lo,
-    # 'DepthFirstExpand': lp,
+    'RandomExpand': (0.7, 0.7, 0.7),
+    'MetaGreedyExpand': lr,
+    'OptimalPlusExpand': lb,
+    'BestFirstExpand': lg,
+    'BreadthFirstExpand': lo,
+    'DepthFirstExpand': lp,
 
-    'MetaGreedyExpand': dr,
-    'OptimalPlusExpand': db,
-    'BestFirstExpand': dg,
-    'BreadthFirstExpand': do,
-    'DepthFirstExpand': dp,
-    'RandomExpand': (.7, .7, .7)
+    # 'MetaGreedyExpand': dr,
+    # 'OptimalPlusExpand': db,
+    # 'BestFirstExpand': dg,
+    # 'BreadthFirstExpand': do,
+    # 'DepthFirstExpand': dp,
+    # 'RandomExpand': (.7, .7, .7)
 }
 plt.rc('legend', fontsize=10, handlelength=2)
 
