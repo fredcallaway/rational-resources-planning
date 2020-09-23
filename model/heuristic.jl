@@ -80,12 +80,28 @@ default_space(::Type{Heuristic{:DepthFirst}}) =
 default_space(::Type{Heuristic{:BreadthFirst}}) = 
     change_space(Heuristic{:Full}, β_best=0, β_depth=(-3, 0))
 
+default_space(::Type{Heuristic{:Random}}) = Space(
+    :β_best => 0.,
+    :β_depth => 0.,
+
+    :β_satisfice => 0.,
+    :β_best_next => 0.,
+    :β_depth_limit => 0.,
+
+    :θ_term => (-30, 30),
+    :ε => 0,
+    :β_expand => 0
+)
+
+
 default_space(::Type{Heuristic{:BestFirstExpand}}) = 
     change_space(Heuristic{:Full}, β_depth=0, β_expand=(1e-6, 50))
 default_space(::Type{Heuristic{:DepthFirstExpand}}) = 
     change_space(Heuristic{:Full}, β_best=0, β_depth=(0, 3), β_expand=(1e-6, 50))
 default_space(::Type{Heuristic{:BreadthFirstExpand}}) = 
     change_space(Heuristic{:Full}, β_best=0, β_depth=(-3, 0), β_expand=(1e-6, 50))
+default_space(::Type{Heuristic{:RandomExpand}}) = 
+    change_space(Heuristic{:Random}, β_expand=(1e-6, 50))
 
 default_space(::Type{Heuristic{:BestPlusDepth}}) = 
     change_space(Heuristic{:Full}, β_depth=(0, 3))
@@ -99,7 +115,7 @@ default_space(::Type{Heuristic{:BestFirstNoBestNext}}) =
 default_space(::Type{Heuristic{:BestFirstNoDepthLimit}}) = 
     change_space(Heuristic{:BestFirst}, β_depth_limit=0, θ_depth_limit=0)
 
-default_space(::Type{Heuristic{:BreadthFirstNoSatisfice}}) = 
+default_space(::Type{Heuristic{:BreadthFirstNoSatisfice}}) =
     change_space(Heuristic{:BreadthFirst}, β_satisfice=0, θ_satisfice=0)
 default_space(::Type{Heuristic{:BreadthFirstNoBestNext}}) = 
     change_space(Heuristic{:BreadthFirst}, β_best_next=0, θ_best_next=0)
@@ -129,7 +145,8 @@ default_space(::Type{Heuristic{:BestFirstRandomStopping}}) = Space(
     :β_depth_limit => 0.,
 
     :θ_term => (-30, 30),
-    :ε => (1e-3, 1)
+    :ε => (1e-3, 1),
+    :B_expand => 0.,
 )
 
 default_space(::Type{Heuristic{:BestFirstSatisficing}}) = 

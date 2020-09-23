@@ -4,7 +4,7 @@ using Glob
 using CSV
 using DataFrames
 
-isempty(ARGS) && push!(ARGS, "exp1")
+isempty(ARGS) && push!(ARGS, "exp3")
 println("Running model comparison for ", ARGS[1])
 include("conf.jl")
 
@@ -180,11 +180,6 @@ end
 function get_params(M::Type, t::Trial)
     model = get_model(M, t)
     Dict(fn => getfield(model, fn) for fn in fieldnames(typeof(model)))
-end
-
-function get_logp(M::Type, d::Datum)
-    model = get_model(M, t)
-    log(action_dist(model, d.t.m, d.b)[d.c+1])
 end
 
 map(all_data) do d

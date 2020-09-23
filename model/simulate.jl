@@ -44,11 +44,11 @@ if basename(PROGRAM_FILE) == basename(@__FILE__)
             fit.model, wid, mdps
         end
     end
-    if ARGS[2] == "optimal"
+    if length(ARGS) >= 2 && ARGS[2] == "optimal"
         filter!(jobs) do (model, )
             model isa OptimalPlus
         end
-    elseif ARGS[2] == "nonoptimal"
+    elseif length(ARGS) >= 2 && ARGS[2] == "nonoptimal"
         filter!(jobs) do (model, )
             !(model isa OptimalPlus)
         end

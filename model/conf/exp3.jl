@@ -9,7 +9,6 @@ MDP_IDS = [
 
 QUOTE_MODELS = quote 
     [
-        RandomSelection,
         OptimalPlus{:Default},
         MetaGreedy{:Default},
         Heuristic{:BestFirst},
@@ -20,5 +19,7 @@ QUOTE_MODELS = quote
         Heuristic{:BestFirstExpand},
         Heuristic{:DepthFirstExpand},
         Heuristic{:BreadthFirstExpand},
+        Heuristic{:Random},
+        Heuristic{:RandomExpand},
     ] 
 end
