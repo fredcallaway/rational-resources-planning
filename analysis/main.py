@@ -51,6 +51,110 @@ def exp3_main():
     first_click_depth(axes[0])
     plot_average_predictive_accuracy(axes[1])
 
+# %% --------
+
+def exp4_make_base():
+    fig = plt.figure(constrained_layout=True, figsize=(12, 6))
+    gs = fig.add_gridspec(2, 6)
+    
+    plt.sca(fig.add_subplot(gs[:, 0:4]))
+    # img = Image.open(f'imgs/roadtrip.png')
+    # plt.imshow(img)
+    plt.axis('off')
+    plt.annotate('A', (-0.4, 1), xycoords='axes fraction', size=32, va='bottom')
+    
+    ax = fig.add_subplot(gs[0, 4:6])
+    plot_average_predictive_accuracy(np.array(ax))
+    ax.annotate('B', (-0.4, 1), xycoords='axes fraction', size=32, va='bottom')
+    
+    ax = fig.add_subplot(gs[1, 4:6])
+    plt.sca(ax)
+    expansion_value()
+    ax.annotate('C', (-0.4, 1), xycoords='axes fraction', size=32, va='bottom')
+    
+    plt.savefig('fighist/exp4a.png', dpi=figs.dpi, bbox_inches='tight')
+
+def exp4_add_task():
+    base = Image.open('fighist/exp4a.png')
+    w, h = base.size
+
+    task = Image.open('imgs/roadtrip.png')
+    wt, ht = task.size
+    scaling = 0.66 * w / wt
+    task = task.resize((int(wt * scaling), int(ht * scaling)))
+
+    base.paste(task, (0, 100))
+
+    dt = datetime.now().strftime('%m-%d-%H-%M-%S')
+    base.save(f'fighist/exp4b-{dt}.png')
+    base.save('figs/4/exp4_main.png')
+
+exp4_make_base()
+exp4_add_task()
+
+
+# %% --------
+# VERSION 1
+def exp4_make_base():
+    fig = plt.figure(constrained_layout=True, figsize=(6, 6))
+    gs = fig.add_gridspec(5, 1)
+    
+    plt.sca(fig.add_subplot(gs[0:3, :]))
+    # img = Image.open(f'imgs/roadtrip.png')
+    # plt.imshow(img)
+    plt.axis('off')
+    plt.annotate('A', (-0.4, 1), xycoords='axes fraction', size=32, va='bottom')
+    
+    ax = fig.add_subplot(gs[3:5, 0])
+    plot_average_predictive_accuracy(np.array(ax))
+    ax.annotate('B', (-0.4, 1), xycoords='axes fraction', size=32, va='bottom')
+    
+    plt.savefig('/tmp/exp4.png', dpi=figs.dpi, bbox_inches='tight')
+
+
+def exp4_add_task_alt():
+    base = Image.open('/tmp/exp4.png')
+    w, h = base.size
+
+    task = Image.open('imgs/roadtrip.png')
+    wt, ht = task.size
+    scaling = 0.8 * w / wt
+    task = task.resize((int(wt * scaling), int(ht * scaling)))
+
+    base.paste(task, (110, 80))
+    base.save('fighist/exp4.png')
+    base.save('figs/4/exp4_main.png')
+
+exp4_make_base()
+exp4_add_task()
+
+# %% --------
+
+
+# %% --------
+# bg_w, bg_h = background.size
+# offset = ((bg_w - img_w) // 2, (bg_h - img_h) // 2)
+# background.paste(img, offset)
+# background.save('out.png')
+
+# @figure()
+# def exp4_main():
+#     fig = plt.figure(constrained_layout=True, figsize=(12, 3))
+#     gs = fig.add_gridspec(1, 2)
+    
+#     plt.sca(fig.add_subplot(gs[0, 0]))
+#     # img = Image.open(f'imgs/roadtrip.png')
+#     # plt.imshow(img)
+#     plt.axis('off')
+    
+#     ax = fig.add_subplot(gs[0, 1])
+#     plot_average_predictive_accuracy(np.array(ax))
+
+
+    # w, h = img.size
+    # return img.crop((700, 730, w-700, h-850))
+
+
 # %% ==================== BACKWARD ====================
 
 tf = model_trial_features('OptimalPlusPure')
@@ -88,6 +192,7 @@ def backwards():
     plt.xlabel('')
 
 # %% --------
+from statsmodels.stats.proportion import proportion_confint
 opt_back = model_trial_features('OptimalPlus').groupby('wid').backward.mean()
 opt_pure_back = model_trial_features('OptimalPlusPure').groupby('wid').backward.mean()
 
@@ -112,67 +217,6 @@ def backwards_complex():
         plt.axhline(0, label='Forward Search', color=palette['BreadthFirst'])
         plt.axhline(1, label='Backward Search', color=palette['DepthFirst'])
     axes.flat[0].legend()
-
-
-# %% ==================== EXPANSION ====================
-from statsmodels.stats.proportion import proportion_confint
-
-# cf = pd.DataFrame(get_result(VERSION, 'click_features.json')) \
-#     .set_index('wid').loc[keep]
-
-
-x = load_cf('OptimalPlusPure')
-
-
-
-
-fig, axes = setup_variance_plot()
-x = pdf[['variance', 'n_click']].join(x.groupby('wid').expand.mean()).set_index('variance')
-for ax, var in zip(axes.flat, VARIANCES):
-    ax.scatter('n_click', 'expand', data=x.loc[var])
-
-show()
-
-
-
-# %% --------
-
-opt_exp = load_cf('OptimalPlus').groupby('wid').expand.mean()
-opt_pure_exp = load_cf('OptimalPlusPure').groupby('wid').expand.mean()
-cf = load_cf('Human')
-@figure()
-def expansion():
-    fig, axes = setup_variance_plot()
-    for ax, (_, d) in zip(axes.flat, cf.groupby(['variance'])):
-        plt.sca(ax)
-        g = d.expand.groupby('wid')
-        est = g.mean()
-        lo, hi = proportion_confint(g.apply(sum), g.apply(len))
-        err = np.vstack([(est - lo).values, (hi - est).values])
-        idx = np.argsort(est)
-        plt.errorbar(np.arange(len(est)), est[idx], yerr=err[:, idx], color='k', label='Humans')
-        
-        plt.plot(np.arange(len(est)), opt_exp[est.index][idx], color=palette['Optimal'], label='Optimal')
-        plt.plot(np.arange(len(est)), opt_pure_exp[est.index][idx], color=lb, label='Pure Optimal')
-
-        plt.xticks([])
-        plt.xlabel("Participant")
-        plt.ylim(-0.05, 1.05)
-        plt.ylabel('Expansion Rate')
-        plt.axhline(1, label='Forward Search', color=palette['BreadthFirst'])
-    axes.flat[0].legend()
-
-# %% --------
-
-pdf['expanding'] = cf.groupby('wid')['expanding'].mean()
-sns.swarmplot('variance', 'expanding', data=pdf, size=3)
-plt.ylabel('Expansion Rate')
-show()
-# %% --------
-
-# for w, x in :
-    # proportion_confint(x.sum(), len(x))
-    # cf.groupby('wid')
 
 
 
@@ -239,6 +283,7 @@ show()
 
 
 sns.distplot(pdf.n_click); show()
+
 # %% ==================== CLICK DELAY ====================
 
 @figure()

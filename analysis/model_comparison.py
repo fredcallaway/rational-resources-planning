@@ -10,10 +10,8 @@ assert set(MODELS) < set(logp.columns)
 # %% --------
 
 def plot_model_performance(L, label, axes=None):
-    if EXPERIMENT == 3:
-        return plot_model_performance_exp3(L, label,  axes)
-    if EXPERIMENT == 4:
-        fig, axes = plt.subplots(1, 1, figsize=(6,4), squeeze=False)
+    if EXPERIMENT >= 3:
+        return plot_model_performance_expansion(L, label,  axes)
     if axes is None:
         fig, axes = setup_variance_plot()
     for i, v in enumerate(VARIANCES):
@@ -26,9 +24,12 @@ def plot_model_performance(L, label, axes=None):
             plt.yticks(())
     figs.reformat_ticks(yaxis=True, ax=axes.flat[0])
 
-def plot_model_performance_exp3(L, label, axes=None):
+def plot_model_performance_expansion(L, label, axes=None):
     if axes is None:
-        fig, axes = setup_variance_plot()
+        if EXPERIMENT == 4:
+            fig, axes = plt.subplots(1, 1, figsize=(6,4), squeeze=False)
+        else:
+            fig, axes = setup_variance_plot()
     
     top_models = [m for m in MODELS if not m.endswith('Expand')]
     bottom_models = [m for m in MODELS if m.endswith('Expand')]

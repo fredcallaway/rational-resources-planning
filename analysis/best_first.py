@@ -21,6 +21,29 @@ def cost_best_first():
     plt.xlim(-0.05, 3.0)
     plt.legend()
 
+# %% ==================== alt ====================
+
+cf = load_cf('Human')
+pdf['best_first'] = cf.is_best.groupby('wid').mean()
+plt.scatter(pdf.cost, pdf.best_first)
+
+cf = load_cf('OptimalPlusPure')
+pdf['opt_best_first'] = cf.is_best.groupby('wid').mean()
+plt.scatter(pdf.cost, pdf.opt_best_first)
+plt.ylim(0, 1.)
+show()
+
+# %% --------
+cf = load_cf('Human')
+pdf['best_first'] = cf.is_best.groupby('wid').mean()
+plt.scatter(pdf.cost, pdf.best_first)
+
+cf = load_cf('OptimalPlus')
+pdf['opt_best_first'] = cf.is_best.groupby('wid').mean()
+plt.scatter(pdf.cost, pdf.opt_best_first)
+plt.ylim(0, 1.)
+show()
+
 
 # %% ==================== stats ====================
 

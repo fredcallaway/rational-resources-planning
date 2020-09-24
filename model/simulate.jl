@@ -30,6 +30,9 @@ end
 
     if name(model) == "OptimalPlus"
         run_simulation(purify(model), wid, mdps)
+    # elseif name(model) == "OptimalPlusPure"
+    #     pure_id = "OptimalPlusPure-$(model.cost)"
+    #     cp("$base_path/sims/$model_wid", "$base_path/sims/$pure_id")
     end
 end
 
@@ -44,6 +47,10 @@ if basename(PROGRAM_FILE) == basename(@__FILE__)
             fit.model, wid, mdps
         end
     end
+    # pmap(COSTS) do cost
+    #     model = Optimal(cost, 1e5, 0.)
+    #     run_simulate(model, "cost$cost")
+    # end
     if length(ARGS) >= 2 && ARGS[2] == "optimal"
         filter!(jobs) do (model, )
             model isa OptimalPlus

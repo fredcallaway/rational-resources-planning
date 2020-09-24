@@ -35,6 +35,8 @@ Base.map(f::Function) = xs -> map(f, xs)
 Base.map(f::Type) = xs -> map(f, xs)
 Base.map(f, d::Dict) = [f(k, v) for (k, v) in d]
 
+Base.filter(f::Function) = xs -> filter(f, xs)
+
 Base.dropdims(idx::Int...) = X -> dropdims(X, dims=idx)
 Base.reshape(idx::Union{Int,Colon}...) = x -> reshape(x, idx...)
 

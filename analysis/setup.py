@@ -84,15 +84,15 @@ def load_depth_curve(k):
 
 tdf['i'] = list(tdf.trial_index - tdf.trial_index.groupby('wid').min() + 1)
 assert all(tdf.groupby(['wid', 'i']).apply(len) == 1)
-trial_features = pd.DataFrame(get_result(VERSION, 'trial_features.json'))
-assert set(pdf.index).issubset(set(trial_features.wid))
-tdf = tdf.join(trial_features.set_index(['wid', 'i']), on=['wid', 'i'])
+tf = pd.DataFrame(get_result(VERSION, 'trial_features.json'))
+n_click = tdf.pop('n_click')  # this is already in tf, we check that it's the same below
+assert set(pdf.index).issubset(set(tf.wid))
+tdf = tdf.join(tf.set_index(['wid', 'i']), on=['wid', 'i'])
+assert all(tdf.n_click == n_click)
 
-# print("FIX ME setup.py line 55")
-# pdf['total_time'] = (pdf.time_end - pdf.time_start) / 1000 / 60
-# pdf['instruct_time'] = (pdf.time_instruct - pdf.time_start) / 60000
-# pdf['test_time'] = (pdf.time_end - pdf.time_instruct) / 60000
-
+pdf['total_time'] = (pdf.time_end - pdf.time_start) / 1000 / 60
+pdf['instruct_time'] = (pdf.time_instruct - pdf.time_start) / 60000
+pdf['test_time'] = (pdf.time_end - pdf.time_instruct) / 60000
 # pdf['backward'] = tdf.groupby('wid').backward.mean()
 
 # %% ==================== PLOTTING ====================
