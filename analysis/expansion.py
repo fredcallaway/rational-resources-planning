@@ -1,4 +1,4 @@
-# %% ==================== EXPANSION ====================
+# %% ==================== expansion rate by participant ====================
 from statsmodels.stats.proportion import proportion_confint
 
 opt_exp = load_cf('OptimalPlus').groupby('wid').expand.mean()
@@ -27,17 +27,35 @@ def expansion():
     axes.flat[0].legend()
 
 
-# %% --------
+# %% ==================== logistic curve ====================
+
 edf = pd.DataFrame(get_result(VERSION, 'expansion.json')).set_index('wid')
 edf['gain'] = edf.q_jump - edf.q_expand
 edf['jump'] = ~edf['expand']
 
+write_tex("jump", mean_std(edf.groupby('wid').jump.mean()*100, fmt='pct'))
+
+# write_tex("best_first", mean_std(pdf.best_first, fmt='pct'))
 
 @figure()
 def expansion_value():
     sns.regplot('gain', 'jump', data=edf, logistic=True, x_bins=np.linspace(-0.75, 0.75, 5), color='black')
-    plt.xlabel('Q(Jump) - Q(Expand)')
-    plt.ylabel('P(Jump)')
+    plt.xlabel('Q(¬Expand) - Q(Expand)')
+    plt.ylabel('P(¬Expand)')
+
+
+# %% ==================== histogram ====================
+
+for k, d in edf.groupby('expand'):
+    sns.distplot(d.gain, label='frontier' if k else 'not frontier', kde=0, norm_hist=True)
+
+plt.legend()
+show()
+
+# %% ==================== bar ====================
+sns.barplot('jump', 'gain', data=edf)
+show()
+
 
 # %% --------
 
@@ -47,6 +65,8 @@ plt.ylabel('Expansion Rate')
 show()
 # %% --------
 
+
+# %% --------
 # for w, x in :
     # proportion_confint(x.sum(), len(x))
     # cf.groupby('wid')

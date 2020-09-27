@@ -1,14 +1,4 @@
-# include("explore_reward_structure_base.jl")
-# using JSON
 
-# function sample_rewards(factor; N=100)
-#     r = make_mdp(factor, 1).rewards
-#     [Int.(rand.(r)) for i in 1:N]
-# end
-# rewards = Dict(factor => sample_rewards(factor) for factor in [1//3, 3])
-# write("/Users/fred/heroku/webofcash2/rewards.json", json(rewards))
-
-# # %% ====================  ====================
 using JSON
 include("mdp.jl")
 mkpath("mdps/base")
@@ -123,21 +113,20 @@ function write_trials(name::String, m::MetaMDP)
     println("Wrote ", f)
 end
 
-# experiment 1
-write_trials("exp1_constant", maket_mdp([4,1,2], :constant, NaN, NaN, NaN))
-# experiment 2
-write_trials("exp2_increasing", make_mdp([4,1,1,1,1], :depth, 20, 1/2, 2/3))
-write_trials("exp2_decreasing", make_mdp([4,1,1,1,1], :breadth, 20, 1/2, 3/5))
-write_trials("exp2_constant", make_mdp([4,1,1,1,1], :constant, NaN, NaN, NaN))
-# experiment 3
-write_trials("exp3_constant", make_mdp_exp3(1))
-write_trials("exp3_increasing", make_mdp_exp3(3))
-write_trials("exp3_decreasing", make_mdp_exp3(1/3))
-
-
-# %% --------
-m = MetaMDP(tree([4,1,2]), DNP([-10, -5, 5, 10]), 0., -Inf, true)
-m1 = make_mdp([4,1,2], :constant, NaN, NaN, NaN)
+if basename(PROGRAM_FILE) == basename(@__FILE__)
+    # experiment 1
+    write_trials("exp1_constant", make_mdp([4,1,2], :constant, NaN, NaN, NaN))
+    # experiment 2
+    write_trials("exp2_increasing", make_mdp([4,1,1,1,1], :depth, 20, 1/2, 2/3))
+    write_trials("exp2_decreasing", make_mdp([4,1,1,1,1], :breadth, 20, 1/2, 3/5))
+    write_trials("exp2_constant", make_mdp([4,1,1,1,1], :constant, NaN, NaN, NaN))
+    # experiment 3
+    write_trials("exp3_constant", make_mdp_exp3(1))
+    write_trials("exp3_increasing", make_mdp_exp3(3))
+    write_trials("exp3_decreasing", make_mdp_exp3(1/3))
+    # m = MetaMDP(tree([4,1,2]), DNP([-10, -5, 5, 10]), 0., -Inf, true)
+    # m1 = make_mdp([4,1,2], :constant, NaN, NaN, NaN)
+end
 
 
 

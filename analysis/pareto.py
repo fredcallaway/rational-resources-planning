@@ -5,6 +5,7 @@ for x in tdf[['variance', 'mdp']].itertuples():
     mdp2var[x.mdp] = x.variance
 
 model_pareto = pd.concat((pd.read_csv(f) for f in glob('../model/mdps/pareto/*')), sort=True)
+model_pareto.model = model_pareto.model.str.replace('RandomSelection', 'Random')
 model_pareto = model_pareto.set_index('mdp').loc[tdf.mdp.unique()].reset_index()
 model_pareto['variance'] = model_pareto.mdp.apply(mdp2var.get)
 model_pareto.set_index(['model', 'variance'], inplace=True)

@@ -1,6 +1,6 @@
 
 if @isdefined(base_path) && isfile("$base_path/Q_table")
-    if !@isdefined(Q_table) || Q_TABLE == nothing
+    if !@isdefined(Q_TABLE) || Q_TABLE == nothing
         const Q_TABLE = deserialize("$base_path/Q_table")
     end
 else

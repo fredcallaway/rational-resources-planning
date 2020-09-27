@@ -3,13 +3,12 @@ using Distributed
 using Glob
 using CSV
 using DataFrames
-include("conf.jl")
 
+include("conf.jl")
 @everywhere include("base.jl")
-@everywhere include("models.jl")
 @everywhere FORCE = false
 mkpath("$base_path/sims/")
-
+@everywhere include("models.jl")
 
 @everywhere function purify(model::OptimalPlus)
     OptimalPlus{:Pure,Float64}(model.cost, 1e5, 1e5, 0., 0.)
@@ -36,8 +35,7 @@ end
     end
 end
 
-
-if basename(PROGRAM_FILE) == basename(@__FILE__)   
+function do_simulate(flag=:null)
     all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
     full_fits = deserialize("$base_path/full_fits")
 
@@ -51,16 +49,21 @@ if basename(PROGRAM_FILE) == basename(@__FILE__)
     #     model = Optimal(cost, 1e5, 0.)
     #     run_simulate(model, "cost$cost")
     # end
-    if length(ARGS) >= 2 && ARGS[2] == "optimal"
+    if flag == :optimal
         filter!(jobs) do (model, )
             model isa OptimalPlus
         end
-    elseif length(ARGS) >= 2 && ARGS[2] == "nonoptimal"
+    elseif flag == :nonoptimal
         filter!(jobs) do (model, )
             !(model isa OptimalPlus)
         end
     end
 
     pmap(x->run_simulation(x...), jobs)
+end
 
+
+if basename(PROGRAM_FILE) == basename(@__FILE__)   
+    flag = length(ARGS) >= 2 ? Symbol(ARGS[2]) : :null
+    do_simulate(flag)
 end

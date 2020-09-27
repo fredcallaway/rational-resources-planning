@@ -99,37 +99,38 @@ for (nam, sims) in pairs(model_sims)
 end
 
 # %% ==================== expansion ====================
-
-mle_cost = let
-    fits = first.(deserialize("$base_path/full_fits"))
-    opt_fits = filter(x->x isa OptimalPlus{:Expand,Float64}, fits)
-    Dict(keys(all_trials) .=> getfield.(opt_fits, :cost))
-end
-
-mle_qs(d::Datum) = Q_TABLE[hash(d)][mle_cost[d.t.wid]]
-
-function expansion_value(d::Datum)
-    qs = mle_qs(d)[2:end]
-    cs = eachindex(d.b)
-    expanding = map(cs) do c
-        has_observed_parent(d.t.m.graph, d.b, c)
+if !flat_trials[1].m.expand_only
+    mle_cost = let
+        M =  OptimalPlus{:Expand,Float64}
+        fits = first.(deserialize("$base_path/full_fits"))
+        opt_fits = filter(x->x isa M, fits)
+        Dict(keys(all_trials) .=> getfield.(opt_fits, :cost))
     end
-    (
-        q_expand = maximum(qs[expanding]),
-        q_jump = maximum(qs[.!expanding]),
-        q_human = qs[d.c],
-        expand = expanding[d.c],
-        wid = d.t.wid
-    )
+
+    mle_qs(d::Datum) = Q_TABLE[hash(d)][mle_cost[d.t.wid]]
+
+    function expansion_value(d::Datum)
+        qs = mle_qs(d)[2:end]
+        cs = eachindex(d.b)
+        expanding = map(cs) do c
+            has_observed_parent(d.t.m.graph, d.b, c)
+        end
+        (
+            q_expand = maximum(qs[expanding]),
+            q_jump = maximum(qs[.!expanding]),
+            q_human = qs[d.c],
+            expand = expanding[d.c],
+            wid = d.t.wid
+        )
+    end
+
+    all_data |> filter(d->d.c != TERM) .|> expansion_value |> JSON.json |> writev("$results_path/expansion.json")
+
+    for (nam, sims) in pairs(model_sims)
+        f = "$results_path/$nam-expansion.json"
+        sims |> flatten |> get_data  |> filter(d->d.c != TERM) .|> expansion_value |> JSON.json |> writev(f)
+    end
 end
-
-all_data |> filter(d->d.c != TERM) .|> expansion_value |> JSON.json |> writev("$results_path/expansion.json")
-
-# for (nam, sims) in pairs(model_sims)
-#     startswith(nam, "Optimal") || continue
-#     f = "$results_path/$nam-expansion.json"
-#     sims |> flatten |> get_data  |> filter(d->d.c != TERM) .|> expansion_value |> JSON.json |> writev(f)
-# end
 
 
 # # %% ==================== depth curve ====================

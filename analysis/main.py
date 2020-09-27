@@ -25,7 +25,53 @@ pdf['wage'] = wage
 np.mean(pdf.wage < pdf.set_index('worker_id').loc['5f4912fc3c25512e73761c48'].wage)
 
 # %% ==================== Main figures  ====================
+def exp2_make_base():
+    label_offset = -0.4
+    fig, axes = plt.subplots(4, 3, figsize=(12, 3+3+3+3), constrained_layout=True,
+                             gridspec_kw={'height_ratios': [3,3,3,3]})
 
+    # letter labels
+    for char, ax in zip('ABCDEFG', axes[:, 0]):
+        ax.annotate(char, (label_offset, 1), xycoords='axes fraction', size=32, va='bottom')
+    # task image
+    for v, ax in zip(VARIANCES, axes[0, :]):
+        ax.set_title(f'{v.title()} Variance', fontdict=dict(fontsize=20))
+        # ax.imshow(task_image(v))
+        ax.axis('off')
+    plot_pareto(axes[1, :], legend=False, fit_reg=False)
+    for ax in axes[1, :]:
+        ax.set_ylim(-1, 25)
+        ax.set_yticks([])
+    plot_average_predictive_accuracy(axes[2, :])
+    plot_second_click(axes[3, :])
+    axes[3,0].legend().remove()
+    for ax in axes[3, :]:
+        ax.set_yticks([])
+
+    plt.savefig('fighist/exp2a.png', dpi=figs.dpi, bbox_inches='tight')
+
+
+def exp2_add_task():
+    base = Image.open('fighist/exp2a.png')
+    w, h = base.size
+
+    task = Image.open('imgs/roadtrip.png')
+    wt, ht = task.size
+    scaling = 0.66 * w / wt
+    task = task.resize((int(wt * scaling), int(ht * scaling)))
+
+    base.paste(task, (0, 100))
+
+    dt = datetime.now().strftime('%m-%d-%H-%M-%S')
+    base.save(f'fighist/exp2b-{dt}.png')
+    base.save('figs/4/exp2_main.png')
+
+
+exp2_make_base()
+# exp2_add_task()
+    
+
+# %% --------
 @figure()
 def exp2_main():
     fig, axes = setup_variance_plot(2)
@@ -42,6 +88,20 @@ def pareto_fit():
     plot_pareto(axes[0, :], legend=False, fit_reg=False)
     plot_average_predictive_accuracy(axes[1, :])
     # figs.reformat_ticks(yaxis=True, ax=axes[1,0])
+
+# %% --------
+@figure()
+def exp2_main_alt():
+    fig, axes = setup_variance_plot(4)
+    for v, ax in zip(VARIANCES, axes[0, :]):
+        ax.imshow(task_image(v))
+        ax.axis('off')
+    plot_second_click(axes[1, :], 
+        # models=['OptimalPlus', 'BestFirst']
+        )
+    plot_pareto(axes[2, :], legend=False, fit_reg=False)
+    plot_average_predictive_accuracy(axes[3, :])
+
 
 # %% --------
 
@@ -93,66 +153,6 @@ exp4_make_base()
 exp4_add_task()
 
 
-# %% --------
-# VERSION 1
-def exp4_make_base():
-    fig = plt.figure(constrained_layout=True, figsize=(6, 6))
-    gs = fig.add_gridspec(5, 1)
-    
-    plt.sca(fig.add_subplot(gs[0:3, :]))
-    # img = Image.open(f'imgs/roadtrip.png')
-    # plt.imshow(img)
-    plt.axis('off')
-    plt.annotate('A', (-0.4, 1), xycoords='axes fraction', size=32, va='bottom')
-    
-    ax = fig.add_subplot(gs[3:5, 0])
-    plot_average_predictive_accuracy(np.array(ax))
-    ax.annotate('B', (-0.4, 1), xycoords='axes fraction', size=32, va='bottom')
-    
-    plt.savefig('/tmp/exp4.png', dpi=figs.dpi, bbox_inches='tight')
-
-
-def exp4_add_task_alt():
-    base = Image.open('/tmp/exp4.png')
-    w, h = base.size
-
-    task = Image.open('imgs/roadtrip.png')
-    wt, ht = task.size
-    scaling = 0.8 * w / wt
-    task = task.resize((int(wt * scaling), int(ht * scaling)))
-
-    base.paste(task, (110, 80))
-    base.save('fighist/exp4.png')
-    base.save('figs/4/exp4_main.png')
-
-exp4_make_base()
-exp4_add_task()
-
-# %% --------
-
-
-# %% --------
-# bg_w, bg_h = background.size
-# offset = ((bg_w - img_w) // 2, (bg_h - img_h) // 2)
-# background.paste(img, offset)
-# background.save('out.png')
-
-# @figure()
-# def exp4_main():
-#     fig = plt.figure(constrained_layout=True, figsize=(12, 3))
-#     gs = fig.add_gridspec(1, 2)
-    
-#     plt.sca(fig.add_subplot(gs[0, 0]))
-#     # img = Image.open(f'imgs/roadtrip.png')
-#     # plt.imshow(img)
-#     plt.axis('off')
-    
-#     ax = fig.add_subplot(gs[0, 1])
-#     plot_average_predictive_accuracy(np.array(ax))
-
-
-    # w, h = img.size
-    # return img.crop((700, 730, w-700, h-850))
 
 
 # %% ==================== BACKWARD ====================

@@ -6,15 +6,12 @@ FIT_BIAS = false
 
 QUOTE_MODELS = quote 
     [
-        RandomSelection,
-        OptimalPlus,
-        MetaGreedy,
+        OptimalPlus{:Default},
+        MetaGreedy{:Default},
+        Heuristic{:Random},
         Heuristic{:BestFirst},
         Heuristic{:DepthFirst},
         Heuristic{:BreadthFirst},
-        Heuristic{:BestPlusDepth},
-        Heuristic{:BestPlusBreadth},
-        Heuristic{:Full},
     ] 
 end
 

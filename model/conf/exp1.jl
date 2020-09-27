@@ -6,14 +6,10 @@ FIT_BIAS = false
 
 QUOTE_MODELS = quote   # this quote thing allows us to refer to types that aren't defined yet
     [
-        RandomSelection,
-        OptimalPlus,
-        MetaGreedy,
+        OptimalPlus{:Default},
+        MetaGreedy{:Default},
+        Heuristic{:Random},
         Heuristic{:BestFirst},
         Heuristic{:BestFirstNoBestNext},
-        Heuristic{:BestFirstRandomStopping},
-        Heuristic{:BestFirstSatisficing},
-        Heuristic{:BestFirstBestNext},
-        Heuristic{:BestFirstDepth},
     ]
 end
