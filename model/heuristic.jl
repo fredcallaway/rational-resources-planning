@@ -69,31 +69,31 @@ function pruning(model::Heuristic, φ::NamedTuple)
     logistic.(model.β_prune * (model.θ_prune .- φ.frontier_values))
 end
 
-function select_pref(model, φ)
+function select_pref(model::Heuristic, φ::NamedTuple)
     h = φ.tmp  # use pre-allocated array for memory efficiency
     @. h = model.β_best * φ.frontier_values + model.β_depth * φ.frontier_depths + model.β_expand * φ.expansion
     h
 end
 
-function selection_probability(model::Heuristic, φ::NamedTuple)
+function selection_probability(model::Heuristic{H, T}, φ::NamedTuple)::Vector{T} where {H, T}
     h = select_pref(model, φ)
-    softmax!(h)
-    # if model.θ_prune == -Inf
-    #     return softmax!(h)
-    # else
-    #     total = fill!(φ.tmp2, 0.)
-    #     p = φ.tmp3
+    if model.θ_prune == -Inf
+        return softmax!(h)
+    else
+        # return softmax!(h)
+        total = fill!(φ.tmp2, 0.)
+        p = φ.tmp3
 
-    #     p_prune = pruning(model, φ)
-    #     for prune in Iterators.product(repeat([[false, true]], length(p_prune))...)
-    #         prune = collect(prune)
-    #         p .= h
-    #         p[prune] .= -1e10
-    #         pp = prod((prune[i] ? p_prune[i] : 1 - p_prune[i]) for i in eachindex(prune))
-    #         total += pp * softmax!(p)
-    #     end
-    #     return total
-    # end
+        p_prune = pruning(model, φ)
+        for prune in Iterators.product(repeat([[false, true]], length(p_prune))...)
+            prune = collect(prune)
+            p .= h
+            p[prune] .= -1e10
+            pp = prod((prune[i] ? p_prune[i] : 1 - p_prune[i]) for i in eachindex(prune))
+            total += pp * softmax!(p)
+        end
+        return total
+    end
 end
 
 
@@ -108,9 +108,9 @@ function termination_probability(model::Heuristic, φ::NamedTuple)
     #     model.β_best_next * (φ.best_vs_next - model.θ_best_next) +
     #     model.β_depth_limit * (φ.min_depth - model.θ_depth_limit)
     p_term = logistic(v)
-    # if model.θ_prune > -Inf
-        # p_term += (1-p_term) * prod(pruning(model, φ))
-    # end
+    if model.θ_prune > -Inf
+        p_term += (1-p_term) * prod(pruning(model, φ))
+    end
     p_term
 end
 
