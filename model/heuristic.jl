@@ -13,6 +13,9 @@ struct Heuristic{H,T} <: AbstractModel{T}
     β_depth_limit::T
     # Stopping rule threshold
     θ_term::T
+    # Pruning
+    β_prune::T
+    θ_prune::T
     # Lapse rate
     ε::T
 end
@@ -51,6 +54,8 @@ function features(::Type{Heuristic{H,T}}, m::MetaMDP, b::Belief) where {H,T}
         best_vs_next = best_vs_next(m, b),
         min_depth = min_depth(m, b),
         tmp = zeros(T, length(frontier)),  # pre-allocate for use in selection_probability
+        tmp2 = zeros(T, length(frontier)),  # pre-allocate for use in selection_probability
+        tmp3 = zeros(T, length(frontier)),  # pre-allocate for use in selection_probability
     )
 end
 
@@ -159,12 +164,39 @@ default_space(::Type{Heuristic{:BestFirstDepth}}) =
     change_space(Heuristic{:BestFirstRandomStopping}, β_depth_limit = (1e-6, 3)
 )
 
+
 # ---------- Selection rule ---------- #
 
+function pruning(model::Heuristic, φ::NamedTuple)
+    logistic.(model.β_prune * (model.θ_prune .- φ.frontier_values))
+end
+
+function select_pref(model, φ)
+    h = φ.tmp  # use pre-allocated array for memory efficiency
+    @. h = model.β_best * φ.frontier_values + model.β_depth * φ.frontier_depths + model.β_expand * φ.expansion
+    h
+end
+
 function selection_probability(model::Heuristic, φ::NamedTuple)
-    p = φ.tmp  # use pre-allocated array for memory efficiency
-    @. p = model.β_best * φ.frontier_values + model.β_depth * φ.frontier_depths + model.β_expand * φ.expansion
-    softmax!(p)
+    h = select_pref(model, φ)
+    if model.θ_prune == -Inf
+        return softmax!(h)
+    else
+        total = fill!(φ.tmp2, 0.)
+        p = φ.tmp3
+
+        p_prune = pruning(model, φ)
+        @show p_prune
+        for prune in Iterators.product(repeat([[false, true]], length(p_prune))...)
+            prune = collect(prune)
+            p .= h
+            p[prune] .= -1e10
+            pp = prod((prune[i] ? p_prune[i] : 1 - p_prune[i]) for i in eachindex(prune))
+            total += pp * softmax!(p)
+        end
+        return total
+
+    end
 end
 
 
@@ -178,7 +210,11 @@ function termination_probability(model::Heuristic, φ::NamedTuple)
     # v = model.β_satisfice * (φ.term_reward - model.θ_satisfice) +
     #     model.β_best_next * (φ.best_vs_next - model.θ_best_next) +
     #     model.β_depth_limit * (φ.min_depth - model.θ_depth_limit)
-    logistic(v)
+    p_term = logistic(v)
+    if model.θ_prune > -Inf
+        p_term += (1-p_term) * prod(pruning(model, φ))
+    end
+    p_term
 end
 
 "Minimum depth of a frontier node"
