@@ -63,108 +63,6 @@ function action_dist!(p::Vector{T}, model::Heuristic{H,T}, φ::NamedTuple) where
     term_select_action_dist!(p, model, φ)
 end
 
-# ---------- Define parameter ranges and special cases ---------- #
-
-default_space(::Type{Heuristic{:Full}}) = Space(
-    :β_best => (1e-6, 3),
-    :β_depth => (-3, 3),
-    :β_expand => 0.,
-
-    :β_satisfice => (1e-6, 3),
-    :β_best_next => (1e-6, 3),
-    :β_depth_limit => (1e-6, 3),
-
-    :θ_term => (-30, 30),
-    :ε => (1e-3, 1)
-)
-
-default_space(::Type{Heuristic{:BestFirst}}) = 
-    change_space(Heuristic{:Full}, β_depth=0)
-default_space(::Type{Heuristic{:DepthFirst}}) = 
-    change_space(Heuristic{:Full}, β_best=0, β_depth=(0, 3))
-default_space(::Type{Heuristic{:BreadthFirst}}) = 
-    change_space(Heuristic{:Full}, β_best=0, β_depth=(-3, 0))
-
-default_space(::Type{Heuristic{:Random}}) = Space(
-    :β_best => 0.,
-    :β_depth => 0.,
-
-    :β_satisfice => 0.,
-    :β_best_next => 0.,
-    :β_depth_limit => 0.,
-
-    :θ_term => (-30, 30),
-    :ε => 0,
-    :β_expand => 0
-)
-
-
-default_space(::Type{Heuristic{:BestFirstExpand}}) = 
-    change_space(Heuristic{:Full}, β_depth=0, β_expand=(1e-6, 50))
-default_space(::Type{Heuristic{:DepthFirstExpand}}) = 
-    change_space(Heuristic{:Full}, β_best=0, β_depth=(0, 3), β_expand=(1e-6, 50))
-default_space(::Type{Heuristic{:BreadthFirstExpand}}) = 
-    change_space(Heuristic{:Full}, β_best=0, β_depth=(-3, 0), β_expand=(1e-6, 50))
-default_space(::Type{Heuristic{:RandomExpand}}) = 
-    change_space(Heuristic{:Random}, β_expand=(1e-6, 50))
-
-default_space(::Type{Heuristic{:BestPlusDepth}}) = 
-    change_space(Heuristic{:Full}, β_depth=(0, 3))
-default_space(::Type{Heuristic{:BestPlusBreadth}}) = 
-    change_space(Heuristic{:Full}, β_depth=(-3, 0))
-
-default_space(::Type{Heuristic{:BestFirstNoSatisfice}}) = 
-    change_space(Heuristic{:BestFirst}, β_satisfice=0, θ_satisfice=0)
-default_space(::Type{Heuristic{:BestFirstNoBestNext}}) = 
-    change_space(Heuristic{:BestFirst}, β_best_next=0, θ_best_next=0)
-default_space(::Type{Heuristic{:BestFirstNoDepthLimit}}) = 
-    change_space(Heuristic{:BestFirst}, β_depth_limit=0, θ_depth_limit=0)
-
-default_space(::Type{Heuristic{:BreadthFirstNoSatisfice}}) =
-    change_space(Heuristic{:BreadthFirst}, β_satisfice=0, θ_satisfice=0)
-default_space(::Type{Heuristic{:BreadthFirstNoBestNext}}) = 
-    change_space(Heuristic{:BreadthFirst}, β_best_next=0, θ_best_next=0)
-default_space(::Type{Heuristic{:BreadthFirstNoDepthLimit}}) = 
-    change_space(Heuristic{:BreadthFirst}, β_depth_limit=0, θ_depth_limit=0)
-
-default_space(::Type{Heuristic{:DepthFirstNoSatisfice}}) = 
-    change_space(Heuristic{:DepthFirst}, β_satisfice=0, θ_satisfice=0)
-default_space(::Type{Heuristic{:DepthFirstNoBestNext}}) = 
-    change_space(Heuristic{:DepthFirst}, β_best_next=0, θ_best_next=0)
-default_space(::Type{Heuristic{:DepthFirstNoDepthLimit}}) = 
-    change_space(Heuristic{:DepthFirst}, β_depth_limit=0, θ_depth_limit=0)
-
-default_space(::Type{Heuristic{:FullNoSatisfice}}) = 
-    change_space(Heuristic{:Full}, β_satisfice=0, θ_satisfice=0)
-default_space(::Type{Heuristic{:FullNoBestNext}}) = 
-    change_space(Heuristic{:Full}, β_best_next=0, θ_best_next=0)
-default_space(::Type{Heuristic{:FullNoDepthLimit}}) = 
-    change_space(Heuristic{:Full}, β_depth_limit=0, θ_depth_limit=0)
-
-default_space(::Type{Heuristic{:BestFirstRandomStopping}}) = Space(
-    :β_best => (1e-6, 3),
-    :β_depth => 0.,
-
-    :β_satisfice => 0.,
-    :β_best_next => 0.,
-    :β_depth_limit => 0.,
-
-    :θ_term => (-30, 30),
-    :ε => (1e-3, 1),
-    :B_expand => 0.,
-)
-
-default_space(::Type{Heuristic{:BestFirstSatisficing}}) = 
-    change_space(Heuristic{:BestFirstRandomStopping}, β_satisfice = (1e-6, 3)
-)
-default_space(::Type{Heuristic{:BestFirstBestNext}}) = 
-    change_space(Heuristic{:BestFirstRandomStopping}, β_best_next = (1e-6, 3)
-)
-default_space(::Type{Heuristic{:BestFirstDepth}}) = 
-    change_space(Heuristic{:BestFirstRandomStopping}, β_depth_limit = (1e-6, 3)
-)
-
-
 # ---------- Selection rule ---------- #
 
 function pruning(model::Heuristic, φ::NamedTuple)
@@ -179,24 +77,23 @@ end
 
 function selection_probability(model::Heuristic, φ::NamedTuple)
     h = select_pref(model, φ)
-    if model.θ_prune == -Inf
-        return softmax!(h)
-    else
-        total = fill!(φ.tmp2, 0.)
-        p = φ.tmp3
+    softmax!(h)
+    # if model.θ_prune == -Inf
+    #     return softmax!(h)
+    # else
+    #     total = fill!(φ.tmp2, 0.)
+    #     p = φ.tmp3
 
-        p_prune = pruning(model, φ)
-        @show p_prune
-        for prune in Iterators.product(repeat([[false, true]], length(p_prune))...)
-            prune = collect(prune)
-            p .= h
-            p[prune] .= -1e10
-            pp = prod((prune[i] ? p_prune[i] : 1 - p_prune[i]) for i in eachindex(prune))
-            total += pp * softmax!(p)
-        end
-        return total
-
-    end
+    #     p_prune = pruning(model, φ)
+    #     for prune in Iterators.product(repeat([[false, true]], length(p_prune))...)
+    #         prune = collect(prune)
+    #         p .= h
+    #         p[prune] .= -1e10
+    #         pp = prod((prune[i] ? p_prune[i] : 1 - p_prune[i]) for i in eachindex(prune))
+    #         total += pp * softmax!(p)
+    #     end
+    #     return total
+    # end
 end
 
 
@@ -211,9 +108,9 @@ function termination_probability(model::Heuristic, φ::NamedTuple)
     #     model.β_best_next * (φ.best_vs_next - model.θ_best_next) +
     #     model.β_depth_limit * (φ.min_depth - model.θ_depth_limit)
     p_term = logistic(v)
-    if model.θ_prune > -Inf
-        p_term += (1-p_term) * prod(pruning(model, φ))
-    end
+    # if model.θ_prune > -Inf
+        # p_term += (1-p_term) * prod(pruning(model, φ))
+    # end
     p_term
 end
 
@@ -249,4 +146,64 @@ function best_vs_next(m, b)
     end
     pvals[best] - competing_value
 end
+
+# ---------- Define parameter ranges for individual models ---------- #
+
+default_space(::Type{Heuristic{:Base}}) = Space(
+    :β_best => 0.,
+    :β_depth => 0.,
+    :β_expand => 0.,
+
+    :β_satisfice => (1e-6, 3),
+    :β_best_next => (1e-6, 3),
+    :β_depth_limit => (1e-6, 3),
+    :θ_term => (-30, 30),
+
+    :β_prune => (0, 30),
+    :θ_prune => (-30, 30),
+
+    :ε => (1e-3, 1),
+)
+
+default_space(::Type{Heuristic{:Random}}) = Space(
+    :β_best => 0.,
+    :β_depth => 0.,
+    :β_expand => 0
+    :β_satisfice => 0.,
+    :β_best_next => 0.,
+    :β_depth_limit => 0.,
+    :θ_term => (-30, 30),
+    :β_prune => 0,
+    :θ_prune => 0,
+    :ε => 0,
+)
+
+default_space(::Type{Heuristic{:BestFirst}}) = 
+    change_space(Heuristic{:Base}, β_best=(0,3))
+
+default_space(::Type{Heuristic{:BestFirstNoPrune}}) = 
+    change_space(Heuristic{:BestFirst}, β_best=(0,3), β_prune=0., θ_prune=-Inf)
+
+default_space(::Type{Heuristic{:BestFirstNoBestNext}}) = 
+    change_space(Heuristic{:BestFirst}, β_best=(0,3), β_prune=0., θ_prune=-Inf)
+
+
+default_space(::Type{Heuristic{:DepthFirst}}) = 
+    change_space(Heuristic{:Base}, β_depth=(0, 3))
+
+default_space(::Type{Heuristic{:BreadthFirst}}) = 
+    change_space(Heuristic{:Base}, β_depth=(-3, 0))
+
+
+default_space(::Type{Heuristic{:BestFirstExpand}}) = 
+    change_space(Heuristic{:BestFirst}, β_expand=(1e-6, 50))
+
+default_space(::Type{Heuristic{:DepthFirstExpand}}) = 
+    change_space(Heuristic{:DepthFirst}, β_expand=(1e-6, 50))
+
+default_space(::Type{Heuristic{:BreadthFirstExpand}}) = 
+    change_space(Heuristic{:BreadthFirst}, β_expand=(1e-6, 50))
+
+default_space(::Type{Heuristic{:RandomExpand}}) = 
+    change_space(Heuristic{:Random}, β_expand=(1e-6, 50))
 

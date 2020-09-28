@@ -10,6 +10,7 @@ QUOTE_MODELS = quote   # this quote thing allows us to refer to types that aren'
         MetaGreedy{:Default},
         Heuristic{:Random},
         Heuristic{:BestFirst},
+        Heuristic{:BestFirstNoPrune},
         Heuristic{:BestFirstNoBestNext},
     ]
 end

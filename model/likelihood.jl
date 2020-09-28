@@ -49,7 +49,7 @@ function bfgs_random_restarts(loss, lower, upper, n_restart; max_err=n_restart/2
     n_time = 0
 
     function do_opt(algo, x0)
-        res = optimize(loss, lower, upper, x0, algo, Optim.Options(time_limit=60); autodiff=:forward)
+        res = optimize(loss, lower, upper, x0, algo, Optim.Options(time_limit=600); autodiff=:forward)
         if !(res.f_converged || res.g_converged) && res.time_run > res.time_limit
             @warn "Timed out" res.iterations res.f_calls
             n_time += 1
