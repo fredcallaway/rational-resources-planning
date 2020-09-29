@@ -13,7 +13,7 @@ model_pareto.sort_values('cost', inplace=True)
 model_pareto.rename(columns={'clicks': 'n_click', 'reward': 'term_reward'}, inplace=True)
 model_pareto.index.unique()
 
-PARETO_MODELS = [m for m in MODELS if not m.endswith('Expand')]
+PARETO_MODELS = [m for m in MODELS if not (m.endswith('Expand') or m.endswith('NoPrune'))]
 
 # %% --------
 

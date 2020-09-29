@@ -11,9 +11,10 @@ VERSION = f'exp{EXPERIMENT}'
 VARIANCES = ['decreasing', 'constant', 'increasing'] if EXPERIMENT in (2,3) else ['constant']
 MODELS = ['Random', 'MetaGreedy', 'OptimalPlus', 'BestFirst']
 if EXPERIMENT == 1:
-    MODELS.append('BestFirstNoBestNext')
+    MODELS.extend(['BestFirstNoBestNext', "BestFirstNoPrune"])
 else:
     MODELS.extend(['BreadthFirst', 'DepthFirst'])
+    # MODELS.extend(['BestFirstNoPrune', 'DepthFirstNoPrune', 'BreadthFirstNoPrune'])
 if EXPERIMENT >= 3:
     MODELS.extend([m + 'Expand' for m in MODELS])
 
@@ -111,7 +112,10 @@ figs.add_names({
     'DepthFirst': 'Depth-First',
     # 'DepthFirst': 'Backward' if EXPERIMENT >= 3 else 'Depth-First',
 
-    'BestFirstNoBestNext': 'Simple\nBest-First',
+    'BestFirstNoBestNext': 'Best-First\nNo Best-Next',
+    'BestFirstNoPrune': 'Best-First\nNo Prune',
+    'BreadthFirstNoPrune': 'Breadth-First\nNo Prune',
+    'DepthFirstNoPrune': 'Depth-First\nNo Prune',
 
     # 'MetaGreedyExpand': 'Meta-Greedy + Expansion',
     # 'BestFirstExpand': 'Best-First + Expansion',
@@ -141,6 +145,9 @@ palette = {
     'DepthFirst': dp,
     
     'BestFirstNoBestNext': lg,
+    'BestFirstNoPrune': lg,
+    'BreadthFirstNoPrune': lo,
+    'DepthFirstNoPrune': lp,
 
     'RandomExpand': (0.7, 0.7, 0.7),
     'MetaGreedyExpand': lr,
@@ -175,4 +182,7 @@ def setup_variance_plot(nrow=1, title=True, label=True, label_offset=-0.3, heigh
 def task_image(variance):
     img = Image.open(f'imgs/{variance}.png')
     w, h = img.size
-    return img.crop((700, 730, w-700, h-850))
+    img = img.crop((700, 730, w-700, h-850))
+    img.save(f'imgs/{variance}-cropped.png')
+    return img
+

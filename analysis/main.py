@@ -25,10 +25,11 @@ pdf['wage'] = wage
 np.mean(pdf.wage < pdf.set_index('worker_id').loc['5f4912fc3c25512e73761c48'].wage)
 
 # %% ==================== Main figures  ====================
+# @figure()
 def exp2_make_base():
     label_offset = -0.4
-    fig, axes = plt.subplots(4, 3, figsize=(12, 3+3+3+3), constrained_layout=True,
-                             gridspec_kw={'height_ratios': [3,3,3,3]})
+    fig, axes = plt.subplots(4, 3, figsize=(12, (4+3+3+3)), constrained_layout=True,
+                             gridspec_kw={'height_ratios': [4,3,3,3]})
 
     # letter labels
     for char, ax in zip('ABCDEFG', axes[:, 0]):
@@ -39,35 +40,39 @@ def exp2_make_base():
         # ax.imshow(task_image(v))
         ax.axis('off')
     plot_pareto(axes[1, :], legend=False, fit_reg=False)
-    for ax in axes[1, :]:
+    for i, ax in enumerate(axes[1, :]):
         ax.set_ylim(-1, 25)
-        ax.set_yticks([])
+        if i != 0:
+            ax.set_yticks([])
     plot_average_predictive_accuracy(axes[2, :])
     plot_second_click(axes[3, :])
     axes[3,0].legend().remove()
-    for ax in axes[3, :]:
-        ax.set_yticks([])
+    for i, ax in enumerate(axes[3, :]):
+        if i != 0:
+            ax.set_yticks([])
 
     plt.savefig('fighist/exp2a.png', dpi=figs.dpi, bbox_inches='tight')
 
+exp2_make_base()
 
+# %% --------
 def exp2_add_task():
     base = Image.open('fighist/exp2a.png')
     w, h = base.size
 
-    task = Image.open('imgs/roadtrip.png')
+    task = task_image('decreasing')
     wt, ht = task.size
-    scaling = 0.66 * w / wt
+    scaling = 0.19 * w / wt
     task = task.resize((int(wt * scaling), int(ht * scaling)))
 
-    base.paste(task, (0, 100))
+    base.paste(task, (400, 110))
 
     dt = datetime.now().strftime('%m-%d-%H-%M-%S')
-    base.save(f'fighist/exp2b-{dt}.png')
+    base.save(f'fighist/{dt}-exp2b.png')
     base.save('figs/4/exp2_main.png')
 
 
-exp2_make_base()
+# # exp2_make_base()
 # exp2_add_task()
     
 
