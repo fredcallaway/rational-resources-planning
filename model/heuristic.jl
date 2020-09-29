@@ -174,7 +174,7 @@ default_space(::Type{Heuristic{:Base}}) = Space(
     :θ_term => (-30, 30),
 
     :β_prune => (0, 3),
-    :θ_prune => (-30, 0),
+    :θ_prune => (-30, 30),
 
     :ε => (1e-3, 1),
 )
@@ -186,7 +186,7 @@ default_space(::Type{Heuristic{:Random}}) = Space(
     :β_satisfice => 0.,
     :β_best_next => 0.,
     :β_depth_limit => 0.,
-    :θ_term => (-30, 30),
+    :θ_term => (-90, 90),
     :β_prune => 0,
     :θ_prune => 0,
     :ε => 0,
