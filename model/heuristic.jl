@@ -209,10 +209,10 @@ default_space(::Type{Heuristic{:BreadthFirst}}) =
     change_space(Heuristic{:Base}, β_depth=(-3, 0))
 
 default_space(::Type{Heuristic{:DepthFirstNoPrune}}) = 
-    change_space(Heuristic{:Base}, β_depth=(0, 3))
+    change_space(Heuristic{:DepthFirst}, β_prune=0., θ_prune=-Inf)
 
 default_space(::Type{Heuristic{:BreadthFirstNoPrune}}) = 
-    change_space(Heuristic{:Base}, β_depth=(-3, 0))
+    change_space(Heuristic{:BreadthFirst}, β_prune=0., θ_prune=-Inf)
 
 
 default_space(::Type{Heuristic{:BestFirstExpand}}) = 
