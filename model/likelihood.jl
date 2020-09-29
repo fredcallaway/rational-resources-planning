@@ -39,7 +39,7 @@ end
     x0s = [next!(seq) for i in 1:n]
 end
 
-function bfgs_random_restarts(loss, lower, upper, n_restart; max_err=n_restart/2)
+function bfgs_random_restarts(loss, lower, upper, n_restart; max_err=n_restart/2, id="null")
     algorithms = [
         Fminbox(LBFGS()),
         Fminbox(LBFGS(linesearch=Optim.LineSearches.BackTracking())),
@@ -51,10 +51,10 @@ function bfgs_random_restarts(loss, lower, upper, n_restart; max_err=n_restart/2
     function do_opt(algo, x0)
         res = optimize(loss, lower, upper, x0, algo, Optim.Options(time_limit=600); autodiff=:forward)
         if !(res.f_converged || res.g_converged) && res.time_run > res.time_limit
-            @warn "Timed out" res.iterations res.f_calls
+            @warn "$id: Timed out" res.iterations res.f_calls x0=repr(round.(x0; digits=3))
             n_time += 1
             if n_time >= max_err
-                error("Too many timeouts")
+                error("$id: Too many timeouts")
             end
         end
         res
@@ -72,10 +72,10 @@ function bfgs_random_restarts(loss, lower, upper, n_restart; max_err=n_restart/2
                 do_opt(algo, x0)
             catch err
                 err isa InterruptException && rethrow(err)
-                @warn "Second BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name
+                @warn "$id: Second BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name x0=repr(round.(x0; digits=3))
                 n_err += 1
                 if n_err >= max_err
-                    @error "Too many optimization errors"
+                    @error "$id: Too many optimization errors"
                     rethrow(err)
                 end
                 return missing
@@ -90,6 +90,8 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_res
     lower, upper = bounds(space)
     space_size = upper .- lower
     @assert all(space_size .> 0)
+    # Initialize in the center of the space. This doesn't seem to help
+    # q = space_size ./ 4; lower += q; upper -= q
 
     L = Likelihood(trials)
 
@@ -111,7 +113,8 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_res
                 x0 = lower .+ rand(length(lower)) .* space_size
                 optimize(loss, lower, upper, x0, SAMIN(verbosity=0), Optim.Options(iterations=10^6))
             elseif method == :bfgs
-                bfgs_random_restarts(loss, lower, upper, n_restart)
+                t = trials[1]
+                bfgs_random_restarts(loss, lower, upper, n_restart; id="$M-$(t.wid)-$(t.i)")
             end
         end
         ismissing(opt) && return missing

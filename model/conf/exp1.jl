@@ -4,13 +4,28 @@ MAX_THETA = 60
 EXPAND_ONLY = true
 FIT_BIAS = false
 
-QUOTE_MODELS = quote   # this quote thing allows us to refer to types that aren't defined yet
+# QUOTE_MODELS = quote   # this quote thing allows us to refer to types that aren't defined yet
+#     [
+#         OptimalPlus{:Default},
+#         MetaGreedy{:Default},
+#         Heuristic{:Random},
+#         Heuristic{:BestFirst},
+#         Heuristic{:BestFirstNoPrune},
+#         Heuristic{:BestFirstNoBestNext},
+#     ]
+# end
+
+QUOTE_MODELS = quote 
     [
         OptimalPlus{:Default},
         MetaGreedy{:Default},
         Heuristic{:Random},
         Heuristic{:BestFirst},
+        Heuristic{:DepthFirst},
+        Heuristic{:BreadthFirst},
         Heuristic{:BestFirstNoPrune},
+        Heuristic{:DepthFirstNoPrune},
+        Heuristic{:BreadthFirstNoPrune},
         Heuristic{:BestFirstNoBestNext},
-    ]
+    ] 
 end

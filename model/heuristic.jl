@@ -65,14 +65,18 @@ end
 
 # ---------- Selection rule ---------- #
 
-function pruning(model::Heuristic, φ::NamedTuple)
-    logistic.(model.β_prune * (model.θ_prune .- φ.frontier_values))
+function pruning(model::Heuristic{H,T}, φ::NamedTuple)::Vector{T} where {H, T}
+    @. logistic(model.β_prune * (model.θ_prune - φ.frontier_values))
 end
 
-function select_pref(model::Heuristic, φ::NamedTuple)
+function select_pref(model::Heuristic{H,T}, φ::NamedTuple)::Vector{T} where {H, T}
     h = φ.tmp  # use pre-allocated array for memory efficiency
     @. h = model.β_best * φ.frontier_values + model.β_depth * φ.frontier_depths + model.β_expand * φ.expansion
     h
+end
+
+@memoize function cartesian_bitvectors(N::Int)::Vector{BitVector}
+    (map(collect, Iterators.product(repeat([BitVector([0, 1])], N)...)))[:]
 end
 
 function selection_probability(model::Heuristic{H, T}, φ::NamedTuple)::Vector{T} where {H, T}
@@ -80,20 +84,30 @@ function selection_probability(model::Heuristic{H, T}, φ::NamedTuple)::Vector{T
     if model.θ_prune == -Inf
         return softmax!(h)
     else
-        # return softmax!(h)
-        total = fill!(φ.tmp2, 0.)
-        p = φ.tmp3
+        # this part is the bottleneck, so we add type annotations and use explicit loops
+        total::Vector{T} = fill!(φ.tmp2, 0.)
+        p::Vector{T} = φ.tmp3
 
         p_prune = pruning(model, φ)
-        for prune in Iterators.product(repeat([[false, true]], length(p_prune))...)
-            prune = collect(prune)
-            p .= h
-            p[prune] .= -1e10
-            pp = prod((prune[i] ? p_prune[i] : 1 - p_prune[i]) for i in eachindex(prune))
-            total += pp * softmax!(p)
+        for prune in cartesian_bitvectors(length(p_prune))
+            all(prune) && continue
+            pp = 1.
+            for i in eachindex(prune)
+                if prune[i]
+                    p[i] = -1e10
+                    pp *= p_prune[i]
+                else
+                    p[i] = h[i]
+                    pp *= (1. - p_prune[i])
+                end
+            end
+            total .+= pp .* softmax!(p)
         end
+        total ./= (eps() + (1. - prod(p_prune)))
+        # @assert all(isfinite(p) for p in total)
         return total
     end
+
 end
 
 
@@ -159,8 +173,8 @@ default_space(::Type{Heuristic{:Base}}) = Space(
     :β_depth_limit => (1e-6, 3),
     :θ_term => (-30, 30),
 
-    :β_prune => (0, 30),
-    :θ_prune => (-30, 30),
+    :β_prune => (0, 3),
+    :θ_prune => (-30, 0),
 
     :ε => (1e-3, 1),
 )
@@ -168,7 +182,7 @@ default_space(::Type{Heuristic{:Base}}) = Space(
 default_space(::Type{Heuristic{:Random}}) = Space(
     :β_best => 0.,
     :β_depth => 0.,
-    :β_expand => 0
+    :β_expand => 0,
     :β_satisfice => 0.,
     :β_best_next => 0.,
     :β_depth_limit => 0.,
@@ -182,16 +196,22 @@ default_space(::Type{Heuristic{:BestFirst}}) =
     change_space(Heuristic{:Base}, β_best=(0,3))
 
 default_space(::Type{Heuristic{:BestFirstNoPrune}}) = 
-    change_space(Heuristic{:BestFirst}, β_best=(0,3), β_prune=0., θ_prune=-Inf)
+    change_space(Heuristic{:BestFirst}, β_prune=0., θ_prune=-Inf)
 
 default_space(::Type{Heuristic{:BestFirstNoBestNext}}) = 
-    change_space(Heuristic{:BestFirst}, β_best=(0,3), β_prune=0., θ_prune=-Inf)
+    change_space(Heuristic{:BestFirst}, β_best_next=0)
 
 
 default_space(::Type{Heuristic{:DepthFirst}}) = 
     change_space(Heuristic{:Base}, β_depth=(0, 3))
 
 default_space(::Type{Heuristic{:BreadthFirst}}) = 
+    change_space(Heuristic{:Base}, β_depth=(-3, 0))
+
+default_space(::Type{Heuristic{:DepthFirstNoPrune}}) = 
+    change_space(Heuristic{:Base}, β_depth=(0, 3))
+
+default_space(::Type{Heuristic{:BreadthFirstNoPrune}}) = 
     change_space(Heuristic{:Base}, β_depth=(-3, 0))
 
 
