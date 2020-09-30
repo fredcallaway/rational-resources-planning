@@ -107,7 +107,9 @@ function write_heuristic_pareto(;force=false)
     # mdps = map(readdir("mdps/base")) do i
     #     deserialize("mdps/base/$i")
     # end
-    models = eval(QUOTE_MODELS)
+    models = filter(eval(QUOTE_MODELS)) do M
+        M <: Heuristic
+    end 
 
     for M in models, m in mdps
         f = "mdps/pareto/$(id(m))-$(name(M)).csv"
@@ -129,12 +131,12 @@ if basename(PROGRAM_FILE) == basename(@__FILE__)
     # end
     mkpath("mdps/pareto")
     if !isempty(ARGS)
-        if ARGS[1] == "optimal"
+        if ARGS[2] == "optimal"
             write_optimal_pareto()
-        elseif ARGS[1] == "heuristic"
+        elseif ARGS[2] == "heuristic"
             write_heuristic_pareto()
         else
-            error("Bad arg")
+            error("Bad arg: ", ARGS[2])
         end
     else
         write_optimal_pareto()

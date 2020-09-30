@@ -26,9 +26,11 @@ QUOTE_MODELS = quote
         Heuristic{:Best_DepthLimit},
         Heuristic{:Best_Prune},
         Heuristic{:Best_Full},
-        Heuristic{:Best_NoPrune},
+        Heuristic{:Best_Full_NoPrune},
         Heuristic{:Breadth_Full},
+        Heuristic{:Breadth_Full_NoPrune},
         Heuristic{:Depth_Full},
+        Heuristic{:Depth_Full_NoPrune},
     ] 
 end
         # Heuristic{:BestFirst},

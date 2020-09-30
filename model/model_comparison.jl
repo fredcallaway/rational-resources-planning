@@ -52,11 +52,23 @@ end
 
 # %% ==================== FIT MODELS TO INDIVIDUALS ====================
 
+mkpath("$base_path/fits/full")
+mkpath("$base_path/fits/cv")
+
 full_fits = let
     full_jobs = Iterators.product(values(all_trials), MODELS);
     @time full_fits = pmap(full_jobs) do (trials, M)
-        model, nll = fit(M, trials; method=OPT_METHOD)
-        (model=model, nll=nll)
+        try
+            model, nll = fit(M, trials; method=OPT_METHOD)
+            wid = trials[1].wid; mname = name(model)
+            result = (model=model, nll=nll, wid=wid)
+            serialize("$base_path/fits/full/$mname-$wid", result)
+            return result
+        catch err
+            @error "Error fitting $mname to $wid" err
+            return missing
+        end
+
     end;
     serialize("$base_path/full_fits", full_fits)
 
@@ -111,9 +123,11 @@ cv_fits = let
     @time cv_fits = pmap(cv_jobs) do (trials, M, fold)
         try
             model, train_nll = fit(M, trials[fold.train]; method=OPT_METHOD)
-            (model=model, train_nll=train_nll, test_nll=-logp(model, trials[fold.test]))
+            result = (model=model, train_nll=train_nll, test_nll=-logp(model, trials[fold.test]))
+            wid = trials[1].wid; mname = name(model); fold_i = fold.train[1]
+            serialize("$base_path/fits/cv/$mname-$wid-$fold_i", result)
         catch e
-            println("Error fitting $M to $(trials[1].wid):  $e")
+            println("Error fitting $mname to $wid on fold $fold_i:  $e")
             rethrow(e)
             # (model=model, nll=NaN)
         end
