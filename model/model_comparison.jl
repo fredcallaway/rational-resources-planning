@@ -4,11 +4,14 @@ using Glob
 using CSV
 using DataFrames
 
-isempty(ARGS) && push!(ARGS, "exp3")
+# isempty(ARGS) && push!(ARGS, "exp3")
 println("Running model comparison for ", ARGS[1])
 include("conf.jl")
 
 @everywhere include("base.jl")
+
+import Random
+Random.seed!(123)
 
 # %% ==================== LOAD DATA ====================
 all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
@@ -32,6 +35,7 @@ all_data = all_trials |> values |> flatten |> get_data;
 @everywhere include("models.jl")
 
 MODELS = eval(QUOTE_MODELS)
+
 
 # serialize("$base_path/models", MODELS)
 
@@ -84,12 +88,12 @@ end;
 
 # %% ==================== CROSS VALIDATION ====================
 
-using Random: randperm
+using Random: randperm, MersenneTwister
 
 function kfold_splits(n, k)
     @assert (n / k) % 1 == 0  # can split evenly
     x = Dict(
-        :random => randperm(n),
+        :random => randperm(MersenneTwister(123), n),  # seed again just to be sure!
         :stratified => 1:n
     )[CV_METHOD]
 

@@ -61,6 +61,10 @@ function bfgs_random_restarts(loss, lower, upper, n_restart; max_err=n_restart/2
     end
 
     opts = map(get_sobol(lower, upper, n_restart)) do x0
+        while !isfinite(loss(x0))
+            # don't start with infinite loss!
+            x0 = lower .+ rand(length(lower)) .* (upper .- lower)
+        end
         try
             do_opt(algo, x0)
         catch err

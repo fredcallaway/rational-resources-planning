@@ -24,7 +24,6 @@ name(::Type{Heuristic{H}}) where H = string(H)
 name(::Type{Heuristic{H,T}}) where {H,T} = string(H)
 name(::Heuristic{H,T}) where {H,T} = string(H)
 
-
 Base.show(io::IO, model::Heuristic{H,T}) where {H, T} = print(io, "Heuristic{:$H}(...)")
 function Base.display(model::Heuristic{H,T}) where {H, T}
     println("--------- Heuristic{:$H} ---------")
@@ -176,36 +175,32 @@ default_space(::Type{Heuristic{:Random}}) = Space(
     :ε => 0,
 )
 
-macro defh(new, base, kws...)
-    return :(default_space(::Type{Heuristic{$new}}) = change_space(Heuristic{$base}; $(kws...)...))
+PARAMS = Dict(
+    "Best" => (β_best=(0, 3),),
+    "Depth" => (β_depth=(0, 3),),
+    "Breadth" => (β_depth=(-3, 0),),
+    "Satisfice" => (β_satisfice=(0, 3), θ_term=(-90, 90)),
+    "BestNext" => (β_best_next=(0, 3), θ_term=(-90, 90)),
+    "DepthLimit" => (β_depth_limit=(0, 3), θ_term=(-90, 90)),
+    "Prune" => (β_prune=(0, 3), θ_prune=(-30, 30)),
+)
+
+function default_space(::Type{Heuristic{M}}) where M
+    x = string(M)
+    components = Set()
+    spec = split(x, "_")
+    push!(components, popfirst!(spec))
+
+    for ex in spec
+        if ex == "Full"
+            push!(components, "Satisfice", "BestNext", "DepthLimit", "Prune")
+        elseif startswith(ex, "No")
+            delete!(components, ex[3:end])
+        else
+            push!(components, ex)
+        end
+    end
+    space = merge((PARAMS[k] for k in components)...)
+    change_space(Heuristic{:Random}; ε=(1e-3, 1), space...)
 end
-
-@defh :BestFirst :Random (β_best=(0, 3), ε = (1e-3, 1))
-@defh :BestFirstSatisfice :BestFirst (β_satisfice=(0, 3), θ_term=(-90, 90))
-@defh :BestFirstBestNext :BestFirst (β_best_next=(0, 3), θ_term=(-90, 90))
-@defh :BestFirstDepthLimit :BestFirst (β_depth_limit=(0, 3), θ_term=(-90, 90))
-@defh :BestFirstPrune :BestFirst (β_prune=(0, 3), θ_prune=(-30, 30))
-@defh :BestFirstFull :BestFirst (
-    β_satisfice=(0, 3), θ_term=(-90, 90),
-    β_best_next=(0, 3),
-    β_depth_limit=(0, 3),
-    β_prune=(0, 3), θ_prune=(-30, 30),
-)
-@defh :BestFirstNoPrune :BestFirstFull (β_prune=0., θ_prune=-Inf)
-
-@defh :DepthFirst :Random (β_depth=(0, 3), ε = (1e-3, 1))
-@defh :DepthFirstFull :DepthFirst (
-    β_satisfice=(0, 3), θ_term=(-90, 90),
-    β_best_next=(0, 3),
-    β_depth_limit=(0, 3),
-    β_prune=(0, 3), θ_prune=(-30, 30),
-)
-
-@defh :BreadthFirst :Random (β_breadth=(-3, 3), ε = (1e-3, 1))
-@defh :BreadthFirstFull :BreadthFirst (
-    β_satisfice=(0, 3), θ_term=(-90, 90),
-    β_best_next=(0, 3),
-    β_depth_limit=(0, 3),
-    β_prune=(0, 3), θ_prune=(-30, 30),
-)
 
