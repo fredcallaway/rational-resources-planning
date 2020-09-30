@@ -25,7 +25,17 @@ pdf['wage'] = wage
 np.mean(pdf.wage < pdf.set_index('worker_id').loc['5f4912fc3c25512e73761c48'].wage)
 
 # %% ==================== Main figures  ====================
-# @figure()
+
+@figure()
+def exp1_main():
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8), gridspec_kw={'width_ratios': [1,2]})
+    plot_pareto(np.array(axes.flat[0]), models=['Random', 'MetaGreedy', 'Optimal', 'BestFirst'])
+    plot_average_predictive_accuracy(axes.flat[1])
+    cost_best_first(axes.flat[2])
+    # shit...
+
+
+# %% --------
 def exp2_make_base():
     label_offset = -0.4
     fig, axes = plt.subplots(4, 3, figsize=(12, (4+3+3+3)), constrained_layout=True,

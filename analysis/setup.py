@@ -9,16 +9,18 @@ print('Setting up experiment', EXPERIMENT)
 VERSION = f'exp{EXPERIMENT}'
 
 VARIANCES = ['decreasing', 'constant', 'increasing'] if EXPERIMENT in (2,3) else ['constant']
-MODELS = ['Random', 'MetaGreedy', 'OptimalPlus', 'BestFirst']
-if EXPERIMENT == 1:
-    MODELS.extend(['BestFirstNoBestNext', "BestFirstNoPrune"])
-else:
-    MODELS.extend(['BreadthFirst', 'DepthFirst'])
-    # MODELS.extend(['BestFirstNoPrune', 'DepthFirstNoPrune', 'BreadthFirstNoPrune'])
-if EXPERIMENT >= 3:
-    MODELS.extend([m + 'Expand' for m in MODELS])
 
-MODELS = 'Random MetaGreedy OptimalPlus BestFirst BestFirstNoPrune BreadthFirst BreadthFirstNoPrune DepthFirst DepthFirstNoPrune'.split()
+MODELS = ['Random', 'MetaGreedy', 'OptimalPlus']
+if EXPERIMENT == 1:
+    MODELS.extend("""
+        Breadth_Full Depth_Full Best_Full_NoPrune 
+        Best_Full Best_BestNext Best_Satisfice Best_DepthLimit Best_Prune Best
+    """.split())
+# else:
+#     MODELS.extend(['BreadthFirst', 'DepthFirst'])
+#     # MODELS.extend(['BestFirstNoPrune', 'DepthFirstNoPrune', 'BreadthFirstNoPrune'])
+# if EXPERIMENT >= 3:
+#     MODELS.extend([m + 'Expand' for m in MODELS])
 
 # %% ==================== LOAD DATA ====================
 pdf, tdf = load_data(VERSION)
@@ -105,64 +107,47 @@ figs.add_names({
     'best_next': 'Best - Next Best Path Value',
     'term_reward': 'Best Path Value',
     
-    # 'RandomSelection': 'Random',
-    'MetaGreedy': 'Meta-Greedy',
-    'BestFirst': 'Best-First',
     'OptimalPlus': 'Optimal',
-    'BreadthFirst': 'Breadth-First',
-    'DepthFirst': 'Depth-First',
-    # 'DepthFirst': 'Backward' if EXPERIMENT >= 3 else 'Depth-First',
+    'Metagreedy': 'MetaGreedy',
+    # 'Best': 'BestFirst',
+    # 'Breadth': 'BreadthFirst',
+    # 'Depth': 'DepthFirst',
 
-    'BestFirstNoBestNext': 'Best-First\nNo Best-Next',
-    'BestFirstNoPrune': 'Best-First\nNo Prune',
-    'BreadthFirstNoPrune': 'Breadth-First\nNo Prune',
-    'DepthFirstNoPrune': 'Depth-First\nNo Prune',
-
-    # 'MetaGreedyExpand': 'Meta-Greedy + Expansion',
-    # 'BestFirstExpand': 'Best-First + Expansion',
-    # 'OptimalPlusExpand': 'Optimal + Expansion',
-    # 'BreadthFirstExpand': 'Breadth-First + Expansion',
-    # 'DepthFirstExpand': 'Depth-First + Expansion',
-
-    'MetaGreedyExpand': 'Meta-Greedy',
-    'BestFirstExpand': 'Best-First',
-    'OptimalPlusExpand': 'Optimal',
-    'BreadthFirstExpand': 'Breadth-First',
-    'DepthFirstExpand': 'Depth-First',
+    'Best_Satisfice' : 'Best +Satisfice',
+    'Best_BestNext' : 'Best +BestNext',
+    'Best_DepthLimit' : 'Best +DepthLimit',
+    'Best_Prune' : 'Best +Prune',
+    'Best_Full': 'Best +All',
+    'Best_Full_NoPrune': 'Best +All -Prune',
+    'Breadth_Full': 'Breadth +All',
+    'Breadth_Full_NoPrune': 'Breadth +All -Prune',
+    'Depth_Full': 'Depth +All',
+    'Depth_Full_NoPrune': 'Depth +All -Prune',
 })
 
 figure = figs.figure; show = figs.show; figs.watch()
 
 lb, db, lg, dg, lr, dr, lo, do, lp, dp, *_ = sns.color_palette("Paired")
 # lb, db, lg, dg, lr, dr, lo, do, *_ = 
+
 palette = {
+    'BestFirst': dg,
     'Human': (0.1, 0.1, 0.1),
     'Random': (0.5, 0.5, 0.5),
     'MetaGreedy': dr,
     'OptimalPlus': db,
     'Optimal': db,
-    'BestFirst': dg,
-    'BreadthFirst': do,
-    'DepthFirst': dp,
-    
-    'BestFirstNoBestNext': lg,
-    'BestFirstNoPrune': lg,
-    'BreadthFirstNoPrune': lo,
-    'DepthFirstNoPrune': lp,
-
-    'RandomExpand': (0.7, 0.7, 0.7),
-    'MetaGreedyExpand': lr,
-    'OptimalPlusExpand': lb,
-    'BestFirstExpand': lg,
-    'BreadthFirstExpand': lo,
-    'DepthFirstExpand': lp,
-
-    # 'MetaGreedyExpand': dr,
-    # 'OptimalPlusExpand': db,
-    # 'BestFirstExpand': dg,
-    # 'BreadthFirstExpand': do,
-    # 'DepthFirstExpand': dp,
-    # 'RandomExpand': (.7, .7, .7)
+    'Best': lg,
+    'Best_Satisfice': lg,
+    'Best_BestNext': lg,
+    'Best_DepthLimit': lg,
+    'Best_Prune': lg,
+    'Best_Full': lg,
+    'Best_Full_NoPrune': dg,
+    'Breadth_Full': do,
+    'Breadth_Full_NoPrune': lo,
+    'Depth_Full': dp,
+    'Depth_Full_NoPrune': lp,
 }
 plt.rc('legend', fontsize=10, handlelength=2)
 

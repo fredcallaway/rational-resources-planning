@@ -22,13 +22,13 @@ def plot_model_pareto(variance, model):
         label=model, marker='.', color=palette[model])
 
 @figure()
-def plot_pareto(axes=None, legend=True, fit_reg=False):
+def plot_pareto(axes=None, legend=True, fit_reg=False, models=PARETO_MODELS):
     if axes is None:
         _, axes = setup_variance_plot()
     X = tdf.reset_index().set_index('variance')
     for i, v in enumerate(VARIANCES):
         plt.sca(axes.flat[i])
-        for model in PARETO_MODELS:
+        for model in models:
             if model == 'OptimalPlus':
                 model = 'Optimal'
             plot_model_pareto(v, model)

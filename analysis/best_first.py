@@ -10,8 +10,11 @@ write_tex("best_first", mean_std(pdf.best_first, fmt='pct'))
 # %% ==================== plot ====================
 
 @figure()
-def cost_best_first():
-    plt.figure(figsize=(4,4))
+def cost_best_first(ax=None):
+    if ax is None:
+        plt.figure(figsize=(4,4))
+    else:
+        plt.sca(ax)
     plt.axhline([1], label='BestFirst', color=palette['BestFirst'], lw=3)
     bfo.plot(label="Optimal", color=palette["Optimal"], lw=3)
     # sns.regplot('cost', 'best_first', lowess=True, data=pdf, color=palette["Human"])

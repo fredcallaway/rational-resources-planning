@@ -7,11 +7,13 @@ logp['variance'] = pdf.variance
 logp = logp.loc[keep]
 assert set(MODELS) < set(logp.columns)
 
-# %% --------
+# %% -------
 
 def plot_model_performance(L, label, axes=None):
+    if EXPERIMENT == 1:
+        return plot_model_performance_horizontal(L, label, axes)
     if EXPERIMENT >= 3:
-        return plot_model_performance_expansion(L, label,  axes)
+        return plot_model_performance_expansion(L, label, axes)
     if axes is None:
         fig, axes = setup_variance_plot()
     for i, v in enumerate(VARIANCES):
@@ -23,6 +25,18 @@ def plot_model_performance(L, label, axes=None):
         if i != 0:
             plt.yticks(())
     figs.reformat_ticks(yaxis=True, ax=axes.flat[0])
+
+
+def plot_model_performance_horizontal(L, label, ax=None):
+    if ax is None:
+        plt.figure(figsize=(8,4))
+    else:
+        plt.sca(ax)
+    pal = [palette[m] for m in MODELS]
+    L.loc['constant'].loc[MODELS].plot.bar(color=pal, ax=ax)
+    plt.xticks(rotation=45, ha="right")
+    figs.reformat_ticks()
+    plt.ylabel(label)
 
 def plot_model_performance_expansion(L, label, axes=None):
     if axes is None:
@@ -47,6 +61,7 @@ def plot_model_performance_expansion(L, label, axes=None):
             figs.reformat_ticks(yaxis=True)
         else:
             plt.yticks(())
+
 
 @figure()
 def plot_average_predictive_accuracy(axes=None):
