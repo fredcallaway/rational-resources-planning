@@ -39,3 +39,9 @@ fighist/
 .figs/
 model/test_fitting.jl
 model/old_analysis.jl
+model/test_pruning.jl
+analysis/exp2a.ai
+analysis/exp2a.png
+analysis/imgs/constant-cropped.png
+analysis/imgs/decreasing-cropped.png
+analysis/imgs/increasing-cropped.png

@@ -1,27 +1,4 @@
-
-bfs_cols = ['BestFirstBestNext', 'BestFirstDepth', 'BestFirstSatisficing', 'BestFirstRandomStopping']
-normal_cols = ['OptimalPlus', 'Human']
-
-# def load_cf(k, group=True):
-#     # VERSION = 'exp1' if k in bfs_cols or k in normal_cols else 'exp1-bfs'
-#     mod = '' if k == 'Human' else k + '-'
-#     if group and mod:
-#         mod = 'group-' + mod
-#     cf = pd.DataFrame(get_result(VERSION, f'{mod}click_features.json'))
-#     cf['potential_gain'] = (cf.max_competing - cf.term_reward).clip(0)
-#     cf['competing'] = cf.term_reward - cf.best_next
-#     if k == 'Human':
-#         cf = cf.set_index('wid').loc[keep]
-#     for k, v in cf.items():
-#         if v.dtype == float:
-#             cf[k] = v.astype(int)
-#     return cf.rename(columns={'expanding': 'expand'})
-
-all_cfs = {k: load_cf(k) for k in [*bfs_cols, *normal_cols]}
-# cfs = {k: load_cf(k) for k in cols}
-
 # %% ==================== heatmaps ====================
-cfs = {k: all_cfs[k] for k in normal_cols}
 
 def robust_mean(x):
     return np.mean(x)
@@ -35,20 +12,36 @@ def plot_term(df, x, y, **kws):
 
     # df = df.query('term_reward >= -10')
     max_clicks = 16
-    df = df.query('n_revealed < @max_clicks')
+    df = df.query('n_revealed < @max_clicks')    
     X = df.groupby([y, x]).is_term.apply(robust_mean).unstack()
-    g = sns.heatmap(X, cmap=cmap, vmin=0, vmax=1, linewidths=1, **kws)
-    g.invert_yaxis()
+
+    ax = sns.heatmap(X, cmap=cmap, vmin=0, vmax=1, linewidths=1, **kws)
+
+    xlab = [int(float(t.get_text())) for t in ax.get_xticklabels()]
+    ax.set_xticks(ax.get_xticks()[::2])
+    ax.set_xticklabels(xlab[::2])
+    plt.xticks(rotation=0)
+    ylab = [int(float(t.get_text())) for t in ax.get_yticklabels()]
+    ax.set_yticks(ax.get_yticks()[1::2])
+    ax.set_yticklabels(ylab[1::2])
+
+    ax.invert_yaxis()
     figs.reformat_labels()
-    return g
+    return ax
 
 
 def termination(x, y, height=3):
-    nc = len(cfs)
+    agents = ['Human', 'OptimalPlus']
+    nc = len(agents)
     fig, axes = plt.subplots(1, nc+1, figsize=(4*nc, height),
                              gridspec_kw={'width_ratios': [*([15] * nc), 1]})
 
-    for i, (name, cf) in enumerate(cfs.items()):
+    cfs = {k: load_cf(k) for k in agents}
+    multi_cf = pd.concat([load_cf(k) for k in agents])
+    for k in (x, y):
+        multi_cf[k] = pd.Categorical(multi_cf[k])
+
+    for i, (name, cf) in enumerate(multi_cf.groupby('agent')):
         plt.sca(axes[i])
         if i == 0:
             plot_term(cf, x, y, cbar_ax=axes[-1])
@@ -63,7 +56,8 @@ def termination(x, y, height=3):
 def plot_termination():
     termination('best_next', 'term_reward', height=4)
 
-
+# %% --------
+ax = plot_term(cf, 'best_next', 'term_reward')
 
 # %% ==================== correlation ====================
 X = all_cfs['Human'][['n_revealed', 'term_reward', 'potential_gain']]

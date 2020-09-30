@@ -163,6 +163,44 @@ for (nam, sims) in pairs(model_sims)
     sims |> flatten |> depth_curve |> JSON.json |> writev("$results_path/$nam-depth_curve.json")
 end
 
+# %% ==================== relative stopping rule ====================
+vals = -60:5:60
+bins = Dict(zip(vals, 1:100))
+
+function termination_matrices(trials)
+    X = zeros(length(bins), length(bins))
+    N = zeros(length(bins), length(bins))
+    for d in get_data(trials)
+        all(observed(d.b)) && continue  # ignore forced terminations
+        i = bins[term_reward(d.t.m, d.b)]
+        j = bins[best_vs_next(d.t.m, d.b)]
+        X[i, j] += (d.c == TERM)
+        N[i, j] += 1
+    end
+    X, N
+end
+
+@time tmats = map(collect(model_sims)) do (model, sim)
+    name(model) => termination_matrices(flatten(sim))
+end
+
+
+# TODO this doesn't exclude properly!
+# Same problem with the simulations!
+h = "Human" => termination_matrices(flatten(values(all_trials)))
+
+write("$results_path/termination.json",
+      json(Dict(tmats..., h, "etrs"=>collect(etrs))))
+
+# function evmv(d::Datum)
+#     m = d.t.m; b = d.b;
+#     pv = path_values(m, b)
+#     mpv = [max_path_value(m, b, p) for p in paths(m)]
+#     best = argmax(pv)
+#     mpv[best] = -Inf
+#     pv[best], maximum(mpv)
+# end
+
 # # %% ==================== optimal visualization ====================
 
 # function viz_sim(t::Trial)

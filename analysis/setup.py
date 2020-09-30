@@ -18,7 +18,7 @@ else:
 if EXPERIMENT >= 3:
     MODELS.extend([m + 'Expand' for m in MODELS])
 
-MODELS
+MODELS = 'Random MetaGreedy OptimalPlus BestFirst BestFirstNoPrune BreadthFirst BreadthFirstNoPrune DepthFirst DepthFirstNoPrune'.split()
 
 # %% ==================== LOAD DATA ====================
 pdf, tdf = load_data(VERSION)
@@ -66,6 +66,7 @@ def load_cf(k, group=False):
 
     cf = cf.set_index('wid').loc[keep]
     cf['variance'] = pdf.variance
+    cf['agent'] = k
     # for k, v in cf.items():
     #     if v.dtype == float:
     #         cf[k] = v.astype(int)

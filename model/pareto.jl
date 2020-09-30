@@ -11,6 +11,16 @@ end
 @everywhere N_SIM = 100000
 @everywhere COSTS = [0:0.05:4; 100]
 
+println("Running pareto for ", ARGS[1])
+include("conf.jl")
+
+mdps = let
+    all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
+    flat_trials = flatten(values(all_trials));
+    unique(getfield.(flat_trials, :m))
+end
+@everywhere mdps = $mdps
+
 @everywhere function mean_reward_clicks(pol; N=N_SIM)
     @assert pol.m.cost == 0
     reward, clicks = N \ mapreduce(+, 1:N) do i
@@ -89,13 +99,15 @@ function write_optimal_pareto(;force=false)
 end
 
 function write_heuristic_pareto(;force=false)
-    Hs = [:BestFirst, :BreadthFirst, :DepthFirst, :BestPlusDepth, :BestPlusBreadth
-          # :BestFirstNoBestNext, :BreadthFirstNoBestNext, :DepthFirstNoBestNext
-    ]
-    models = [RandomSelection; MetaGreedy; [Heuristic{H} for H in Hs]]
-    mdps = map(readdir("mdps/base")) do i
-        deserialize("mdps/base/$i")
-    end
+    # Hs = [:BestFirst, :BreadthFirst, :DepthFirst, :BestPlusDepth, :BestPlusBreadth
+    #       # :BestFirstNoBestNext, :BreadthFirstNoBestNext, :DepthFirstNoBestNext
+    # ]
+    # models = [RandomSelection; MetaGreedy; [Heuristic{H} for H in Hs]]
+
+    # mdps = map(readdir("mdps/base")) do i
+    #     deserialize("mdps/base/$i")
+    # end
+    models = eval(QUOTE_MODELS)
 
     for M in models, m in mdps
         f = "mdps/pareto/$(id(m))-$(name(M)).csv"
