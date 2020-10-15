@@ -183,7 +183,9 @@ PARAMS = Dict(
     "BestNext" => (β_best_next=(0, 3), θ_term=(-90, 90)),
     "DepthLimit" => (β_depth_limit=(0, 3), θ_term=(-90, 90)),
     "Prune" => (β_prune=(0, 3), θ_prune=(-30, 30)),
+    "Expand" => (β_expand=(0, 50),),
 )
+
 
 function default_space(::Type{Heuristic{M}}) where M
     x = string(M)
@@ -204,3 +206,5 @@ function default_space(::Type{Heuristic{M}}) where M
     change_space(Heuristic{:Random}; ε=(1e-3, 1), space...)
 end
 
+default_space(::Type{Heuristic{:Exhaustive}}) = 
+    change_space(Heuristic{:Random}, θ_term=-1e10)

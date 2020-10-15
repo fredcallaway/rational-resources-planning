@@ -13,6 +13,10 @@ include("conf.jl")
 import Random
 Random.seed!(123)
 
+mkpath("$base_path/fits/full")
+mkpath("$base_path/fits/cv")
+mkpath("$base_path/fits/group")
+
 # %% ==================== LOAD DATA ====================
 all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
 flat_trials = flatten(values(all_trials));
@@ -44,7 +48,15 @@ MODELS = eval(QUOTE_MODELS)
 @async begin
     @everywhere flat_trials = $flat_trials
     @time group_fits = pmap(MODELS) do M
-        fit(M, flat_trials; method=OPT_METHOD)
+        mname = name(M)
+        file = "$base_path/fits/group/$mname"
+        if isfile(file)
+            println("$file already exists, skipping.")
+            return deserialize(file)
+        end
+        result = fit(M, flat_trials; method=OPT_METHOD)
+        serialize(file, result)
+        return result
     end
     serialize("$base_path/group_fits", group_fits)
     println("Wrote $base_path/group_fits")
@@ -52,17 +64,20 @@ end
 
 # %% ==================== FIT MODELS TO INDIVIDUALS ====================
 
-mkpath("$base_path/fits/full")
-mkpath("$base_path/fits/cv")
 
 full_fits = let
     full_jobs = Iterators.product(values(all_trials), MODELS);
     @time full_fits = pmap(full_jobs) do (trials, M)
+        wid = trials[1].wid; mname = name(M)
         try
+            file = "$base_path/fits/full/$mname-$wid"
+            if isfile(file)
+                println("$file already exists, skipping.")
+                return deserialize(file)
+            end
             model, nll = fit(M, trials; method=OPT_METHOD)
-            wid = trials[1].wid; mname = name(model)
             result = (model=model, nll=nll, wid=wid)
-            serialize("$base_path/fits/full/$mname-$wid", result)
+            serialize(file, result)
             return result
         catch err
             @error "Error fitting $mname to $wid" err
@@ -121,14 +136,22 @@ cv_jobs = Iterators.product(values(all_trials), MODELS, folds);
 
 cv_fits = let
     @time cv_fits = pmap(cv_jobs) do (trials, M, fold)
+        wid = trials[1].wid; mname = name(M); fold_i = fold.test[1]
         try
+            file = "$base_path/fits/cv/$mname-$wid-$fold_i"
+            if isfile(file)
+                # println("$file already exists, skipping.")
+                result = deserialize(file)
+                @assert result.fold == fold
+                return result
+            end
             model, train_nll = fit(M, trials[fold.train]; method=OPT_METHOD)
-            result = (model=model, train_nll=train_nll, test_nll=-logp(model, trials[fold.test]))
-            wid = trials[1].wid; mname = name(model); fold_i = fold.train[1]
-            serialize("$base_path/fits/cv/$mname-$wid-$fold_i", result)
+            result = (model=model, train_nll=train_nll, test_nll=-logp(model, trials[fold.test]), fold=fold)
+            serialize(file, result)
+            return result
         catch e
             println("Error fitting $mname to $wid on fold $fold_i:  $e")
-            rethrow(e)
+            return missing
             # (model=model, nll=NaN)
         end
     end
@@ -206,35 +229,4 @@ map(all_data) do d
     predictions = Dict(name(M) => action_dist(get_model(M, d.t), d) for M in MODELS))
 end |> JSON.json |> write("$results_path/predictions.json")
 
-# %% ==================== GENERATE VISUALIZATION JSON ====================
-
-function demo_trial(t)
-    (
-        stateRewards = t.bs[end],
-        demo = (
-            clicks = t.cs[1:end-1] .- 1,
-            path = t.path .- 1,
-            predictions = Dict(name(M) => get_preds(M, t) for M in MODELS),
-            parameters = Dict(name(M) => get_params(M, t) for M in MODELS)
-        )
-    )
-end
-
-function sorter(xs)
-    sort(xs, by=x->(x.variance, -x.score))
-end
-
-mkpath("$results_path/viz")
-map(collect(all_trials)) do (wid, trials)
-    (
-        wid = wid,
-        variance = variance_structure(trials[1].m),
-        score = mean(t.score for t in trials),
-        clicks = mean(length(t.cs)-1 for t in trials),
-    )
-end |> sorter |> JSON.json |> write("$results_path/viz/table.json")
-
-foreach(collect(all_trials)) do (wid, trials)
-    demo_trial.(trials) |> JSON.json |> write("$results_path/viz/$wid.json")
-end
 

@@ -45,10 +45,11 @@ function do_simulate(flag=:null)
             fit.model, wid, mdps
         end
     end
-    # pmap(COSTS) do cost
-    #     model = Optimal(cost, 1e5, 0.)
-    #     run_simulate(model, "cost$cost")
-    # end
+    mdps = unique(t.m for t in flatten(values(all_trials)))
+    pmap(Iterators.product(mdps, COSTS)) do (m, cost)
+        model = Optimal(cost, 1e5, 0.)
+        run_simulation(model, "cost$cost-$(id(m))", [m]; n_repeat=10000)
+    end
     if flag == :optimal
         filter!(jobs) do (model, )
             model isa OptimalPlus

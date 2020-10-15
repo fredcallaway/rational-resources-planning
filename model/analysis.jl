@@ -64,8 +64,8 @@ end
 
 # %% ==================== click features ====================
 
-_bf = Heuristic{:BestFirst,Float64}(10., 0.,0., 0., 0., 0., -1e10, 0.)
-function is_bestfirst(d::Datum)
+@everywhere _bf = Heuristic{:Best,Float64}(10., 0.,0., 0., 0., 0., -1e10, 0, -Inf, 0.)
+@everywhere function is_bestfirst(d::Datum)
     (d.c != TERM) && action_dist(_bf, d)[d.c+1] > 1e-2
 end
 
@@ -163,43 +163,6 @@ for (nam, sims) in pairs(model_sims)
     sims |> flatten |> depth_curve |> JSON.json |> writev("$results_path/$nam-depth_curve.json")
 end
 
-# %% ==================== relative stopping rule ====================
-vals = -60:5:60
-bins = Dict(zip(vals, 1:100))
-
-function termination_matrices(trials)
-    X = zeros(length(bins), length(bins))
-    N = zeros(length(bins), length(bins))
-    for d in get_data(trials)
-        all(observed(d.b)) && continue  # ignore forced terminations
-        i = bins[term_reward(d.t.m, d.b)]
-        j = bins[best_vs_next(d.t.m, d.b)]
-        X[i, j] += (d.c == TERM)
-        N[i, j] += 1
-    end
-    X, N
-end
-
-@time tmats = map(collect(model_sims)) do (model, sim)
-    name(model) => termination_matrices(flatten(sim))
-end
-
-
-# TODO this doesn't exclude properly!
-# Same problem with the simulations!
-h = "Human" => termination_matrices(flatten(values(all_trials)))
-
-write("$results_path/termination.json",
-      json(Dict(tmats..., h, "etrs"=>collect(etrs))))
-
-# function evmv(d::Datum)
-#     m = d.t.m; b = d.b;
-#     pv = path_values(m, b)
-#     mpv = [max_path_value(m, b, p) for p in paths(m)]
-#     best = argmax(pv)
-#     mpv[best] = -Inf
-#     pv[best], maximum(mpv)
-# end
 
 # # %% ==================== optimal visualization ====================
 
@@ -222,23 +185,40 @@ write("$results_path/termination.json",
 # end |> json |> write("$results_path/viz/optimal-table.json")
 
 # # %% ==================== best first ====================
+using Glob
+@everywhere function best_first_rate(trials)
+    map(get_data(trials)) do d
+        d.c == TERM && return missing
+        is_bestfirst(d)
+    end |> skipmissing |> (x -> isempty(x) ? NaN : mean(x))
+end
 
-# _bf = Heuristic{:BestFirst,Float64}(10., 0., 0., 0., 0., -1e10, 0.)
-# is_bestfirst(d::Datum) = action_dist(_bf, d)[d.c+1] > 1e-2
+@everywhere function compute_bfr(f)
+    cost, mid = match(r"cost(.*)-(.*)", f).captures
+    cost = parse(Float64, cost)
+    trials = deserialize(f);
+    (
+        mdp = mid,
+        cost = cost,
+        n_click = mean(length(t.cs) for t in trials) - 1,
+        best_first = best_first_rate(trials),
+    )
+end
 
-# function best_first_rate(trials)
-#     map(get_data(trials)) do d
-#         d.c == TERM && return missing
-#         is_bestfirst(d)
-#     end |> skipmissing |> (x -> isempty(x) ? NaN : mean(x))
-# end
+using ProgressMeter
 
-# opt_bfr = map(best_first_rate, opt_sims)
-# (
-#     optimal = Dict(zip(COSTS, opt_bfr)),
-#     human = valmap(best_first_rate, all_trials)
-# ) |> json |> write("$results_path/bestfirst.json")
+res = map(glob("$base_path/sims/Optimal-cost*")) do f
+    cost, mid = match(r"cost(.*)-(.*)", f).captures
+    cost = parse(Float64, cost)
+    trials = deserialize(f);
+    (
+        mdp = mid,
+        cost = cost,
+        n_click = mean(length(t.cs) for t in trials) - 1,
+        best_first = best_first_rate(trials),
+    )
+end
+res |> json |> write("$results_path/bestfirst.json")
 
-# is_bestfirst(all_data)
 
 

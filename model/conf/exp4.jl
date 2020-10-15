@@ -7,14 +7,16 @@ QUOTE_MODELS = quote
         OptimalPlus{:Default},
         MetaGreedy{:Default},
         Heuristic{:Random},
-        Heuristic{:BestFirst},
-        Heuristic{:DepthFirst},
-        Heuristic{:BreadthFirst},
+        Heuristic{:Best_Satisfice_BestNext},
+        Heuristic{:Breadth_Satisfice_BestNext},
+        Heuristic{:Depth_Satisfice_BestNext},
+
         OptimalPlus{:Expand},
         MetaGreedy{:Expand},
-        Heuristic{:RandomExpand},
-        Heuristic{:BestFirstExpand},
-        Heuristic{:DepthFirstExpand},
-        Heuristic{:BreadthFirstExpand},
+        Heuristic{:Expand},
+
+        Heuristic{:Best_Satisfice_BestNext_Expand},
+        Heuristic{:Breadth_Satisfice_BestNext_Expand},
+        Heuristic{:Depth_Satisfice_BestNext_Expand},
     ] 
 end

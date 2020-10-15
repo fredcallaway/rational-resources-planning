@@ -94,10 +94,16 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_res
     lower, upper = bounds(space)
     space_size = upper .- lower
     @assert all(space_size .> 0)
-    # Initialize in the center of the space. This doesn't seem to help
+
+    # Initialize in the center of the space? This doesn't seem to help
     # q = space_size ./ 4; lower += q; upper -= q
 
     L = Likelihood(trials)
+    
+    if isempty(lower)  # no free parameters
+        model = create_model(M, lower, (), space)
+        return model, -logp(L, model)
+    end
 
     n_call = 0
     function make_loss(z)
