@@ -1,19 +1,34 @@
 # %% ==================== MODEL COMPARISON ====================
 preds = pd.DataFrame(get_result(VERSION, 'predictions.json')).set_index('wid')
 res = preds.apply(lambda d: {k: p[d.c] for k, p in d.predictions.items()}, axis=1)
-logp = np.log(pd.DataFrame(list(res.values)))[MODELS]
+logp = np.log(pd.DataFrame(list(res.values)))
 logp.set_index(preds.index, inplace=True)
 logp['variance'] = pdf.variance
 logp = logp.loc[keep]
 assert set(MODELS) < set(logp.columns)
+# %% --------
+L = np.exp(logp.groupby(['variance', 'wid']).mean()).groupby('variance').mean()
+X = L.loc[:, L.columns.str.startswith('Best')].stack()
+for v, x in X.groupby('variance'):
+    print(x.idxmax())
+
+
+# %% --------
+from scipy.stats import ttest_rel, wilcoxon
+x = np.exp(logp.groupby('wid').mean())
+ttest_rel(x.OptimalPlus, x.Best_Full)
+
+sns.distplot(x.OptimalPlus - x.Best_Satisfice)
+show()
 
 # %% -------
 
 def plot_model_performance(L, label, axes=None):
     if EXPERIMENT == 1:
-        return plot_model_performance_horizontal(L, label, axes)
+        return plot_model_performance_vertical(L, label, axes)
     if EXPERIMENT >= 3:
         return plot_model_performance_expansion(L, label, axes)
+    L = L.groupby('variance').mean()
     if axes is None:
         fig, axes = setup_variance_plot()
     for i, v in enumerate(VARIANCES):
@@ -27,18 +42,26 @@ def plot_model_performance(L, label, axes=None):
     figs.reformat_ticks(yaxis=True, ax=axes.flat[0])
 
 
-def plot_model_performance_horizontal(L, label, ax=None):
+def plot_model_performance_vertical(L, label, ax=None):
     if ax is None:
         plt.figure(figsize=(8,4))
+        ax = plt.gca()
     else:
         plt.sca(ax)
     pal = [palette[m] for m in MODELS]
-    L.loc['constant'].loc[MODELS].plot.bar(color=pal, ax=ax)
+
+    x = L.groupby('variance').mean().loc['constant'].loc[MODELS]
+    x.plot.bar(color=pal)
+    stars = [i for i, k in enumerate(x.index) 
+        if k != 'OptimalPlus' and wilcoxon(L.OptimalPlus, L[k]).pvalue < .05]
+    plt.scatter(stars, x.iloc[stars] + 0.03, marker='*', c='k')
     plt.xticks(rotation=45, ha="right")
+
     figs.reformat_ticks()
     plt.ylabel(label)
 
 def plot_model_performance_expansion(L, label, axes=None):
+    L = L.groupby('variance').mean()
     if axes is None:
         if EXPERIMENT == 4:
             fig, axes = plt.subplots(1, 1, figsize=(6,4), squeeze=False)
@@ -66,10 +89,15 @@ def plot_model_performance_expansion(L, label, axes=None):
 @figure()
 def plot_average_predictive_accuracy(axes=None):
     plot_model_performance(
-        np.exp(logp.groupby(['variance', 'wid']).mean()).groupby('variance').mean(),
+        np.exp(logp.groupby(['variance', 'wid']).mean()),
         'Predictive Accuracy',
         axes,
     )
+
+# %% --------
+X = np.exp(logp.groupby(['variance', 'wid']).mean())
+for model, acc in X.items():
+    write_tex(f'accuracy_{model}', mean_std(acc, digits=3))
 
 # %% --------
 

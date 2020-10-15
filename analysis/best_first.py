@@ -1,73 +1,61 @@
-best_first = get_result(VERSION, 'bestfirst.json')
+bfo = pd.DataFrame(get_result(VERSION, 'bestfirst.json'))
+bfo = bfo.sort_values('n_click')
+# bfo = pd.Series(best_first['optimal'])
+# bfo.index = bfo.index.astype(float)
+# bfo = bfo.sort_index().iloc[:-1]  # drop 100
+# pdf['best_first'] = pd.Series(best_first['human'])
+write_tex("best_first", mean_std(pdf.best_first*100, fmt='pct'))
 
-bfo = pd.Series(best_first['optimal'])
-bfo.index = bfo.index.astype(float)
-bfo = bfo.sort_index().iloc[:-1]  # drop 100
-pdf['best_first'] = pd.Series(best_first['human'])
-
-write_tex("best_first", mean_std(pdf.best_first, fmt='pct'))
+pdf['best_first'] = load_cf('Human').query('~is_term').groupby('wid').is_best.mean()
 
 # %% ==================== plot ====================
 
 @figure()
-def cost_best_first(ax=None):
+def plot_best_first():    
+    plt.figure(figsize=(4,4))
+    pdf.best_first.plot.hist(bins=np.linspace(0,1,11), color=palette['Human'])
+    plt.xlabel('Proportion of Clicks on Best Path')
+    plt.ylabel('Number of Participants')
+
+# %% --------
+
+show()
+
+
+# %% --------
+
+@figure()
+def best_first_by_clicks(ax=None):
     if ax is None:
         plt.figure(figsize=(4,4))
     else:
         plt.sca(ax)
     plt.axhline([1], label='BestFirst', color=palette['BestFirst'], lw=3)
-    bfo.plot(label="Optimal", color=palette["Optimal"], lw=3)
+    # bfo.plot(label="Optimal", color=palette["Optimal"], lw=3)
+    plt.plot(bfo.n_click, bfo.best_first, label="Optimal", color=palette["Optimal"], lw=3)
     # sns.regplot('cost', 'best_first', lowess=True, data=pdf, color=palette["Human"])
-    plt.scatter('cost', 'best_first', data=pdf, color=palette["Human"], label='Human')
+    plt.scatter('n_click', 'best_first', data=pdf, color=palette["Human"], label='Human', s=10)
     plt.ylabel('Proportion of Clicks on Best Path')
-    plt.xlabel('Click Cost')
-    plt.xlim(-0.05, 3.0)
-    plt.legend()
-
-# %% ==================== alt ====================
-
-cf = load_cf('Human')
-pdf['best_first'] = cf.is_best.groupby('wid').mean()
-plt.scatter(pdf.cost, pdf.best_first)
-
-cf = load_cf('OptimalPlusPure')
-pdf['opt_best_first'] = cf.is_best.groupby('wid').mean()
-plt.scatter(pdf.cost, pdf.opt_best_first)
-plt.ylim(0, 1.)
-show()
-
-# %% --------
-cf = load_cf('Human')
-pdf['best_first'] = cf.is_best.groupby('wid').mean()
-plt.scatter(pdf.cost, pdf.best_first)
-
-cf = load_cf('OptimalPlus')
-pdf['opt_best_first'] = cf.is_best.groupby('wid').mean()
-plt.scatter(pdf.cost, pdf.opt_best_first)
-plt.ylim(0, 1.)
-show()
+    plt.xlabel('Number of Clicks per Trial')
+    # plt.xlim(-0.05, 3.0)
+    plt.legend(loc='best')
 
 
 # %% ==================== stats ====================
+from statsmodels.formula.api import ols
+model = ols('best_first ~ n_click', data=pdf).fit()
+model.params
+
+write_tex('best_first_click', fr'$B={model.params.n_click:.4f},\ {pval(model.pvalues.n_click)}$')
 
 
 # %% --------
-"""
-- perecent best first (human/optimal)
-- errors broken down by termination
-    - terminate early vs late?
-- action error rate
-- interaction for adaptive satisficing
-"""
-
-# %% --------
-rdf = pdf[['cost', 'best_first']]
+rdf = pdf[['n_click', 'best_first']]
 %load_ext rpy2.ipython
 
 # %% --------
-%%R -i rdf
-summary(lm(best_first ~ cost, data=rdf))
-
-
-pdf.best_first
+%%R -i rdf -oout
+out = summary(lm(best_first ~ n_click, data=rdf))
 # %% --------
+out = %R -i rdf summary(lm(best_first ~ n_click, data=rdf))
+

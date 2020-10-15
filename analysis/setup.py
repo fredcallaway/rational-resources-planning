@@ -10,12 +10,30 @@ VERSION = f'exp{EXPERIMENT}'
 
 VARIANCES = ['decreasing', 'constant', 'increasing'] if EXPERIMENT in (2,3) else ['constant']
 
-MODELS = ['Random', 'MetaGreedy', 'OptimalPlus']
+# MODELS = ['Random', 'MetaGreedy', 'OptimalPlus']
 if EXPERIMENT == 1:
-    MODELS.extend("""
-        Breadth_Full Depth_Full Best_Full_NoPrune 
+    MODELS = ("""
+        Random MetaGreedy OptimalPlus
+        Breadth_Full_NoDepthLimit Depth_Full_NoDepthLimit Best_Satisfice_BestNext
         Best_Full Best_BestNext Best_Satisfice Best_DepthLimit Best_Prune Best
     """.split())
+
+if EXPERIMENT == 2:
+    MODELS = ("""
+        Random MetaGreedy OptimalPlus
+        Breadth_Full_NoDepthLimit Depth_Full_NoDepthLimit Best_Satisfice_BestNext 
+    """.split())
+
+if EXPERIMENT >= 3:
+    MODELS = ("""
+        Random MetaGreedy OptimalPlus
+        Best_Satisfice_BestNext Breadth_Satisfice_BestNext Depth_Satisfice_BestNext 
+        Expand MetaGreedyExpand OptimalPlusExpand
+        Best_Satisfice_BestNext_Expand Breadth_Satisfice_BestNext_Expand Depth_Satisfice_BestNext_Expand 
+    """.split())
+
+
+
 # else:
 #     MODELS.extend(['BreadthFirst', 'DepthFirst'])
 #     # MODELS.extend(['BestFirstNoPrune', 'DepthFirstNoPrune', 'BreadthFirstNoPrune'])
@@ -83,7 +101,6 @@ def load_depth_curve(k):
     d['variance'] = pdf.variance
     d['agent'] = k
     return d.loc[keep]
-
 # %% ==================== ADD COLUMNS ====================
 
 tdf['i'] = list(tdf.trial_index - tdf.trial_index.groupby('wid').min() + 1)
@@ -92,7 +109,8 @@ tf = pd.DataFrame(get_result(VERSION, 'trial_features.json'))
 n_click = tdf.pop('n_click')  # this is already in tf, we check that it's the same below
 assert set(pdf.index).issubset(set(tf.wid))
 tdf = tdf.join(tf.set_index(['wid', 'i']), on=['wid', 'i'])
-assert all(tdf.n_click == n_click)
+if hasattr(tdf, 'n_click'):
+    assert all(tdf.n_click == n_click)
 
 pdf['total_time'] = (pdf.time_end - pdf.time_start) / 1000 / 60
 pdf['instruct_time'] = (pdf.time_instruct - pdf.time_start) / 60000
@@ -108,11 +126,11 @@ figs.add_names({
     'term_reward': 'Best Path Value',
     
     'OptimalPlus': 'Optimal',
-    'Metagreedy': 'MetaGreedy',
+    'OptimalPlusPure': 'Optimal',
+    'MetaGreedy': 'MetaGreedy',
     # 'Best': 'BestFirst',
     # 'Breadth': 'BreadthFirst',
     # 'Depth': 'DepthFirst',
-
     'Best_Satisfice' : 'Best +Satisfice',
     'Best_BestNext' : 'Best +BestNext',
     'Best_DepthLimit' : 'Best +DepthLimit',
@@ -125,17 +143,32 @@ figs.add_names({
     'Depth_Full_NoPrune': 'Depth +All -Prune',
 })
 
+if EXPERIMENT > 1:
+    figs.add_names({
+        'Breadth_Full_NoDepthLimit': 'Breadth',
+        'Depth_Full_NoDepthLimit': 'Depth',
+        'Best_Satisfice_BestNext': 'Best',
+        'BreadthFirst': 'Breadth',
+        'DepthFirst': 'Depth',
+        'BestFirst': 'Best',
+        'Breadth_Satisfice_BestNext': 'Breadth',
+        'Depth_Satisfice_BestNext': 'Depth',
+
+    })
+
 figure = figs.figure; show = figs.show; figs.watch()
 
 lb, db, lg, dg, lr, dr, lo, do, lp, dp, *_ = sns.color_palette("Paired")
 # lb, db, lg, dg, lr, dr, lo, do, *_ = 
 
+# %% --------
 palette = {
     'BestFirst': dg,
     'Human': (0.1, 0.1, 0.1),
     'Random': (0.5, 0.5, 0.5),
     'MetaGreedy': dr,
     'OptimalPlus': db,
+    'OptimalPlusPure': db,
     'Optimal': db,
     'Best': lg,
     'Best_Satisfice': lg,
@@ -147,9 +180,29 @@ palette = {
     'Breadth_Full': do,
     'Breadth_Full_NoPrune': lo,
     'Depth_Full': dp,
+
     'Depth_Full_NoPrune': lp,
+    'Breadth_Full_NoDepthLimit': do,
+    'Depth_Full_NoDepthLimit': dp,
+    
+    'Best_Satisfice_BestNext': dg,
+    'Breadth_Satisfice_BestNext': do,
+    'Depth_Satisfice_BestNext': dp,
+
+    'OptimalPlusExpand': lb,
+    'MetaGreedyExpand': lr,
+    'Expand': (0.7, 0.7, 0.7),
+    'Best_Satisfice_BestNext_Expand': lg,
+    'Breadth_Satisfice_BestNext_Expand': lo,
+    'Depth_Satisfice_BestNext_Expand': lp,
+
 }
+for m in MODELS:
+    assert m in palette, m
+
+# %% --------
 plt.rc('legend', fontsize=10, handlelength=2)
+sns.set_style('ticks')
 
 write_tex = TeX(path=f'stats/{EXPERIMENT}').write
 

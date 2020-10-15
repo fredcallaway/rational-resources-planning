@@ -40,8 +40,21 @@ write_tex("jump", mean_std(edf.groupby('wid').jump.mean()*100, fmt='pct'))
 @figure()
 def expansion_value():
     sns.regplot('gain', 'jump', data=edf, logistic=True, x_bins=np.linspace(-0.75, 0.75, 5), color='black')
-    plt.xlabel('Q(¬Expand) - Q(Expand)')
-    plt.ylabel('P(¬Expand)')
+    plt.xlabel('Value of Violating\nForward Search')
+    plt.ylabel('Probability of Violating\nForward Search')
+
+# %% --------
+rdf = edf[['gain', 'jump']].reset_index().copy()
+edf.jump -= edf.mean()
+edf.jump /= edf.std()
+rdf.jump = rdf.jump.astype(int)
+
+%load_ext rpy2.ipython
+%R -i rdf
+%R library(lme4)
+%R library(lmerTest)
+%R m = glmer(jump ~ gain + (1|wid), family=binomial, data=rdf)
+%R print(summary(m));
 
 
 # %% ==================== histogram ====================

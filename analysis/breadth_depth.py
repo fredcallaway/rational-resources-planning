@@ -1,12 +1,12 @@
 
 # %% ==================== Second click ====================
 
-def breadth_depth_data(noclick='drop'):
+def breadth_depth_data(models=MODELS, noclick='drop'):
     dfs = []
     d = tdf.set_index('variance').copy()
     d['agent'] = 'Human'
     dfs.append(d)
-    for k in MODELS:
+    for k in models:
         d = model_trial_features(k)
         dfs.append(d)
     data = pd.concat(dfs, sort=False)
@@ -23,9 +23,9 @@ def breadth_depth_data(noclick='drop'):
     return data
 
 @figure()
-def plot_second_click(axes=None, models=['OptimalPlus', 'BestFirst', 'DepthFirst', 'BreadthFirst']):
+def plot_second_click(axes=None, models=['OptimalPlus', 'BestFirst', 'BreadthFirst', 'DepthFirst']):
     noclick = 'drop'
-    bdd = breadth_depth_data(noclick=noclick)
+    bdd = breadth_depth_data(models, noclick=noclick)
     if axes is None:
         fig, axes = setup_variance_plot(title=True)
     for i, v in enumerate(VARIANCES):
@@ -38,11 +38,12 @@ def plot_second_click(axes=None, models=['OptimalPlus', 'BestFirst', 'DepthFirst
         plt.ylim(-0.05, 1.05)
         if i == 0:
             if noclick == 'zero':
-                plt.ylabel('Probability of Second\nClick on the Same Path')
+                plt.ylabel('Probability of Second\nClick on Same Path')
             else:
-                plt.ylabel('Proportion of Second\nClicks on the Same Path')
+                plt.ylabel('Proportion of Second\nClicks on Same Path')
             plt.legend()
             figs.reformat_legend()
+            plt.yticks([0,1])
         else:
             plt.legend().remove()
             plt.ylabel('')
@@ -108,7 +109,7 @@ def first_click_depth(axes=None):
     if axes is None:
         fig, axes = setup_variance_plot(title=True)
 
-    agents = ['Human', 'OptimalPlusExpand', 'OptimalPlus', ]
+    agents = ['Human', 'OptimalPlus', 'OptimalPlusExpand', ]
     dd = pd.concat([load_depth_curve(h).query('click == 1')
         for h in agents]).set_index(['agent', 'variance']).depth
 
@@ -125,7 +126,21 @@ def first_click_depth(axes=None):
         ax.set_xlabel('First Clicked Depth')
         if i == 0:
             ax.set_ylabel('Proportion of Trials')
-            figs.reformat_legend(ax=ax, OptimalPlusExpand='Optimal + Expansion')
+            figs.reformat_legend(ax=ax, OptimalPlusExpand='Optimal + Forward')
+
+
+# %% --------
+# X = pd.concat(load_cf(x) for x in ['Human', ])
+
+x = load_cf('Human')
+rate = x.query('variance == "constant" and not is_term').groupby('wid').expand.mean()
+write_tex(f'expansion_Human', mean_std(100*rate, fmt='pct', digits=0))
+
+rate = load_cf('OptimalPlus').query('variance == "constant" and not is_term').expand.mean()
+write_tex('expansion_OptimalPlus', f'{rate*100:.1f}\\%')
+rate.mean()
+
+
 
 # # %% --------
 # dd.groupby(['variance']).apply(make_hist)

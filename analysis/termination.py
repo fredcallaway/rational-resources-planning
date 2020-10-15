@@ -57,83 +57,72 @@ def plot_termination():
     termination('best_next', 'term_reward', height=4)
 
 # %% --------
-ax = plot_term(cf, 'best_next', 'term_reward')
+@figure()
+def plot_nextbest():
+    X = pd.concat(load_cf(v) for v in ['Human', 'OptimalPlusPure'])
+    sns.pointplot('best_next', 'is_term', data=X, hue='agent', palette=palette)
+    plt.ylabel('Probability of Stopping')
+    figs.reformat_legend()
+    figs.reformat_labels()
 
-# %% ==================== correlation ====================
-X = all_cfs['Human'][['n_revealed', 'term_reward', 'potential_gain']]
-sns.pairplot(X, kind='reg')
+# %% --------
+@figure()
+def plot_satisfice():
+    X = pd.concat(load_cf(v) for v in ['Human', 'OptimalPlusPure'])
+    sns.pointplot('term_reward', 'is_term', data=X, hue='agent', palette=palette)
+    plt.ylabel('Probability of Stopping')
+    figs.reformat_legend()
+    figs.reformat_labels()
+
+# sns.lmplot('best_next', 'is_term', data=cf, logistic=False, scatter=False)
+# %% --------
+sns.lmplot('best_next', 'is_term', data=cf, logistic=False, x_bins=10)
 show()
 
 # %% ==================== stats ====================
-# %load_ext rpy2.ipython
-# cf = all_cfs['OptimalPlus']
-m = "PureOptimal"
-cf = load_cf(m, group=False)
-for k, v in cf.items():
-    if v.dtype == bool:
-        cf[k] = v.astype(int)
-
-cf.to_csv(f'{m}-term.csv', index=False)
-print(f'{m}-term.csv')
+cf = load_cf('Human')
+preds = ['n_revealed', 'best_next', 'term_reward']
+X = cf[['is_term', *preds]].copy()
+X.is_term = X.is_term.astype(int)
+X[preds] -= X[preds].mean()
+X[preds] /= X[preds].std()
+X = X.reset_index()
+# %% --------
+%%R -i X
+library(lme4)
+library(lmerTest)
+model = glmer(is_term ~ best_next + term_reward + (1|wid), family=binomial, data=X)
+summary(model)
 
 # %% --------
-sns.factorplot('best_next', )
+from statsmodels.formula.api import logit
+def do_fit(X):
+    m = logit('is_term ~ best_next + term_reward', data=X).fit(disp=False)
+    return m.pvalues
 
-# %% ==================== ADAPTIVE SATISFICING ====================
+# pd.DataFrame(do_fit(d) for _)
+ind_fits = X.groupby('wid').apply(do_fit)
 
-termination = get_result(VERSION, 'termination.json')
-etrs = list(map(int, termination['etrs']))
-idx = 1+np.arange(len(etrs))
-idx = idx[0::2]
-etrs = etrs[0::2]
+bn_sig = (ind_fits.best_next < .05)
+tr_sig = (ind_fits.term_reward < .05)
 
-@figure()
-def adaptive_satisficing():
-    cols = ['OptimalPlus', 'Human', 'BestFirstNoBestNext']
+sig = ind_fits < .05
+types = sig.apply(lambda row: (int(row.best_next), int(row.term_reward)), axis=1).value_counts()
 
-    fig, axes = plt.subplots(1, 4, figsize=(12, 3),
-                             gridspec_kw={'width_ratios': [15, 15, 15, 1]})
-
-    for i, col in enumerate(cols):
-        plt.sca(axes[i])
-        X, N = map(np.array, termination[col])
-        if i == 0:
-            sns.heatmap(X.T/N.T, cmap='viridis', linewidths=1, cbar_ax=axes[3])
-            plt.yticks(idx, etrs, rotation='horizontal')
-            plt.ylabel("Expected Value")
-        else:
-            sns.heatmap(X.T/N.T, cmap='viridis', linewidths=1, cbar=False)
-            plt.yticks(())
-        axes[i].invert_yaxis()
-        plt.xlabel('Number of Clicks Made')
-        plt.title('Satisficing BestFirst' if col == "Heuristic" else col)
-        # plt.title(col)
-
-# %% ==================== EXPECTED VS MAX ====================
+types.items
+for k, n in types.items():
+    i = ''.join(map(str, k))
+    write_tex(f'term_nsig_{i}', f'($N={n}$)')
+    
+for k in ['best_next', 'term_reward']:
+    sig = ind_fits[k] < .05
 
 
-evmv = get_result(VERSION, 'evmv.json')
 
 
-@figure()
-def expected_vs_max():
-    cols = ['OptimalPlus', 'Human', 'BestFirstNoBestNext']
 
-    fig, axes = plt.subplots(1, 4, figsize=(12, 3),
-                             gridspec_kw={'width_ratios': [15, 15, 15, 1]})
+# %% --------
+ind_fits
 
-    for i, col in enumerate(cols):
-        plt.sca(axes[i])
-        X, N = map(np.array, evmv[col])
-        if i == 0:
-            sns.heatmap(X.T/N.T, cmap='viridis', linewidths=1, cbar_ax=axes[3])
-            plt.yticks(idx, etrs, rotation='horizontal')
-            plt.ylabel("Expected Value")
-        else:
-            sns.heatmap(X.T/N.T, cmap='viridis', linewidths=1, cbar=False)
-            plt.yticks(())
-        axes[i].invert_yaxis()
-        plt.xticks(idx, etrs)
-        plt.xlabel('Maximum Possible Value')
-        plt.title('Satisficing BestFirst' if col == "Heuristic" else col)
-        # plt.title(col)
+
+

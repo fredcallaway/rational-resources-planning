@@ -22,15 +22,15 @@ def get_result(version, name):
     return load_json(f'../model/results/{version}/{name}')
 
 def mean_std(x, digits=1, fmt=None):
-    mean = x.mean().round(digits)
-    std = x.std().round(digits)
+    mean = x.mean()
+    std = x.std()
     if fmt == 'pct':
         x = x * 100
-        return fr'{mean}\% $\pm$ {std}\%'
+        return fr'{mean:.{digits}f}\% $\pm$ {std:.{digits}f}\%'
     elif fmt == '$':
         return fr'\${mean:.2f} $\pm$ \${std:.2f}'
     else:
-        return fr'{mean} $\pm$ {std}'
+        return fr'{mean:.{digits}f} $\pm$ {std:.{digits}f}'
 
 def load_data(exp):
     tdf = pd.read_pickle(f'../data/{exp}/trials.pkl').query('block == "test"')
@@ -117,7 +117,7 @@ class Figures(object):
             self.watcher.start()
         self.watcher = Watcher(self.hist_path)
 
-    def show(self, name='tmp', tight=True, reformat_labels=False, reformat_legend=False):
+    def show(self, name='tmp', tight=True, reformat_labels=False, reformat_legend=False, despine=True):
         try:
             if tight:
                 plt.tight_layout()
@@ -125,6 +125,8 @@ class Figures(object):
                 self.reformat_labels()
             if reformat_legend:
                 self.reformat_legend()
+            if despine:
+                sns.despine()
 
             dt = datetime.now().strftime('%m-%d-%H-%M-%S')
             p = f'{dt}-{name}.png'
@@ -142,7 +144,7 @@ class Figures(object):
         finally:
             plt.close('all')
 
-    def figure(self, save=True, reformat_labels=False, reformat_legend=False, **kwargs):
+    def figure(self, save=True, reformat_labels=False, reformat_legend=False, despine=True, **kwargs):
         """Decorator that calls a plotting function and saves the result."""
         def decorator(func):
             params = [v for v in kwargs.values() if v is not None]
@@ -153,7 +155,7 @@ class Figures(object):
             try:
                 plt.figure()
                 func(**kwargs)
-                self.show(name, reformat_labels=reformat_labels, reformat_legend=reformat_legend)
+                self.show(name, reformat_labels=reformat_labels, reformat_legend=reformat_legend, despine=despine)
             finally:
                 plt.close('all')
             return func
@@ -169,6 +171,18 @@ def plot_params(fits):
     X = X[betas]
     X.T.plot(legend=False, color='k', alpha=0.4)
 
+
+def pval(x):
+    if x < 0.001:
+        return r"p < 0.001"
+    elif x < 0.01:
+        return r"p < 0.01"
+    elif x < 0.05:
+        return r"p < 0.05"
+    elif x >= 0.05:
+        return r"p = {:.2f}".format(x)
+    else:
+        assert False
 
 class TeX(object):
     """Saves tex files."""

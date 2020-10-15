@@ -1,7 +1,7 @@
 # %%
 %run setup 3
 # figs.nosave = True
-if EXPERIMENT == 2:
+if EXPERIMENT > 1:
     %run -i breadth_depth
 %run -i pareto
 %run -i model_comparison
@@ -24,7 +24,8 @@ wage = 60 * (pdf.bonus + 1.50) / pdf.total_time
 pdf['wage'] = wage
 np.mean(pdf.wage < pdf.set_index('worker_id').loc['5f4912fc3c25512e73761c48'].wage)
 
-# %% ==================== Main figures  ====================
+
+# %% ==================== EXPERIMENT 1 ===================
 
 @figure()
 def exp1_main():
@@ -35,9 +36,10 @@ def exp1_main():
     # shit...
 
 
-# %% --------
+# %% ==================== EXPERIMENT 2 ====================
+
 def exp2_make_base():
-    label_offset = -0.4
+    label_offset = -0.2
     fig, axes = plt.subplots(4, 3, figsize=(12, (4+3+3+3)), constrained_layout=True,
                              gridspec_kw={'height_ratios': [4,3,3,3]})
 
@@ -62,47 +64,46 @@ def exp2_make_base():
             ax.set_yticks([])
 
     plt.savefig('fighist/exp2a.png', dpi=figs.dpi, bbox_inches='tight')
-
-exp2_make_base()
-
-# %% --------
-def exp2_add_task():
-    base = Image.open('fighist/exp2a.png')
-    w, h = base.size
-
-    task = task_image('decreasing')
-    wt, ht = task.size
-    scaling = 0.19 * w / wt
-    task = task.resize((int(wt * scaling), int(ht * scaling)))
-
-    base.paste(task, (400, 110))
-
-    dt = datetime.now().strftime('%m-%d-%H-%M-%S')
-    base.save(f'fighist/{dt}-exp2b.png')
-    base.save('figs/4/exp2_main.png')
+    os.system('cp fighist/exp2a.png .')
 
 
-# # exp2_make_base()
+# # %% --------
+# def exp2_add_task():
+#     base = Image.open('fighist/exp2a.png')
+#     w, h = base.size
+
+#     task = task_image('decreasing')
+#     wt, ht = task.size
+#     scaling = 0.19 * w / wt
+#     task = task.resize((int(wt * scaling), int(ht * scaling)))
+
+#     base.paste(task, (400, 110))
+
+#     dt = datetime.now().strftime('%m-%d-%H-%M-%S')
+#     base.save(f'fighist/{dt}-exp2b.png')
+#     base.save('figs/4/exp2_main.png')
+
+
 # exp2_add_task()
     
 
-# %% --------
-@figure()
-def exp2_main():
-    fig, axes = setup_variance_plot(2)
-    for v, ax in zip(VARIANCES, axes[0, :]):
-        ax.imshow(task_image(v))
-        ax.axis('off')
-    plot_second_click(axes[1, :], 
-        # models=['OptimalPlus', 'BestFirst']
-        )
+# # %% --------
+# @figure()
+# def exp2_main():
+#     fig, axes = setup_variance_plot(2)
+#     for v, ax in zip(VARIANCES, axes[0, :]):
+#         ax.imshow(task_image(v))
+#         ax.axis('off')
+#     plot_second_click(axes[1, :], 
+#         # models=['OptimalPlus', 'BestFirst']
+#         )
 
-@figure()
-def pareto_fit():
-    fig, axes = setup_variance_plot(2, label_offset=-0.4)
-    plot_pareto(axes[0, :], legend=False, fit_reg=False)
-    plot_average_predictive_accuracy(axes[1, :])
-    # figs.reformat_ticks(yaxis=True, ax=axes[1,0])
+# @figure()
+# def pareto_fit():
+#     fig, axes = setup_variance_plot(2, label_offset=-0.4)
+#     plot_pareto(axes[0, :], legend=False, fit_reg=False)
+#     plot_average_predictive_accuracy(axes[1, :])
+#     # figs.reformat_ticks(yaxis=True, ax=axes[1,0])
 
 # %% --------
 @figure()
@@ -118,7 +119,7 @@ def exp2_main_alt():
     plot_average_predictive_accuracy(axes[3, :])
 
 
-# %% --------
+# %% ==================== EXPERIMENT 3 ====================
 
 @figure()
 def exp3_main():
@@ -140,12 +141,12 @@ def exp4_make_base():
     
     ax = fig.add_subplot(gs[0, 4:6])
     plot_average_predictive_accuracy(np.array(ax))
-    ax.annotate('B', (-0.4, 1), xycoords='axes fraction', size=32, va='bottom')
+    ax.annotate('B', (-0.5, 1), xycoords='axes fraction', size=32, va='bottom')
     
     ax = fig.add_subplot(gs[1, 4:6])
     plt.sca(ax)
     expansion_value()
-    ax.annotate('C', (-0.4, 1), xycoords='axes fraction', size=32, va='bottom')
+    ax.annotate('C', (-0.5, 1), xycoords='axes fraction', size=32, va='bottom')
     
     plt.savefig('fighist/exp4a.png', dpi=figs.dpi, bbox_inches='tight')
 
@@ -155,7 +156,7 @@ def exp4_add_task():
 
     task = Image.open('imgs/roadtrip.png')
     wt, ht = task.size
-    scaling = 0.66 * w / wt
+    scaling = 0.64 * w / wt
     task = task.resize((int(wt * scaling), int(ht * scaling)))
 
     base.paste(task, (0, 100))
