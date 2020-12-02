@@ -1,6 +1,11 @@
 using Distributed
 if myid() == 1  # only run on the master process
     if isempty(ARGS)
+        if isinteractive()
+            print("Experiment: ")
+            x = readline()
+            push!(ARGS, "exp" * replace(x, "exp" => ""))
+        end
         error("Must pass configuration name as first argument!")
     end
     conf = ARGS[1]

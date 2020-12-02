@@ -1,5 +1,5 @@
 # %%
-%run setup 3
+%run setup 1
 # figs.nosave = True
 if EXPERIMENT > 1:
     %run -i breadth_depth
@@ -10,6 +10,10 @@ figs.nosave = False
 
 # %% ==================== Basic stuff ====================
 write_tex("recruited", len(full_pdf))
+
+
+failed = full_pdf.comprehension.dropna().apply(lambda x: not x[-1]['correct'])
+failed.sum(), len(failed)
 
 write_tex("excluded", "TODO")
 write_tex("incomplete", "TODO")
@@ -33,7 +37,6 @@ def exp1_main():
     plot_pareto(np.array(axes.flat[0]), models=['Random', 'MetaGreedy', 'Optimal', 'BestFirst'])
     plot_average_predictive_accuracy(axes.flat[1])
     cost_best_first(axes.flat[2])
-    # shit...
 
 
 # %% ==================== EXPERIMENT 2 ====================
@@ -258,47 +261,6 @@ F.loc['w016ae6c']
 
 fits.set_index(['wid', 'model']).cost
 
-# %% ==================== PARAMETERS ====================
-
-cv_fits = pd.concat([pd.read_csv(f'../model/results/{VERSION}/mle/{model}-cv.csv') 
-                     for model in MODELS], sort=False).set_index('wid')
-
-cv_fits.query('model == "OptimalPlus"').columns
-cv_fits['click_delay'] = pdf.click_delay
-cv_fits['variance'] = pdf.variance
-# cv_fits.to_csv('cv_fits.csv')
-# cv_fits.rename(columns=lambda x: x.replace('ε', 'eps').replace('β', 'beta').replace('θ', 'theta')).to_csv('cv_fits.csv')
-# %% --------
-
-sns.scatterplot('β_term', 'β_select', data=fits.query('model == "OptimalPlus"'))
-plt.plot([0,50], [0,50], c='k')
-plt.axis('square')
-show()
-
-# %% --------
-f = cv_fits.query('model == "Optimal"')
-f.groupby('wid').cost.std()
-
-# %% --------
-
-g = sns.FacetGrid(col='variance', data=f)
-g.map(sns.scatterplot, 'ε', 'β')
-show()
-
-# %% --------
-
-g = sns.FacetGrid(row='variance', sharex=False, aspect=3, palette=sns.color_palette()[:3],
-    data=cv_fits.query('model == "BreadthFirst"').reset_index())
-
-g.map(sns.stripplot, 'wid', 'β_depth')
-g.set_xticklabels([])
-show()
-
-
-# %% --------
-
-
-sns.distplot(pdf.n_click); show()
 
 # %% ==================== CLICK DELAY ====================
 

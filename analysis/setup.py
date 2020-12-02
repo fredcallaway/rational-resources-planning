@@ -21,8 +21,9 @@ if EXPERIMENT == 1:
 if EXPERIMENT == 2:
     MODELS = ("""
         Random MetaGreedy OptimalPlus
-        Breadth_Full_NoDepthLimit Depth_Full_NoDepthLimit Best_Satisfice_BestNext 
+        Breadth_Full Depth_Full Best_Full
     """.split())
+        # Breadth_Full_NoDepthLimit Depth_Full_NoDepthLimit Best_Satisfice_BestNext 
 
 if EXPERIMENT >= 3:
     MODELS = ("""

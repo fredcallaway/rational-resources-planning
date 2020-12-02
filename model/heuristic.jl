@@ -10,15 +10,18 @@ struct Heuristic{H,T} <: AbstractModel{T}
     # Stopping rule weights
     β_satisfice::T
     β_best_next::T
-    β_depth_limit::T
     # Stopping rule threshold
     θ_term::T
+    # Depth limits
+    β_depthlim::T
+    θ_depthlim::T
     # Pruning
     β_prune::T
     θ_prune::T
     # Lapse rate
     ε::T
 end
+
 
 name(::Type{Heuristic{H}}) where H = string(H)
 name(::Type{Heuristic{H,T}}) where {H,T} = string(H)
@@ -51,7 +54,7 @@ function features(::Type{Heuristic{H,T}}, m::MetaMDP, b::Belief) where {H,T}
         frontier_depths = node_depths(m)[frontier],
         term_reward = term_reward(m, b),
         best_vs_next = best_vs_next(m, b),
-        min_depth = min_depth(m, b),
+        # min_depth = min_depth(m, b),
         tmp = zeros(T, length(frontier)),  # pre-allocate for use in selection_probability
         tmp2 = zeros(T, length(frontier)),  # pre-allocate for use in selection_probability
         tmp3 = zeros(T, length(frontier)),  # pre-allocate for use in selection_probability
@@ -65,8 +68,15 @@ end
 # ---------- Selection rule ---------- #
 
 function pruning(model::Heuristic{H,T}, φ::NamedTuple)::Vector{T} where {H, T}
-    @. logistic(model.β_prune * (model.θ_prune - φ.frontier_values))
+    @. begin  # weird syntax prevents unnecessary memory allocation
+        1 - 
+        # probability of NOT pruning
+        logistic(model.β_prune * (φ.frontier_values - model.θ_prune)) * 
+        logistic(model.β_depthlim * (model.θ_depthlim - φ.frontier_depths))
+    end
 end
+
+@inline pruning_active(model) = (model.β_prune != 1e5) || (model.β_depthlim != 1e5)
 
 function select_pref(model::Heuristic{H,T}, φ::NamedTuple)::Vector{T} where {H, T}
     h = φ.tmp  # use pre-allocated array for memory efficiency
@@ -80,7 +90,7 @@ end
 
 function selection_probability(model::Heuristic{H, T}, φ::NamedTuple)::Vector{T} where {H, T}
     h = select_pref(model, φ)
-    if model.θ_prune == -Inf
+    if !pruning_active(model)
         return softmax!(h)
     else
         # this part is the bottleneck, so we add type annotations and use explicit loops
@@ -115,26 +125,22 @@ end
 function termination_probability(model::Heuristic, φ::NamedTuple)
     v = model.θ_term + 
         model.β_satisfice * φ.term_reward +
-        model.β_best_next * φ.best_vs_next +
-        model.β_depth_limit * 10φ.min_depth  # put min_depth on the roughly the same scale as the others
-    # v = model.β_satisfice * (φ.term_reward - model.θ_satisfice) +
-    #     model.β_best_next * (φ.best_vs_next - model.θ_best_next) +
-    #     model.β_depth_limit * (φ.min_depth - model.θ_depth_limit)
+        model.β_best_next * φ.best_vs_next
     p_term = logistic(v)
-    if model.θ_prune > -Inf
+    if pruning_active(model)
         p_term += (1-p_term) * prod(pruning(model, φ))
     end
     p_term
 end
 
-"Minimum depth of a frontier node"
-function min_depth(m::MetaMDP, b::Belief)
-    nd = node_depths(m)
-    # minimum(nd[c] for c in 1:length(b) if allowed(m, b, c))  # do this but handle fully revealed case
-    mapreduce(min, 1:length(b); init=Inf) do c
-        allowed(m, b, c) ? nd[c] : Inf
-    end
-end
+# "Minimum depth of a frontier node"
+# function min_depth(m::MetaMDP, b::Belief)
+#     nd = node_depths(m)
+#     # minimum(nd[c] for c in 1:length(b) if allowed(m, b, c))  # do this but handle fully revealed case
+#     mapreduce(min, 1:length(b); init=Inf) do c
+#         allowed(m, b, c) ? nd[c] : Inf
+#     end
+# end
 
 "How much better is the best path from its competitors?"
 function best_vs_next(m, b)
@@ -168,10 +174,11 @@ default_space(::Type{Heuristic{:Random}}) = Space(
     :β_expand => 0,
     :β_satisfice => 0.,
     :β_best_next => 0.,
-    :β_depth_limit => 0.,
-    :θ_term => (-5, 5),
-    :β_prune => 0,
-    :θ_prune => -Inf,
+    :θ_term => (-10, 10),
+    :β_depthlim => 1e5,  # flag for inactive
+    :θ_depthlim => 1e10,  # Inf breaks gradient
+    :β_prune => 1e5,
+    :θ_prune => -1e10,
     :ε => 0,
 )
 
@@ -181,7 +188,7 @@ PARAMS = Dict(
     "Breadth" => (β_depth=(-3, 0),),
     "Satisfice" => (β_satisfice=(0, 3), θ_term=(-90, 90)),
     "BestNext" => (β_best_next=(0, 3), θ_term=(-90, 90)),
-    "DepthLimit" => (β_depth_limit=(0, 3), θ_term=(-90, 90)),
+    "DepthLimit" => (β_depthlim=(0, 30), θ_depthlim=(0, 5)),
     "Prune" => (β_prune=(0, 3), θ_prune=(-30, 30)),
     "Expand" => (β_expand=(0, 50),),
 )
@@ -196,7 +203,7 @@ function default_space(::Type{Heuristic{M}}) where M
     for ex in spec
         if ex == "Full"
             push!(components, "Satisfice", "BestNext", "DepthLimit", "Prune")
-        elseif startswith(ex, "No")
+        elseif startswith(ex, "No") 
             delete!(components, ex[3:end])
         else
             push!(components, ex)

@@ -4,7 +4,6 @@ using Glob
 using CSV
 using DataFrames
 
-# isempty(ARGS) && push!(ARGS, "exp3")
 println("Running model comparison for ", ARGS[1])
 include("conf.jl")
 
@@ -69,12 +68,12 @@ full_fits = let
     full_jobs = Iterators.product(values(all_trials), MODELS);
     @time full_fits = pmap(full_jobs) do (trials, M)
         wid = trials[1].wid; mname = name(M)
+        file = "$base_path/fits/full/$mname-$wid"
+        if isfile(file)
+            println("$file already exists, skipping.")
+            return deserialize(file)
+        end
         try
-            file = "$base_path/fits/full/$mname-$wid"
-            if isfile(file)
-                println("$file already exists, skipping.")
-                return deserialize(file)
-            end
             model, nll = fit(M, trials; method=OPT_METHOD)
             result = (model=model, nll=nll, wid=wid)
             serialize(file, result)
@@ -137,14 +136,14 @@ cv_jobs = Iterators.product(values(all_trials), MODELS, folds);
 cv_fits = let
     @time cv_fits = pmap(cv_jobs) do (trials, M, fold)
         wid = trials[1].wid; mname = name(M); fold_i = fold.test[1]
+        file = "$base_path/fits/cv/$mname-$wid-$fold_i"
+        if isfile(file)
+            # println("$file already exists, skipping.")
+            result = deserialize(file)
+            @assert result.fold == fold
+            return result
+        end
         try
-            file = "$base_path/fits/cv/$mname-$wid-$fold_i"
-            if isfile(file)
-                # println("$file already exists, skipping.")
-                result = deserialize(file)
-                @assert result.fold == fold
-                return result
-            end
             model, train_nll = fit(M, trials[fold.train]; method=OPT_METHOD)
             result = (model=model, train_nll=train_nll, test_nll=-logp(model, trials[fold.test]), fold=fold)
             serialize(file, result)

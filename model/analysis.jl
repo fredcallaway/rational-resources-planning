@@ -1,4 +1,3 @@
-isempty(ARGS) && push!(ARGS, "exp4")
 include("conf.jl")
 include("base.jl")
 include("models.jl")
@@ -64,7 +63,7 @@ end
 
 # %% ==================== click features ====================
 
-@everywhere _bf = Heuristic{:Best,Float64}(10., 0.,0., 0., 0., 0., -1e10, 0, -Inf, 0.)
+_bf = create_model(Heuristic{:Best}, [1e5, -1e5, 0], (), default_space(Heuristic{:Best}))
 @everywhere function is_bestfirst(d::Datum)
     (d.c != TERM) && action_dist(_bf, d)[d.c+1] > 1e-2
 end

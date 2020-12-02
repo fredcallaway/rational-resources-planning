@@ -12,15 +12,6 @@ X = L.loc[:, L.columns.str.startswith('Best')].stack()
 for v, x in X.groupby('variance'):
     print(x.idxmax())
 
-
-# %% --------
-from scipy.stats import ttest_rel, wilcoxon
-x = np.exp(logp.groupby('wid').mean())
-ttest_rel(x.OptimalPlus, x.Best_Full)
-
-sns.distplot(x.OptimalPlus - x.Best_Satisfice)
-show()
-
 # %% -------
 
 def plot_model_performance(L, label, axes=None):
