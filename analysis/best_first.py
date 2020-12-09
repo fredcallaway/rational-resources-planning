@@ -1,11 +1,5 @@
 bfo = pd.DataFrame(get_result(VERSION, 'bestfirst.json'))
 bfo = bfo.sort_values('n_click')
-# bfo = pd.Series(best_first['optimal'])
-# bfo.index = bfo.index.astype(float)
-# bfo = bfo.sort_index().iloc[:-1]  # drop 100
-# pdf['best_first'] = pd.Series(best_first['human'])
-# write_tex("best_first", mean_std(pdf.best_first*100, fmt='pct'))
-pdf['best_first'] = load_cf('Human').query('~is_term').groupby('wid').is_best.mean()
 
 # %% ==================== plot ====================
 
@@ -24,10 +18,13 @@ def best_first_by_clicks(ax=None):
         plt.figure(figsize=(4,4))
     else:
         plt.sca(ax)
+
     plt.axhline([1], label='BestFirst', color=palette['Best'], lw=3)
     # bfo.plot(label="Optimal", color=palette["Optimal"], lw=3)
     x = bfo.query('0 < cost < 50')
     plt.plot(x.n_click, x.best_first, label="Optimal", color=palette["Optimal"], lw=3)
+    rand = load_cf('Random').query('~is_term').is_best.mean()
+    plt.axhline([rand], label='Random', color=palette['Random'], lw=3)
     # x = bfo.query('cost == 0')
     # plt.scatter(x.n_click, x.best_first, color=palette["Optimal"], s=20, )
     # plt.annotate('cost = 0', )
@@ -35,11 +32,29 @@ def best_first_by_clicks(ax=None):
     plt.scatter('n_click', 'best_first', data=pdf, color=palette["Human"], label='Human', s=10)
     plt.ylabel('Proportion of Clicks on Best Path')
     plt.xlabel('Number of Clicks per Trial')
+    plt.xlim(-0.5,15.5)
+    plt.ylim(0.48, 1.02)
+    # plt.xticks([0, 15])
+    plt.yticks([0.5, 0.75, 1])
+    # sns.despine(trim=True);
     # plt.xlim(-0.05, 3.0)
-    plt.legend(loc='best')
+    # plt.legend(loc='upper right')
 
 
 # %% ==================== stats ====================
+x = load_cf('Human').query('~is_term')
+bf_rate = x.groupby('wid').is_best.mean()
+bf_rand_rate = x.groupby('wid').p_best_rand.mean()
+write_tex("best_first", mean_std(bf_rate*100, fmt='pct'))
+
+
+from statsmodels.stats.proportion import proportions_ztest
+r = load_cf('Random').query('~is_term').is_best
+h = x.is_best
+z, p = proportions_ztest([h.sum(), r.sum()], [len(h), len(r)], alternative='larger')
+write_tex("best_first_random", rf"{bf_rand_rate.mean() * 100:.1f}\%" )
+write_tex("best_first_test", rf"$z={z:.1f},\ {pval(p)}$")
+# %% --------
 # from statsmodels.formula.api import ols
 # model = ols('best_first ~ n_click', data=pdf).fit()
 # write_tex('best_first_click', fr'$B={model.params.n_click:.4f},\ {pval(model.pvalues.n_click)}$')

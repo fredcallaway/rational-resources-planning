@@ -69,9 +69,9 @@ end
 # %% ==================== click features ====================
 
 _bf = create_model(Heuristic{:Best}, [1e5, -1e5, 0], (), default_space(Heuristic{:Best}))
-@everywhere function is_bestfirst(d::Datum)
-    (d.c != TERM) && action_dist(_bf, d)[d.c+1] > 1e-2
-end
+# function is_bestfirst(d::Datum)
+#     (d.c != TERM) && action_dist(_bf, d)[d.c+1] > 1e-2
+# end
 
 function click_features(d)
     m = d.t.m; b = d.b;
@@ -81,13 +81,16 @@ function click_features(d)
     max_path = maximum(mpv)
     mpv[best] = -Inf
     max_competing = maximum(mpv)
+    is_best = action_dist(_bf, d) .> 1e-2
+
     (
         wid=d.t.wid,
         i=d.t.i,
         expanding = has_observed_parent(d.t.m.graph, d.b, d.c),
         # depth = d.c == TERM ? -1 : depth(m.graph, d.c),
         is_term = d.c == TERM,
-        is_best=is_bestfirst(d),
+        is_best=is_best[d.c+1],
+        p_best_rand=sum(is_best) / (sum(allowed(d.t.m, d.b)) - 1),
         n_revealed=sum(observed(d.b)) - 1,
         term_reward=pv[best],
         max_path=max_path,
@@ -96,7 +99,7 @@ function click_features(d)
     )
 end
 click_features.(all_data) |> JSON.json |> writev("$results_path/click_features.json");
-
+# %% --------
 for (nam, sims) in pairs(model_sims)
     f = "$results_path/$nam-click_features.json"
     sims |> flatten |> get_data .|> click_features |> JSON.json |> writev(f)

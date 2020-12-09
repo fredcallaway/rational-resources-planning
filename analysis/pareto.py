@@ -21,6 +21,7 @@ else:
 # PARETO_MODELS = [m for m in MODELS if not (m.endswith('Expand') or m.endswith('NoPrune'))]
 palette['BreadthFirst'] = do
 palette['DepthFirst'] = dp
+palette['BestFirst'] = dg
 # %% --------
 
 def plot_model_pareto(variance, model): 
@@ -45,7 +46,7 @@ def plot_pareto(axes=None, legend=True, fit_reg=False, models=PARETO_MODELS):
         g = X.loc[v].groupby('wid'); x = 'n_click'; y = 'score'
         sns.regplot(g[x].mean(), g[y].mean(), fit_reg=fit_reg, lowess=True, 
             color=palette['Human'], label='Human', scatter=False).set_zorder(20)
-        plt.scatter(g[x].mean(), g[y].mean(), color=palette['Human'], s=5).set_zorder(21)
+        plt.scatter(g[x].mean(), g[y].mean(), label='Human', color=palette['Human'], s=5).set_zorder(21)
 
         # plt.errorbar(g[x].mean(), g[y].mean(), yerr=g[y].sem(), xerr=g[x].sem(), 
         #              label='Human', fmt='.', color='#333333', elinewidth=.5)
@@ -59,13 +60,10 @@ def plot_pareto(axes=None, legend=True, fit_reg=False, models=PARETO_MODELS):
         else:
             plt.ylabel('')
 
-
-# %% --------
-        
-
 # %% --------
 
 def linear_interpolate(x1, x2, y1, y2, x):
+    assert x1 < x < x2
     d = (x - x1) / (x2 - x1)
     return y1 + d * (y2 - y1)
 
@@ -75,39 +73,60 @@ def linear_interpolate(x1, x2, y1, y2, x):
 # plt.plot([x], [linear_interpolate(x1, x2, y1, y2, x)], 'o')
 # show()
 
-optimal = model_pareto.loc['Optimal'].set_index('mdp')[['n_click', 'term_reward']]
-human = tdf.groupby('wid')[['n_click', 'term_reward']].mean()
+optimal = model_pareto.loc['Optimal'].set_index('mdp')[['n_click', 'term_reward']].sort_values('n_click')
+random = model_pareto.loc['RandomSelection'].set_index('mdp')[['n_click', 'term_reward']].sort_values('n_click')
 
 def only(x):
     assert len(x) == 1
     return x[0]
 
-human['mdp'] = tdf.groupby('wid').mdp.unique().apply(only)
 
-def pareto_loss(row):
-    opt = optimal.loc[row.mdp]
-    xvar = 'n_click'; yvar = 'term_reward'
-    xvar = human.columns.drop(yvar)[0]
-    x_diff = (opt[xvar] - row[xvar]).values
-    cross_point = (x_diff < 0).argmax()
-    hum_x, hum_y = row[[xvar, yvar]]
+# %% --------
+def get_closest_term_reward(row, agent):
+    comp = agent.loc[row.mdp]
+    x_diff = (comp['n_click'] - row['n_click']).values
+    cross_point = (x_diff > 0).argmax()
     
     if cross_point == 0:
-        o = opt.iloc[0]
-        assert row[xvar] > o[xvar]
-        opt_y = o[yvar]
+        o = comp.iloc[0]
+        assert row['n_click'] > o['n_click']
+        return o['term_reward']
     else:
-        assert x_diff[cross_point - 1] > 0
-        o = opt.iloc[cross_point-1:cross_point+1]
-        opt_xs = list(o[xvar])
-        assert opt_xs[0] > hum_x > opt_xs[1]
-        opt_ys = list(o[yvar])
-        opt_y = linear_interpolate(*opt_xs, *opt_ys, hum_x)
+        assert x_diff[cross_point - 1] < 0
+        o = comp.iloc[cross_point-1:cross_point+1]
+        return linear_interpolate(*o['n_click'], *o['term_reward'], row.n_click)
 
-    if opt_y == 0:
-        return np.nan
-    d = opt_y - hum_y
-    return d, d / opt_y
 
-loss, pct_loss = human.apply(pareto_loss, axis=1, result_type='expand').mean().values.T
-write_tex(f'pareto_loss', f'{loss:.2f} ({pct_loss*100:.0f}\%)')
+df = tdf.groupby('wid')[['n_click', 'term_reward', 'score']].mean()
+df['mdp'] = tdf.groupby('wid').mdp.unique().apply(only)
+df['optimal'] = df.apply(get_closest_term_reward, agent=optimal, axis=1)
+df['random'] = df.apply(get_closest_term_reward, agent=random, axis=1)
+
+gain = df.score - df.random
+loss = df.optimal - df.score
+pct_loss = loss / df.optimal
+relative = (df.score - df.random) / (df.optimal - df.random)
+
+write_tex(f'pareto_loss', f'{loss.mean():.2f} ({pct_loss.mean()*100:.0f}\%)')
+write_tex(f'pareto_gain', f'{gain.mean():.2f}')
+write_tex(f'pareto_relative', f'{100*relative.mean():.1f}\%')
+write_tex(f'pareto_gain_wilcoxon', f'${pval(wilcoxon(gain).pvalue)}$')
+
+# %% --------
+x = 2.5
+a = 1
+b = 3
+(x - a) / (b - a)
+
+# %% --------
+
+loss, pct_loss = -human.apply(pareto_relative, comparison=optimal, axis=1, result_type='expand').values.T
+gain, pct_gain = human.apply(pareto_relative, comparison=random, axis=1, result_type='expand').values.T
+
+
+loss, pct_loss = -human.apply(pareto_relative, comparison=optimal, 
+    axis=1, result_type='expand').mean().values.T
+
+gain, pct_gain = human.apply(pareto_relative, comparison=random, 
+    axis=1, result_type='expand').mean().values.T
+gain

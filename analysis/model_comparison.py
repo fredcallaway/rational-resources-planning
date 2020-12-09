@@ -38,8 +38,6 @@ t = pd.DataFrame(make_row(model) for model in models)
 t = t.sort_values(['Satisfice', 'BestNext', 'DepthLimit', 'Prune'])
 t.to_latex
 
-
-
 total.sort_values()
 
 # %% ==================== Choose models to plot ====================
@@ -79,21 +77,26 @@ for model_class in HEURISTIC:
     x = mean_gml.filter(regex=f'^{model_class}*')
     print(x.max() - x.loc[~x.index.str.contains('Prune')].max())
 
+
 # %% ==================== Stats ====================
-# assert set(MODELS) < set(logp.columns)
-# L = np.exp(logp.groupby(['variance', 'wid']).mean()).groupby('variance').mean()
-# X = L.loc[:, L.columns.str.startswith('Best')].stack()
-# for v, x in X.groupby('variance'):
-#     print(x.idxmax())
+opt = total.OptimalPlus
+no_opt = total.drop('OptimalPlus')
+no_best = no_opt.loc[~no_opt.index.str.startswith('Best')]
 
-from scipy.stats import wilcoxon, ttest_rel, ttest_ind
+write_tex('dnll_no_best', rf'all $\dnll > {opt - no_best.max():.0f}$')
 
-X = np.exp(logp.groupby(['variance', 'wid']).mean())
-for model, acc in X.items():
-    write_tex(f'accuracy_{model}', mean_std(acc, digits=3))
+no_best_next = total.loc[~total.index.str.contains('BestNext')]
+best_no_best_next = no_best_next.drop('OptimalPlus').max()
+write_tex('dnll_no_bestnext', rf'all $\dnll > {opt - best_no_best_next.max():.0f}$')
 
-if EXPERIMENT == 1:
-    write_tex("opt_vs_best_ttest", paired_ttest(gml.OptimalPlus, gml.Best_Full_NoPrune))
+write_tex('dnll_best', rf'$\dnll = {total.max() - opt:.0f}$')
+
+assert total.idxmax() == 'Best_Satisfice_BestNext_DepthLimit'
+delta = total.Best_Satisfice_BestNext_DepthLimit_Prune - total.Best_Satisfice_BestNext_DepthLimit
+write_tex('dnll_prune', rf'$\dnll = {delta:.0f}$')
+
+total.loc[total.index.str.startswith('Best')].sort_values()
+
 
 # %% ==================== Plots ====================
 

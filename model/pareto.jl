@@ -53,7 +53,6 @@ end
 function sample_models(::Type{MetaGreedy}, n)
     # ignore n...
     map(COSTS) do cost
-        cost = 1.
         MetaGreedy{:Default,Float64}(cost, 100., 100., 0., 0.)
     end
 end

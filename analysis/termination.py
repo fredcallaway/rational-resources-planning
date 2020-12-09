@@ -30,7 +30,8 @@ def plot_term(df, x, y, **kws):
     return ax
 
 def termination(x, y, height=3):
-    agents = ['Human', 'OptimalPlus']
+    agents = ['Human', 'OptimalPlusPure']
+    # agents = ['Human', 'OptimalPlus']
     nc = len(agents)
     fig, axes = plt.subplots(1, nc+1, figsize=(4*nc, height),
                              gridspec_kw={'width_ratios': [*([15] * nc), 1]})
@@ -117,16 +118,47 @@ for k, n in types.items():
 for k in ['best_next', 'term_reward']:
     sig = ind_fits[k] < .05
 
-
 # %% --------
 
+# %% ==================== stats on optimal ====================
+
+cf = load_cf('Human').query('n_revealed < 16')
+m = logit(f'is_term.astype(int) ~ term_reward + best_next', data=cf).fit()
+for k in ['term_reward', 'best_next']:
+    write_tex(f'term_human_{k}', rf'$B = {m.params[k]:.3f},\ {pval(m.pvalues[k])}$')
+
 cf = load_cf('OptimalPlusPure').query('n_revealed < 16')
-cf.is_term = cf.is_term.astype(int)
-preds = ['n_revealed', 'best_next', 'term_reward']
-X = cf[['is_term', *preds]].copy()
-X.is_term = X.is_term.astype(int)
-X[preds] -= X[preds].mean()
-X[preds] /= X[preds].std()
+m = logit(f'is_term.astype(int) ~ term_reward + best_next', data=cf).fit()
+for k in ['term_reward', 'best_next']:
+    write_tex(f'term_optimal_{k}', f'{m.params[k]:.3f}')
+
+# %% --------
+preds = ['best_next', 'term_reward', 'n_revealed']
+models = {
+    pred: logit(f'is_term ~ {pred}', data=X).fit()
+    for pred in preds
+}
+for pred in preds:
+    models[f'no_{pred}'] = logit('is_term ~ ' + ' + '.join([p for p in preds if p != pred]), data=X).fit()
+models['full'] = logit('is_term ~ best_next + term_reward + n_revealed', data=X).fit()
+
+# %% --------
+X = pd.DataFrame({k: {
+        'R^2': round(m.prsquared, 3),
+        'LL': round(m.llf),
+    } 
+    for k, m in models.items()}).T
+X
+
+for p in preds:
+    print(p, X.LL.full - X.LL['no_' + p])
+    
+# %% --------
+
+
+# %% --------
+preds = m.predict(X) > 0.5
+(X.is_term == preds).mean()
 
 # %% --------
 %%R -i X

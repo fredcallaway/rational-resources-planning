@@ -7,6 +7,8 @@ import os
 from glob import glob
 import json
 
+from scipy.stats import wilcoxon
+
 matplotlib.use('Agg')
 sns.set_context('notebook', font_scale=1.3)
 sns.set_style('white')
