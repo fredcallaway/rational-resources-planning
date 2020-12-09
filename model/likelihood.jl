@@ -36,7 +36,7 @@ end
 @memoize function get_sobol(lower, upper, n)
     seq = SobolSeq(lower, upper)
     skip(seq, n)
-    x0s = [next!(seq) for i in 1:n]
+    x0s = [Sobol.next!(seq) for i in 1:n]
 end
 
 function bfgs_random_restarts(loss, lower, upper, n_restart; max_err=n_restart/2, id="null")

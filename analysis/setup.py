@@ -10,13 +10,13 @@ VERSION = f'exp{EXPERIMENT}'
 
 VARIANCES = ['decreasing', 'constant', 'increasing'] if EXPERIMENT in (2,3) else ['constant']
 
-# MODELS = ['Random', 'MetaGreedy', 'OptimalPlus']
-if EXPERIMENT == 1:
-    MODELS = ("""
-        Random MetaGreedy OptimalPlus
-        Breadth_Full_NoDepthLimit Depth_Full_NoDepthLimit Best_Satisfice_BestNext
-        Best_Full Best_BestNext Best_Satisfice Best_DepthLimit Best_Prune Best
-    """.split())
+# if EXPERIMENT == 1:
+#     MODELS = ("""
+#         Random MetaGreedy OptimalPlus
+#         Breadth_Full Depth_Full
+#         Best_Full_NoPrune
+#         Best_Full Best_BestNext Best_Satisfice Best_DepthLimit Best_Prune Best
+#     """.split())
 
 if EXPERIMENT == 2:
     MODELS = ("""
@@ -52,17 +52,17 @@ pdf.variance = pd.Categorical(pdf.variance, categories=VARIANCES)
 pdf = pdf.query('complete').copy()
 tdf = tdf.loc[list(pdf.index)]
 pdf = pdf.query('n_click >= 1')
-if EXPERIMENT == 3:
-    pdf = pdf.query('click_delay == "3.0s"')
-    print('DROPPING PARTICIPANTS: click_delay == "3.0s"')
+# if EXPERIMENT == 3:
+#     pdf = pdf.query('click_delay == "3.0s"')
+#     print('DROPPING PARTICIPANTS: click_delay == "3.0s"')
 
 keep = list(pdf.index)
 tdf = tdf.loc[keep]
 # %% ==================== LOAD MODEL RESULTS ====================
 
-fits = load_fits(VERSION, MODELS)
-fits = fits.join(pdf[['variance', 'click_delay']], on='wid')
-pdf['cost'] = fits.query('model == "OptimalPlus"').set_index('wid').cost.clip(upper=5)
+# fits = load_fits(VERSION, MODELS)
+# fits = fits.join(pdf[['variance', 'click_delay']], on='wid')
+# pdf['cost'] = fits.query('model == "OptimalPlus"').set_index('wid').cost.clip(upper=5)
 
 
 def model_trial_features(model):
@@ -79,7 +79,10 @@ def load_cf(k, group=False):
     if group and mod:
         mod = 'group-' + mod
     cf = pd.DataFrame(get_result(VERSION, f'{mod}click_features.json'))
-    cf['potential_gain'] = (cf.max_competing - cf.term_reward).clip(0)
+    try:
+        cf['potential_gain'] = (cf.max_competing - cf.term_reward).clip(0)
+    except:
+        print('Error computing potential_gain')
     cf['competing'] = cf.term_reward - cf.best_next
 
     if k != 'Human':
@@ -118,88 +121,85 @@ pdf['instruct_time'] = (pdf.time_instruct - pdf.time_start) / 60000
 pdf['test_time'] = (pdf.time_end - pdf.time_instruct) / 60000
 # pdf['backward'] = tdf.groupby('wid').backward.mean()
 
-# %% ==================== PLOTTING ====================
+# %% ==================== FIGURES ====================
 
 figs = Figures(f'figs/{EXPERIMENT}')
+figure = figs.figure; show = figs.show; figs.watch()
+
+
+model_names = json.load(open('model_names.json'))
+all_extra = ['Satisfice', 'BestNext', 'DepthLimit', 'Prune']
+
+def prettify_name(name):
+    spec = base, *extra = name.split('_')
+    if len(extra) == len(all_extra):
+        return base + ' +All'
+    elif len(extra) == len(all_extra) - 1:
+        missing = [e for e in all_extra if e not in extra]
+        assert len(missing) <= 1
+        return base + ' -' + missing[0]
+    else:
+        return ' +'.join(spec)
+
 figs.add_names({
     'backward': 'Proportion Planning Backward',
     'best_next': 'Best - Next Best Path Value',
     'term_reward': 'Best Path Value',
-    
     'OptimalPlus': 'Optimal',
     'OptimalPlusPure': 'Optimal',
     'MetaGreedy': 'MetaGreedy',
-    # 'Best': 'BestFirst',
-    # 'Breadth': 'BreadthFirst',
-    # 'Depth': 'DepthFirst',
-    'Best_Satisfice' : 'Best +Satisfice',
-    'Best_BestNext' : 'Best +BestNext',
-    'Best_DepthLimit' : 'Best +DepthLimit',
-    'Best_Prune' : 'Best +Prune',
-    'Best_Full': 'Best +All',
-    'Best_Full_NoPrune': 'Best +All -Prune',
-    'Breadth_Full': 'Breadth +All',
-    'Breadth_Full_NoPrune': 'Breadth +All -Prune',
-    'Depth_Full': 'Depth +All',
-    'Depth_Full_NoPrune': 'Depth +All -Prune',
+    'Random': 'Random'
 })
+figs.add_names({name: prettify_name(name) 
+    for name in model_names if name not in figs.names})
 
-if EXPERIMENT > 1:
-    figs.add_names({
-        'Breadth_Full_NoDepthLimit': 'Breadth',
-        'Depth_Full_NoDepthLimit': 'Depth',
-        'Best_Satisfice_BestNext': 'Best',
-        'BreadthFirst': 'Breadth',
-        'DepthFirst': 'Depth',
-        'BestFirst': 'Best',
-        'Breadth_Satisfice_BestNext': 'Breadth',
-        'Depth_Satisfice_BestNext': 'Depth',
-
-    })
-
-figure = figs.figure; show = figs.show; figs.watch()
-
-lb, db, lg, dg, lr, dr, lo, do, lp, dp, *_ = sns.color_palette("Paired")
-# lb, db, lg, dg, lr, dr, lo, do, *_ = 
+# if EXPERIMENT > 1:
+#     figs.add_names({
+#         'Breadth_Full_NoDepthLimit': 'Breadth',
+#         'Depth_Full_NoDepthLimit': 'Depth',
+#         'Best_Satisfice_BestNext': 'Best',
+#         'BreadthFirst': 'Breadth',
+#         'DepthFirst': 'Depth',
+#         'BestFirst': 'Best',
+#         'Breadth_Satisfice_BestNext': 'Breadth',
+#         'Depth_Satisfice_BestNext': 'Depth',
+#     })
 
 # %% --------
+lb, db, lg, dg, lr, dr, lo, do, lp, dp, *_ = sns.color_palette("Paired")
+
 palette = {
-    'BestFirst': dg,
+    # 'BestFirst': dg,
     'Human': (0.1, 0.1, 0.1),
     'Random': (0.5, 0.5, 0.5),
     'MetaGreedy': dr,
     'OptimalPlus': db,
     'OptimalPlusPure': db,
     'Optimal': db,
-    'Best': lg,
-    'Best_Satisfice': lg,
-    'Best_BestNext': lg,
-    'Best_DepthLimit': lg,
-    'Best_Prune': lg,
-    'Best_Full': lg,
-    'Best_Full_NoPrune': dg,
-    'Breadth_Full': do,
-    'Breadth_Full_NoPrune': lo,
-    'Depth_Full': dp,
-
-    'Depth_Full_NoPrune': lp,
-    'Breadth_Full_NoDepthLimit': do,
-    'Depth_Full_NoDepthLimit': dp,
-    
-    'Best_Satisfice_BestNext': dg,
-    'Breadth_Satisfice_BestNext': do,
-    'Depth_Satisfice_BestNext': dp,
 
     'OptimalPlusExpand': lb,
     'MetaGreedyExpand': lr,
     'Expand': (0.7, 0.7, 0.7),
-    'Best_Satisfice_BestNext_Expand': lg,
-    'Breadth_Satisfice_BestNext_Expand': lo,
-    'Depth_Satisfice_BestNext_Expand': lp,
 
+    # 'Best_Satisfice_BestNext_Expand': lg,
+    # 'Breadth_Satisfice_BestNext_Expand': lo,
+    # 'Depth_Satisfice_BestNext_Expand': lp,
 }
-for m in MODELS:
-    assert m in palette, m
+
+def pick_color(name):
+    if name.startswith('Best'):
+        return dg
+    if name.startswith('Breadth'):
+        return do
+    if name.startswith('Depth'):
+        return dp
+
+for m in model_names:
+    if m not in palette:
+        palette[m] = pick_color(m)
+
+# lb, db, lg, dg, lr, dr, lo, do, *_ = 
+
 
 # %% --------
 plt.rc('legend', fontsize=10, handlelength=2)

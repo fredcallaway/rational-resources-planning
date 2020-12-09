@@ -24,6 +24,11 @@ model_sims = map([name.(MODELS); "OptimalPlusPure"]) do mname
     end
 end |> Dict;
 
+# %% --------
+map(MODELS) do m
+    name(m) => length(bounds(default_space(m))[1])
+end |> Dict |> JSON.json |> writev("$results_path/param_counts.json")
+
 # %% ==================== trial features ====================
 
 path_loss(t::Trial) = term_reward(t.m, t.bs[end]) - path_value(t.m, t.bs[end], t.path)

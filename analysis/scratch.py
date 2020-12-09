@@ -1,4 +1,23 @@
 
+%run setup 1
+print(pdf.groupby(['click_delay', 'variance']).apply(len))
+%run setup 2
+print(pdf.groupby(['click_delay', 'variance']).apply(len))
+%run setup 3
+print(pdf.groupby(['click_delay', 'variance']).apply(len))
+%run setup 4
+print(len(pdf))
+
+
+
+
+
+x = np.linspace(0, 20)
+y = x + np.random.randn(len(x)) * 0.025 * 5
+plt.plot(x, y)
+plt.show()
+
+# %% --------
 import hashlib
 def hash_id(worker_id):
     return 'w' + hashlib.md5(worker_id.encode()).hexdigest()[:7]

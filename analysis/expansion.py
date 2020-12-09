@@ -26,9 +26,33 @@ def expansion():
         plt.axhline(1, label='Forward Search', color=palette['BreadthFirst'])
     axes.flat[0].legend()
 
+# %% --------
+
+human_rate = load_cf('Human').query('variance == "constant" and not is_term').groupby('wid').expand.mean()
+write_tex(f'expansion_Human', mean_std(human_rate, fmt='pct', digits=0))
+
+model_rate = load_cf('OptimalPlus').query('variance == "constant" and not is_term').expand.mean()
+write_tex('expansion_OptimalPlus', f'{model_rate*100:.1f}\\%')
+
+model_rate
+# %% --------
+cfh = load_cf('Human').query('variance == "constant" and not is_term')
+cfo  = load_cf('OptimalPlus').query('variance == "constant" and not is_term')
+
+# %% --------
+from statsmodels.stats.proportion import proportions_ztest
+z, p = proportions_ztest(cfh.expand.sum(), len(cfh.expand), value=model_rate)
+write_tex('expand_proportion', rf'$z={z:.2f},\ {pval(p)}$')
+    
+
+prop_p = cfh.groupby('wid').expand.apply(
+    lambda x: proportions_ztest(x.sum(), len(x), value=model_rate, alternative='larger')[1]
+)
+(prop_p < .05).sum()
+
+cfh.groupby('wid').expand.mean()
 
 # %% ==================== logistic curve ====================
-
 edf = pd.DataFrame(get_result(VERSION, 'expansion.json')).set_index('wid')
 edf['gain'] = edf.q_jump - edf.q_expand
 edf['jump'] = ~edf['expand']
@@ -44,17 +68,16 @@ def expansion_value():
     plt.ylabel('Probability of Violating\nForward Search')
 
 # %% --------
-rdf = edf[['gain', 'jump']].reset_index().copy()
-edf.jump -= edf.mean()
-edf.jump /= edf.std()
+rdf = edf[['gain', 'jump']].reset_index().dropna()
 rdf.jump = rdf.jump.astype(int)
-
-%load_ext rpy2.ipython
-%R -i rdf
-%R library(lme4)
-%R library(lmerTest)
-%R m = glmer(jump ~ gain + (1|wid), family=binomial, data=rdf)
-%R print(summary(m));
+rdf.gain -= rdf.gain.mean()
+rdf.gain /= rdf.gain.std()
+# %% --------
+%%R -i rdf
+library(lme4)
+library(lmerTest)
+m = glmer(jump ~ gain + (1|wid), family=binomial, data=rdf)
+print(summary(m));
 
 
 # %% ==================== histogram ====================

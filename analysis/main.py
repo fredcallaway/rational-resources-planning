@@ -1,6 +1,7 @@
 # %%
+%load_ext rpy2.ipython
 %run setup 1
-# figs.nosave = True
+figs.nosave = True
 if EXPERIMENT > 1:
     %run -i breadth_depth
 %run -i pareto
@@ -9,8 +10,8 @@ figs.nosave = False
 
 
 # %% ==================== Basic stuff ====================
+%run setup 1
 write_tex("recruited", len(full_pdf))
-
 
 failed = full_pdf.comprehension.dropna().apply(lambda x: not x[-1]['correct'])
 failed.sum(), len(failed)

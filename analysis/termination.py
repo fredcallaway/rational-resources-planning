@@ -29,7 +29,6 @@ def plot_term(df, x, y, **kws):
     figs.reformat_labels()
     return ax
 
-
 def termination(x, y, height=3):
     agents = ['Human', 'OptimalPlus']
     nc = len(agents)
@@ -86,12 +85,13 @@ X = cf[['is_term', *preds]].copy()
 X.is_term = X.is_term.astype(int)
 X[preds] -= X[preds].mean()
 X[preds] /= X[preds].std()
-X = X.reset_index()
+X = X.reset_index().dropna()  # TODO: why is best_next sometimes NaN?
 # %% --------
 %%R -i X
 library(lme4)
 library(lmerTest)
-model = glmer(is_term ~ best_next + term_reward + (1|wid), family=binomial, data=X)
+model = glmer(is_term ~ best_next + term_reward + n_revealed + 
+    (1|wid), family=binomial, data=X)
 summary(model)
 
 # %% --------
@@ -118,11 +118,56 @@ for k in ['best_next', 'term_reward']:
     sig = ind_fits[k] < .05
 
 
+# %% --------
 
+cf = load_cf('OptimalPlusPure').query('n_revealed < 16')
+cf.is_term = cf.is_term.astype(int)
+preds = ['n_revealed', 'best_next', 'term_reward']
+X = cf[['is_term', *preds]].copy()
+X.is_term = X.is_term.astype(int)
+X[preds] -= X[preds].mean()
+X[preds] /= X[preds].std()
+
+# %% --------
+%%R -i X
+
+m1 = glm(is_term ~ best_next + term_reward + n_revealed, data=X, family=binomial)
+print(summary(m1))
+
+# %% --------
+
+%%R
+print(anova(m1, update(m1, ~ . - best_next)))
+print(anova(m1, update(m1, ~ . - term_reward)))
+print(anova(m1, update(m1, ~ . - n_revealed)))
+
+# %% --------
+%%R
+anova(
+    m1,
+    update(m1, ~ . - n_revealed),
+    update(m1, ~ . - term_reward),
+    update(m1, ~ . - best_next)
+)
+
+# %% --------
+%%R
+m2 = glm(is_term ~ best_next + term_reward, data=X, family=binomial)
+print(anova(m2, update(m2, ~ . - best_next)))
+print(anova(m2, update(m2, ~ . - term_reward)))
+
+# %% --------
+%%R
+print(anova(glm(is_term ~ best_next, data=X, family=binomial)))
+print(anova(glm(is_term ~ term_reward, data=X, family=binomial)))
+print(anova(glm(is_term ~  n_revealed, data=X, family=binomial)))
 
 
 # %% --------
-ind_fits
+%%R
+print(anova(m1))
+m2 = glm(is_term ~ n_revealed + term_reward + best_next, data=X, family=binomial)
+print(anova(m2))
 
 
 

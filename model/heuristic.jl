@@ -193,7 +193,6 @@ PARAMS = Dict(
     "Expand" => (β_expand=(0, 50),),
 )
 
-
 function default_space(::Type{Heuristic{M}}) where M
     x = string(M)
     components = Set()
@@ -211,6 +210,23 @@ function default_space(::Type{Heuristic{M}}) where M
     end
     space = merge((PARAMS[k] for k in components)...)
     change_space(Heuristic{:Random}; ε=(1e-3, 1), space...)
+end
+
+function powerset(x::Vector{T}) where T
+    result = Vector{T}[[]]
+    for elem in x, j in eachindex(result)
+        push!(result, [result[j] ; elem])
+    end
+    result
+end
+
+function all_heuristic_models()
+    base = ["Best", "Depth", "Breadth"]
+    whistles = ["Satisfice", "BestNext", "DepthLimit", "Prune"]
+    map(Iterators.product(base, powerset(whistles))) do (b, ws)
+        spec = Symbol(join([b, ws...], "_"))
+        Heuristic{spec}
+    end[:]
 end
 
 default_space(::Type{Heuristic{:Exhaustive}}) = 

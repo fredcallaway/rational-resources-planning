@@ -1,26 +1,109 @@
-# %% ==================== MODEL COMPARISON ====================
+# %% ==================== Load predictions ====================
+%run setup 1
 preds = pd.DataFrame(get_result(VERSION, 'predictions.json')).set_index('wid')
 res = preds.apply(lambda d: {k: p[d.c] for k, p in d.predictions.items()}, axis=1)
 logp = np.log(pd.DataFrame(list(res.values)))
 logp.set_index(preds.index, inplace=True)
 logp['variance'] = pdf.variance
 logp = logp.loc[keep]
-assert set(MODELS) < set(logp.columns)
-# %% --------
-L = np.exp(logp.groupby(['variance', 'wid']).mean()).groupby('variance').mean()
-X = L.loc[:, L.columns.str.startswith('Best')].stack()
-for v, x in X.groupby('variance'):
-    print(x.idxmax())
+logp = logp.reset_index().set_index(['variance', 'wid'])
 
-# %% -------
+# geometric mean likelihood
+gml = np.exp(logp.groupby(['variance', 'wid']).mean())
+mean_gml = gml.mean()
+total = logp.sum()
+total.sort_values()
+
+total.OptimalPlus - total.Best_Satisfice_DepthLimit_Prune
+total.max() - total.OptimalPlus
+
+mean_gml.sort_values()
+
+# %% ==================== Build table ====================
+HEURISTICS = ['Breadth', 'Depth', 'Best']
+MECHANISMS = ['Satisfice', 'BestNext', 'DepthLimit', 'Prune']
+h = HEURISTICS[0]
+
+param_counts = get_result(VERSION, 'param_counts.json')
+
+def make_row(model):
+    row = {m: m in model for m in MECHANISMS}
+    row['# Params'] = param_counts[model]
+    row['Total NLL'] = -int(round(total[model]))
+    return row
+
+
+models = list(total.index[total.index.str.startswith(h)])
+t = pd.DataFrame(make_row(model) for model in models)
+t = t.sort_values(['Satisfice', 'BestNext', 'DepthLimit', 'Prune'])
+t.to_latex
+
+
+
+total.sort_values()
+
+# %% ==================== Choose models to plot ====================
+
+MODELS = ['Random', 'MetaGreedy', 'OptimalPlus']
+HEURISTIC = ['Breadth', 'Depth', 'Best']
+
+best_heuristic = [
+    mean_gml.filter(regex=f'^{model_class}*').idxmax()
+    for model_class in ['Breadth', 'Depth', 'Best']
+]
+best_heuristic_simple = [
+    # mean_gml.filter(regex=f'^{model_class}(_Satisfice)?(_BestNext)?(_Prune)?$').idxmax()
+    mean_gml.filter(regex=f'^{model_class}(_Satisfice)?(_BestNext)?$').idxmax()
+    for model_class in ['Breadth', 'Depth', 'Best']
+]
+full_heuristic = [f'{base}_Satisfice_BestNext_DepthLimit_Prune'
+    for base in ['Breadth', 'Depth', 'Best']]
+
+foo = [f'{base}_Satisfice_BestNext'
+    for base in ['Breadth', 'Depth', 'Best']]
+
+# MODELS.extend(best_heuristic)
+print(best_heuristic_simple)
+MODELS.extend(best_heuristic_simple)
+if EXPERIMENT == 1:
+    MODELS.extend([
+        'Best_Satisfice_BestNext_DepthLimit_Prune',
+        'Best_BestNext',
+        'Best_Satisfice',
+        'Best_DepthLimit',
+        'Best_Prune',
+        'Best'
+    ])
+# %% --------
+for model_class in HEURISTIC:
+    x = mean_gml.filter(regex=f'^{model_class}*')
+    print(x.max() - x.loc[~x.index.str.contains('Prune')].max())
+
+# %% ==================== Stats ====================
+# assert set(MODELS) < set(logp.columns)
+# L = np.exp(logp.groupby(['variance', 'wid']).mean()).groupby('variance').mean()
+# X = L.loc[:, L.columns.str.startswith('Best')].stack()
+# for v, x in X.groupby('variance'):
+#     print(x.idxmax())
+
+from scipy.stats import wilcoxon, ttest_rel, ttest_ind
+
+X = np.exp(logp.groupby(['variance', 'wid']).mean())
+for model, acc in X.items():
+    write_tex(f'accuracy_{model}', mean_std(acc, digits=3))
+
+if EXPERIMENT == 1:
+    write_tex("opt_vs_best_ttest", paired_ttest(gml.OptimalPlus, gml.Best_Full_NoPrune))
+
+# %% ==================== Plots ====================
 
 def plot_model_performance(L, label, axes=None):
     if EXPERIMENT == 1:
         return plot_model_performance_vertical(L, label, axes)
     if EXPERIMENT >= 3:
         return plot_model_performance_expansion(L, label, axes)
-    L = L.groupby('variance').mean()
     if axes is None:
+        L = L.groupby('variance').mean()
         fig, axes = setup_variance_plot()
     for i, v in enumerate(VARIANCES):
         plt.sca(axes.flat[i])
@@ -40,11 +123,15 @@ def plot_model_performance_vertical(L, label, ax=None):
     else:
         plt.sca(ax)
     pal = [palette[m] for m in MODELS]
+    for i in range(6, len(pal)):
+        pal[i] = lg
 
     x = L.groupby('variance').mean().loc['constant'].loc[MODELS]
+
     x.plot.bar(color=pal)
+
     stars = [i for i, k in enumerate(x.index) 
-        if k != 'OptimalPlus' and wilcoxon(L.OptimalPlus, L[k]).pvalue < .05]
+        if k != 'OptimalPlus' and ttest_ind(L.OptimalPlus, L[k]).pvalue < .05]
     plt.scatter(stars, x.iloc[stars] + 0.03, marker='*', c='k')
     plt.xticks(rotation=45, ha="right")
 
@@ -76,20 +163,26 @@ def plot_model_performance_expansion(L, label, axes=None):
         else:
             plt.yticks(())
 
-
 @figure()
 def plot_average_predictive_accuracy(axes=None):
-    plot_model_performance(
-        np.exp(logp.groupby(['variance', 'wid']).mean()),
-        'Predictive Accuracy',
-        axes,
-    )
+    plot_model_performance(gml, 'Predictive Accuracy', axes)
 
 # %% --------
-X = np.exp(logp.groupby(['variance', 'wid']).mean())
-for model, acc in X.items():
-    write_tex(f'accuracy_{model}', mean_std(acc, digits=3))
-
+@figure()
+def plot_full_likelihood(axes=None):
+    plot_model_performance(
+        -logp.groupby('variance').sum(),
+        'Cross Validated\nNegative Log-Likelihood',
+        axes
+    )
+# %% --------
+@figure()
+def plot_full_predictive_accuracy(axes=None):
+    plot_model_performance(
+        np.exp(logp.groupby('variance').mean()),
+        'Predictive Accuracy',
+        axes
+    )
 # %% --------
 
 @figure()
@@ -146,13 +239,7 @@ def individual_predictive_accuracy():
 #             plt.xlabel('')
 
 # # %% --------
-# @figure()
-# def full_likelihood(axes=None):
-#     plot_model_performance(
-#         -logp.groupby('variance').sum(),
-#         'Cross Validated\nNegative Log-Likelihood',
-#         axes
-#     )
+
 
 # @figure()
 # def geometric_mean_likelihood(axes=None):

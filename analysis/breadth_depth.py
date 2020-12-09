@@ -132,13 +132,6 @@ def first_click_depth(axes=None):
 # %% --------
 # X = pd.concat(load_cf(x) for x in ['Human', ])
 
-x = load_cf('Human')
-rate = x.query('variance == "constant" and not is_term').groupby('wid').expand.mean()
-write_tex(f'expansion_Human', mean_std(100*rate, fmt='pct', digits=0))
-
-rate = load_cf('OptimalPlus').query('variance == "constant" and not is_term').expand.mean()
-write_tex('expansion_OptimalPlus', f'{rate*100:.1f}\\%')
-rate.mean()
 
 
 

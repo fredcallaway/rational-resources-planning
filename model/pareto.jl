@@ -1,5 +1,6 @@
 using CSV
 using Glob
+using ProgressMeter
 
 @everywhere begin
     include("utils.jl")
@@ -9,6 +10,7 @@ using Glob
 end
 
 @everywhere N_SIM = 100000
+@everywhere N_CANDIDATE = 100000
 @everywhere COSTS = [0:0.05:4; 100]
 
 println("Running pareto for ", ARGS[1])
@@ -38,7 +40,7 @@ function sample_models(M, n)
     seq = SobolSeq(lower, upper)
     skip(seq, n)
     map(1:n) do i
-        x = next!(seq)
+        x = Sobol.next!(seq)
         create_model(M, x, [], space)
     end
 end
@@ -51,12 +53,13 @@ end
 function sample_models(::Type{MetaGreedy}, n)
     # ignore n...
     map(COSTS) do cost
-        MetaGreedy(cost, 100., 100., 0.)
+        cost = 1.
+        MetaGreedy{:Default,Float64}(cost, 100., 100., 0., 0.)
     end
 end
 
-function pareto_front(M, m; n_candidate=10000, n_eval=N_SIM)
-    candidates = pmap(sample_models(M, n_candidate)) do model
+function pareto_front(M, m; n_candidate=N_CANDIDATE, n_eval=N_SIM)
+    candidates = @showprogress pmap(sample_models(M, n_candidate)) do model
         mrc = mean_reward_clicks(Simulator(model, m), N=n_eval)
         (model=name(M), mdp=id(m), namedtuple(model)..., mrc...)
     end
@@ -107,9 +110,16 @@ function write_heuristic_pareto(;force=false)
     # mdps = map(readdir("mdps/base")) do i
     #     deserialize("mdps/base/$i")
     # end
-    models = filter(eval(QUOTE_MODELS)) do M
-        M <: Heuristic
-    end 
+    # models = filter(eval(QUOTE_MODELS)) do M
+    #     M <: Heuristic
+    # end
+    models = [
+        RandomSelection,
+        MetaGreedy,
+        Heuristic{:Best_Full},
+        Heuristic{:Breadth_Full},
+        Heuristic{:Depth_Full},
+    ] 
 
     for M in models, m in mdps
         f = "mdps/pareto/$(id(m))-$(name(M)).csv"

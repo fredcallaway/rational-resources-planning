@@ -174,15 +174,11 @@ def plot_params(fits):
 
 def pval(x):
     if x < 0.001:
-        return r"p < 0.001"
-    elif x < 0.01:
-        return r"p < 0.01"
-    elif x < 0.05:
-        return r"p < 0.05"
-    elif x >= 0.05:
-        return r"p = {:.2f}".format(x)
+        return r"p < .001"
     else:
-        assert False
+        assert x < 1
+        p = f'{x:.3f}'[1:]
+        return f"p = {p}"
 
 class TeX(object):
     """Saves tex files."""
@@ -198,6 +194,12 @@ class TeX(object):
         with open(file, "w+") as f:
             f.write(str(tex) + r"\unskip")
         print(f'wrote "{tex}" to "{file}"')
+
+from scipy.stats import ttest_rel
+def paired_ttest(x, y):
+    t, p = ttest_rel(x, y)
+    df = len(x) - 1
+    return f"$t({df}) = {t:.3f}, {pval(p)}$"
 
 
 # def load_data_multi(codes):
