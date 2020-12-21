@@ -65,10 +65,11 @@ def load_fits(exp, models, path='mle'):
 from datetime import datetime
 class Figures(object):
     """Plots and saves figures."""
-    def __init__(self, path='figs', hist_path='fighist', dpi=200):
+    def __init__(self, path='figs', hist_path='fighist', pdf=True, dpi=200):
         self.path = path
         self.hist_path = hist_path
         self.dpi = dpi
+        self.pdf = pdf
         self.names = {}
         self._last = None
         self.nosave = False
@@ -119,7 +120,9 @@ class Figures(object):
             self.watcher.start()
         self.watcher = Watcher(self.hist_path)
 
-    def show(self, name='tmp', tight=True, reformat_labels=False, reformat_legend=False, despine=True):
+    def show(self, name='tmp', pdf=None, tight=True, reformat_labels=False, reformat_legend=False, despine=True):
+      if pdf is None:
+        pdf = self.pdf
         try:
             if tight:
                 plt.tight_layout()
@@ -140,24 +143,23 @@ class Figures(object):
 
             if name != 'tmp':
                 name = name.lower()
-                path = f'{self.path}/{name}.png'
-                os.system(f'cp {tmp} {path}')
-                print(f"Wrote {path}")
+                if pdf:
+                    plt.savefig(f'{self.path}/{name}.pdf', bbox_inches='tight')
+                else:
+                    os.system(f'cp {tmp} {self.path}/{name}.png')
         finally:
             plt.close('all')
 
-    def figure(self, save=True, reformat_labels=False, reformat_legend=False, despine=True, **kwargs):
+    def figure(self, **kwargs):
         """Decorator that calls a plotting function and saves the result."""
         def decorator(func):
-            params = [v for v in kwargs.values() if v is not None]
-            param_str = '_' + str_join(params).rstrip('_') if params else ''
-            name = func.__name__ + param_str
+            name = func.__name__
             if name.startswith('plot_'):
                 name = name[len('plot_'):].lower()
             try:
                 plt.figure()
-                func(**kwargs)
-                self.show(name, reformat_labels=reformat_labels, reformat_legend=reformat_legend, despine=despine)
+                func()
+                self.show(name, **kwargs)
             finally:
                 plt.close('all')
             return func

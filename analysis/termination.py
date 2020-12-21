@@ -21,11 +21,15 @@ def plot_term(df, x, y, **kws):
     ax.set_xticks(ax.get_xticks()[::2])
     ax.set_xticklabels(xlab[::2])
     plt.xticks(rotation=0)
+    
     ylab = [int(float(t.get_text())) for t in ax.get_yticklabels()]
-    ax.set_yticks(ax.get_yticks()[1::2])
-    ax.set_yticklabels(ylab[1::2])
+    ax.set_yticks(ax.get_yticks()[::2])
+    ax.set_yticklabels(ylab[::2])
+
 
     ax.invert_yaxis()
+    plt.xlim(-0.5, X.shape[1] + 0.5)
+    plt.ylim(-0.5, X.shape[0] + 0.5)
     figs.reformat_labels()
     return ax
 
@@ -34,7 +38,7 @@ def termination(x, y, height=3):
     # agents = ['Human', 'OptimalPlus']
     nc = len(agents)
     fig, axes = plt.subplots(1, nc+1, figsize=(4*nc, height),
-                             gridspec_kw={'width_ratios': [*([15] * nc), 1]})
+                             gridspec_kw={'width_ratios': [*([16] * nc), 1]})
 
     cfs = {k: load_cf(k) for k in agents}
     multi_cf = pd.concat([load_cf(k) for k in agents])
@@ -50,11 +54,13 @@ def termination(x, y, height=3):
             # plt.yticks(())
             plt.ylabel("")
         plt.title(figs.nice_name(name))
-    axes[-1].set_ylabel('Stopping Probability')
+    axes[-1].set_ylabel('Stopping Probability', labelpad=10)
 
-@figure()
+@figure(despine=True, tight=False)
 def plot_termination():
+    # with sns.axes_style('white'):
     termination('best_next', 'term_reward', height=4)
+    # sns.despine(offset=10, trim=True)
 
 # %% --------
 @figure()
@@ -74,59 +80,16 @@ def plot_satisfice():
     figs.reformat_legend()
     figs.reformat_labels()
 
-# sns.lmplot('best_next', 'is_term', data=cf, logistic=False, scatter=False)
-# %% --------
-sns.lmplot('best_next', 'is_term', data=cf, logistic=False, x_bins=10)
-show()
-
-# %% ==================== stats ====================
-cf = load_cf('Human')
-preds = ['n_revealed', 'best_next', 'term_reward']
-X = cf[['is_term', *preds]].copy()
-X.is_term = X.is_term.astype(int)
-X[preds] -= X[preds].mean()
-X[preds] /= X[preds].std()
-X = X.reset_index().dropna()  # TODO: why is best_next sometimes NaN?
-# %% --------
-%%R -i X
-library(lme4)
-library(lmerTest)
-model = glmer(is_term ~ best_next + term_reward + n_revealed + 
-    (1|wid), family=binomial, data=X)
-summary(model)
-
-# %% --------
-from statsmodels.formula.api import logit
-def do_fit(X):
-    m = logit('is_term ~ best_next + term_reward', data=X).fit(disp=False)
-    return m.pvalues
-
-# pd.DataFrame(do_fit(d) for _)
-ind_fits = X.groupby('wid').apply(do_fit)
-
-bn_sig = (ind_fits.best_next < .05)
-tr_sig = (ind_fits.term_reward < .05)
-
-sig = ind_fits < .05
-types = sig.apply(lambda row: (int(row.best_next), int(row.term_reward)), axis=1).value_counts()
-
-types.items
-for k, n in types.items():
-    i = ''.join(map(str, k))
-    write_tex(f'term_nsig_{i}', f'($N={n}$)')
-    
-for k in ['best_next', 'term_reward']:
-    sig = ind_fits[k] < .05
-
-# %% --------
-
-# %% ==================== stats on optimal ====================
-
+# %% ==================== stats  ====================
+from statsmodels.formula.api import logit 
 cf = load_cf('Human').query('n_revealed < 16')
 m = logit(f'is_term.astype(int) ~ term_reward + best_next', data=cf).fit()
 for k in ['term_reward', 'best_next']:
-    write_tex(f'term_human_{k}', rf'$B = {m.params[k]:.3f},\ {pval(m.pvalues[k])}$')
+    lo, hi = m.conf_int().loc[k]
+    write_tex(f'term_human_{k}', rf'$B = {m.params[k]:.3f}$ [{lo:.3f}, {hi:.3f}]')
+    # write_tex(f'term_human_{k}', rf'$B = {m.params[k]:.3f}$, {label} [{lo:.3f}, {hi:.3f}], ${pval(m.pvalues[k])}$'))
 
+# %% --------
 cf = load_cf('OptimalPlusPure').query('n_revealed < 16')
 m = logit(f'is_term.astype(int) ~ term_reward + best_next', data=cf).fit()
 for k in ['term_reward', 'best_next']:
@@ -153,53 +116,5 @@ X
 for p in preds:
     print(p, X.LL.full - X.LL['no_' + p])
     
-# %% --------
-
-
-# %% --------
-preds = m.predict(X) > 0.5
-(X.is_term == preds).mean()
-
-# %% --------
-%%R -i X
-
-m1 = glm(is_term ~ best_next + term_reward + n_revealed, data=X, family=binomial)
-print(summary(m1))
-
-# %% --------
-
-%%R
-print(anova(m1, update(m1, ~ . - best_next)))
-print(anova(m1, update(m1, ~ . - term_reward)))
-print(anova(m1, update(m1, ~ . - n_revealed)))
-
-# %% --------
-%%R
-anova(
-    m1,
-    update(m1, ~ . - n_revealed),
-    update(m1, ~ . - term_reward),
-    update(m1, ~ . - best_next)
-)
-
-# %% --------
-%%R
-m2 = glm(is_term ~ best_next + term_reward, data=X, family=binomial)
-print(anova(m2, update(m2, ~ . - best_next)))
-print(anova(m2, update(m2, ~ . - term_reward)))
-
-# %% --------
-%%R
-print(anova(glm(is_term ~ best_next, data=X, family=binomial)))
-print(anova(glm(is_term ~ term_reward, data=X, family=binomial)))
-print(anova(glm(is_term ~  n_revealed, data=X, family=binomial)))
-
-
-# %% --------
-%%R
-print(anova(m1))
-m2 = glm(is_term ~ n_revealed + term_reward + best_next, data=X, family=binomial)
-print(anova(m2))
-
 
 

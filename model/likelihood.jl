@@ -105,10 +105,8 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_res
         return model, -logp(L, model)
     end
 
-    n_call = 0
     function make_loss(z)
         x -> begin
-            n_call += 1
             model = create_model(M, x, z, space)
             # L1 = sum(abs.(x) ./ space_size)
             -logp(L, model) #+ 10 * L1

@@ -44,20 +44,28 @@ if EXPERIMENT >= 3:
 # %% ==================== LOAD DATA ====================
 pdf, tdf = load_data(VERSION)
 pdf = pdf.rename(columns={'final_bonus': 'bonus'})
+if EXPERIMENT == 1:
+    pdf = pdf.drop('w29dd261')  # extra participant approved after reaching 100
 
 full_pdf = pdf.copy()
+pdf = pdf.query('complete')
+tdf = tdf.loc[list(pdf.index)]
 pdf.variance = pd.Categorical(pdf.variance, categories=VARIANCES)
 
-# %% ==================== EXCLUSION ====================
-pdf = pdf.query('complete').copy()
-tdf = tdf.loc[list(pdf.index)]
-pdf = pdf.query('n_click >= 1')
-# if EXPERIMENT == 3:
-#     pdf = pdf.query('click_delay == "3.0s"')
-#     print('DROPPING PARTICIPANTS: click_delay == "3.0s"')
+assert (tdf.index.value_counts() == 25).all()
+assert set(tdf.index) == set(pdf.index)
 
-keep = list(pdf.index)
-tdf = tdf.loc[keep]
+
+# # %% ==================== EXCLUSION ====================
+# pdf = pdf.query('complete').copy()
+# tdf = tdf.loc[list(pdf.index)]
+# pdf = pdf.query('n_click >= 1')
+# # if EXPERIMENT == 3:
+# #     pdf = pdf.query('click_delay == "3.0s"')
+# #     print('DROPPING PARTICIPANTS: click_delay == "3.0s"')
+
+# list(pdf.index) = list(pdf.index)
+# tdf = tdf.loc[list(pdf.index)]
 # %% ==================== LOAD MODEL RESULTS ====================
 
 # fits = load_fits(VERSION, MODELS)
@@ -66,19 +74,16 @@ tdf = tdf.loc[keep]
 
 
 def model_trial_features(model):
-    tf = pd.DataFrame(get_result(VERSION, f'{model}-trial_features.json'))
+    tf = pd.DataFrame(get_result(VERSION, f'trial_features/{model}.json'))
     tf.wid = tf.wid.apply(lambda x: x.split('-')[1])
     tf.set_index('wid', inplace=True)
     tf['variance'] = pdf.variance
     tf['agent'] = model
-    return tf.loc[keep].reset_index().set_index('variance')
+    return tf.loc[list(pdf.index)].reset_index().set_index('variance')
 
-def load_cf(k, group=False):
+def load_cf(k):
     # VERSION = 'exp1' if k in bfs_cols or k in normal_cols else 'exp1-bfs'
-    mod = '' if k == 'Human' else k + '-'
-    if group and mod:
-        mod = 'group-' + mod
-    cf = pd.DataFrame(get_result(VERSION, f'{mod}click_features.json'))
+    cf = pd.DataFrame(get_result(VERSION, f'click_features/{k}.json'))
     try:
         cf['potential_gain'] = (cf.max_competing - cf.term_reward).clip(0)
     except:
@@ -88,7 +93,7 @@ def load_cf(k, group=False):
     if k != 'Human':
         cf.wid = cf.wid.apply(lambda x: x.split('-')[1])
 
-    cf = cf.set_index('wid').loc[keep]
+    cf = cf.set_index('wid').loc[list(pdf.index)]
     cf['variance'] = pdf.variance
     cf['agent'] = k
     # for k, v in cf.items():
@@ -97,24 +102,24 @@ def load_cf(k, group=False):
     return cf.rename(columns={'expanding': 'expand'})
 
 def load_depth_curve(k):
-    mod = '' if k == 'Human' else k + '-'
-    d = pd.DataFrame(get_result(VERSION, f'{mod}depth_curve.json'))
+    d = pd.DataFrame(get_result(VERSION, f'depth_curve/{k}.json'))
     if k != 'Human':
         d.wid = d.wid.apply(lambda x: x.split('-')[1])
     d.set_index('wid', inplace=True)
     d['variance'] = pdf.variance
     d['agent'] = k
-    return d.loc[keep]
+    return d.loc[list(pdf.index)]
+
 # %% ==================== ADD COLUMNS ====================
 
 tdf['i'] = list(tdf.trial_index - tdf.trial_index.groupby('wid').min() + 1)
 assert all(tdf.groupby(['wid', 'i']).apply(len) == 1)
-tf = pd.DataFrame(get_result(VERSION, 'trial_features.json'))
+tf = pd.DataFrame(get_result(VERSION, 'trial_features/Human.json'))
 n_click = tdf.pop('n_click')  # this is already in tf, we check that it's the same below
-assert set(pdf.index).issubset(set(tf.wid))
+
+assert set(pdf.index) <= set(tf.wid)
 tdf = tdf.join(tf.set_index(['wid', 'i']), on=['wid', 'i'])
-if hasattr(tdf, 'n_click'):
-    assert all(tdf.n_click == n_click)
+assert all(tdf.n_click == n_click)
 
 pdf['total_time'] = (pdf.time_end - pdf.time_start) / 1000 / 60
 pdf['instruct_time'] = (pdf.time_instruct - pdf.time_start) / 60000
@@ -123,15 +128,16 @@ pdf['test_time'] = (pdf.time_end - pdf.time_instruct) / 60000
 
 # %% ==================== FIGURES ====================
 
-figs = Figures(f'figs/{EXPERIMENT}')
+figs = Figures(f'figs/{EXPERIMENT}', pdf=True)
 figure = figs.figure; show = figs.show; figs.watch()
+model_names = get_result(VERSION, 'param_counts.json').keys()
 
-
-model_names = json.load(open('model_names.json'))
 all_extra = ['Satisfice', 'BestNext', 'DepthLimit', 'Prune']
 
 def prettify_name(name):
     spec = base, *extra = name.split('_')
+    if EXPERIMENT > 1:
+        return base
     if len(extra) == len(all_extra):
         return base + ' +All'
     elif len(extra) == len(all_extra) - 1:
@@ -147,7 +153,7 @@ figs.add_names({
     'term_reward': 'Best Path Value',
     'OptimalPlus': 'Optimal',
     'OptimalPlusPure': 'Optimal',
-    'MetaGreedy': 'MetaGreedy',
+    'MetaGreedy': 'Myopic',
     'Random': 'Random'
 })
 figs.add_names({name: prettify_name(name) 
@@ -188,11 +194,11 @@ palette = {
 
 def pick_color(name):
     if name.startswith('Best'):
-        return dg
+        return lg if name.endswith('Expand') else dg
     if name.startswith('Breadth'):
-        return do
+        return lo if name.endswith('Expand') else do
     if name.startswith('Depth'):
-        return dp
+        return lp if name.endswith('Expand') else dp
 
 for m in model_names:
     if m not in palette:

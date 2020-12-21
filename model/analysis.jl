@@ -1,3 +1,6 @@
+using Glob
+using ProgressMeter
+
 include("conf.jl")
 include("base.jl")
 include("models.jl")
@@ -24,9 +27,14 @@ model_sims = map([name.(MODELS); "OptimalPlusPure"]) do mname
     end
 end |> Dict;
 
+comparison_models = ["OptimalPlus", "OptimalPlusPure"]
+if !EXPAND_ONLY
+    push!(comparison_models, "OptimalPlusExpand")
+end
+
 # %% --------
 map(MODELS) do m
-    name(m) => length(bounds(default_space(m))[1])
+    name(m) => sum(length(spec) > 1 for spec in values(default_space(m)))
 end |> Dict |> JSON.json |> writev("$results_path/param_counts.json")
 
 # %% ==================== trial features ====================
@@ -59,19 +67,21 @@ trial_features(t::Trial) = (
     path_loss=path_loss(t),
 )
 
-trial_features.(flat_trials) |> JSON.json |> writev("$results_path/trial_features.json");
+println("Computing trial features")
+mkpath("$results_path/trial_features")
+trial_features.(flat_trials) |> JSON.json |> writev("$results_path/trial_features/Human.json");
 
-for (nam, sims) in pairs(model_sims)
-    f = "$results_path/$nam-trial_features.json"
-    sims |> flatten .|> trial_features |> JSON.json |> writev(f)
+
+# @showprogress for (nam, sims) in pairs(model_sims)
+for nam in comparison_models
+    sims = model_sims[nam]
+    f = "$results_path/trial_features/$nam.json"
+    sims |> flatten .|> trial_features |> JSON.json |> write(f)
 end
 
 # %% ==================== click features ====================
 
 _bf = create_model(Heuristic{:Best}, [1e5, -1e5, 0], (), default_space(Heuristic{:Best}))
-# function is_bestfirst(d::Datum)
-#     (d.c != TERM) && action_dist(_bf, d)[d.c+1] > 1e-2
-# end
 
 function click_features(d)
     m = d.t.m; b = d.b;
@@ -98,11 +108,15 @@ function click_features(d)
         best_next=best_vs_next(m, b),
     )
 end
-click_features.(all_data) |> JSON.json |> writev("$results_path/click_features.json");
-# %% --------
-for (nam, sims) in pairs(model_sims)
-    f = "$results_path/$nam-click_features.json"
-    sims |> flatten |> get_data .|> click_features |> JSON.json |> writev(f)
+
+println("Computing click features")
+mkpath("$results_path/click_features")
+click_features.(all_data) |> JSON.json |> writev("$results_path/click_features/Human.json");
+
+for nam in comparison_models
+    sims = model_sims[nam]
+    f = "$results_path/click_features/$nam.json"
+    sims |> flatten  |> get_data.|> click_features |> JSON.json |> write(f)
 end
 
 # %% ==================== expansion ====================
@@ -133,10 +147,10 @@ if !flat_trials[1].m.expand_only
 
     all_data |> filter(d->d.c != TERM) .|> expansion_value |> JSON.json |> writev("$results_path/expansion.json")
 
-    for (nam, sims) in pairs(model_sims)
-        f = "$results_path/$nam-expansion.json"
-        sims |> flatten |> get_data  |> filter(d->d.c != TERM) .|> expansion_value |> JSON.json |> writev(f)
-    end
+    # for (nam, sims) in pairs(model_sims)
+    #     f = "$results_path/$nam-expansion.json"
+    #     sims |> flatten |> get_data  |> filter(d->d.c != TERM) .|> expansion_value |> JSON.json |> writev(f)
+    # end
 end
 
 
@@ -163,69 +177,12 @@ function depth_curve(trials)
     Dict(["wid", "click", "depth", "cumdepth"] .=> invert(rows))
 end
 
-depth_curve(flat_trials) |> JSON.json |> writev("$results_path/depth_curve.json");
+println("Computing depth curve")
+mkpath("$results_path/depth_curve")
+depth_curve(flat_trials) |> JSON.json |> writev("$results_path/depth_curve/Human.json");
 
-for (nam, sims) in pairs(model_sims)
-    # M = MODELS[5]; sims = model_sims[M];
-    sims |> flatten |> depth_curve |> JSON.json |> writev("$results_path/$nam-depth_curve.json")
+# @showprogress for (nam, sims) in pairs(model_sims)
+for nam in comparison_models
+    sims = model_sims[nam]
+    sims |> flatten |> depth_curve |> JSON.json |> writev("$results_path/depth_curve/$nam.json")
 end
-
-
-# # %% ==================== optimal visualization ====================
-
-# function viz_sim(t::Trial)
-#     (
-#         stateRewards = t.bs[end],
-#         demo = (
-#             clicks = t.cs[1:end-1] .- 1,
-#             path = t.path .- 1,
-#             # parameters = Dict(name(M) => get_params(M, t) for M in MODELS)
-#             # predictions = Dict(name(M) => get_preds(M, t) for M in MODELS),
-#         )
-#     )
-# end
-
-# map(zip(COSTS, opt_sims)) do (cost, sim)
-#     name = "Optimal-$cost"
-#     viz_sim.(sim[1:50]) |> json |> write("$results_path/viz/$name.json")
-#     (cost = cost, name=name)
-# end |> json |> write("$results_path/viz/optimal-table.json")
-
-# # %% ==================== best first ====================
-using Glob
-@everywhere function best_first_rate(trials)
-    map(get_data(trials)) do d
-        d.c == TERM && return missing
-        is_bestfirst(d)
-    end |> skipmissing |> (x -> isempty(x) ? NaN : mean(x))
-end
-
-@everywhere function compute_bfr(f)
-    cost, mid = match(r"cost(.*)-(.*)", f).captures
-    cost = parse(Float64, cost)
-    trials = deserialize(f);
-    (
-        mdp = mid,
-        cost = cost,
-        n_click = mean(length(t.cs) for t in trials) - 1,
-        best_first = best_first_rate(trials),
-    )
-end
-
-using ProgressMeter
-
-res = map(glob("$base_path/sims/Optimal-cost*")) do f
-    cost, mid = match(r"cost(.*)-(.*)", f).captures
-    cost = parse(Float64, cost)
-    trials = deserialize(f);
-    (
-        mdp = mid,
-        cost = cost,
-        n_click = mean(length(t.cs) for t in trials) - 1,
-        best_first = best_first_rate(trials),
-    )
-end
-res |> json |> write("$results_path/bestfirst.json")
-
-
-

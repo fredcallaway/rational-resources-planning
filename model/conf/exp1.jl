@@ -12,3 +12,14 @@ QUOTE_MODELS = quote
         all_heuristic_models()...
     ] 
 end
+
+QUOTE_PARETO_MODELS = quote
+    [
+        RandomSelection,
+        MetaGreedy,
+        Heuristic{:Best_Full},
+        Heuristic{:Best_BestNext_Satisfice},
+        Heuristic{:Best_BestNext_Satisfice_Prune},
+        Heuristic{:Best_BestNext_Satisfice_DepthLimits},
+    ]
+end

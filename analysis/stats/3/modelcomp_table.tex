@@ -1,0 +1,37 @@
+\begin{tabular}{lllllrrr}
+\toprule
+      Class & Satisfice & BestNext & DepthLimit & Prune &  \# Params &  \# Participants &  Total NLL \\
+\midrule
+     Random &           &          &            &       &         1 &               1 &     143016 \\
+ MetaGreedy &           &          &            &       &         4 &               2 &     130268 \\
+    Optimal &           &          &            &       &         4 &              64 &      97679 \\
+    Breadth &           &          &            &       &         3 &               0 &     123523 \\
+    Breadth &           &          &            &       &         4 &               2 &     113088 \\
+    Breadth &           &        X &            &       &         5 &               2 &     106793 \\
+    Breadth &           &        X &            &       &         4 &               0 &     117381 \\
+    Breadth &         X &          &            &       &         4 &               2 &     118267 \\
+    Breadth &         X &          &            &       &         5 &               5 &     108360 \\
+    Breadth &         X &        X &            &       &         5 &               3 &     116071 \\
+    Breadth &         X &        X &            &       &         6 &               3 &     105550 \\
+      Depth &           &          &            &       &         3 &               0 &     136683 \\
+      Depth &           &          &            &       &         4 &               1 &     109856 \\
+      Depth &           &        X &            &       &         5 &               3 &     103245 \\
+      Depth &           &        X &            &       &         4 &               0 &     130826 \\
+      Depth &         X &          &            &       &         5 &               7 &     104741 \\
+      Depth &         X &          &            &       &         4 &               6 &     132174 \\
+      Depth &         X &        X &            &       &         5 &               1 &     129497 \\
+      Depth &         X &        X &            &       &         6 &               3 &     101877 \\
+       Best &           &          &            &       &         4 &               3 &     104415 \\
+       Best &           &          &            &       &         3 &               1 &     127750 \\
+       Best &           &        X &            &       &         4 &               1 &     121526 \\
+       Best &           &        X &            &       &         5 &              24 &      98058 \\
+       Best &         X &          &            &       &         4 &               2 &     123372 \\
+       Best &         X &          &            &       &         5 &               7 &      99972 \\
+       Best &         X &        X &            &       &         6 &              38 &      96967 \\
+       Best &         X &        X &            &       &         5 &               3 &     120196 \\
+        NaN &           &          &            &       &         5 &               0 &     124522 \\
+        NaN &           &          &            &       &         3 &               0 &     114902 \\
+        NaN &           &          &            &       &         5 &             107 &      86121 \\
+\bottomrule
+\end{tabular}
+\unskip

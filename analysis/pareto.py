@@ -14,22 +14,24 @@ model_pareto.rename(columns={'clicks': 'n_click', 'reward': 'term_reward'}, inpl
 model_pareto.index.unique()
 
 if EXPERIMENT == 1:
-    PARETO_MODELS = ['Random', 'MetaGreedy', 'OptimalPlus', 'BestFirst', ]
+    PARETO_MODELS = ['Optimal', 'BestFirst', 'MetaGreedy', 'Random', ]
 else:
-    PARETO_MODELS = ['OptimalPlus', 'BestFirst', 'BreadthFirst', 'DepthFirst', 'Random']
+    PARETO_MODELS = ['Optimal', 'BestFirst', 'BreadthFirst', 'DepthFirst', 'Random']
 
 # PARETO_MODELS = [m for m in MODELS if not (m.endswith('Expand') or m.endswith('NoPrune'))]
 palette['BreadthFirst'] = do
 palette['DepthFirst'] = dp
 palette['BestFirst'] = dg
+
 # %% --------
 
-def plot_model_pareto(variance, model): 
-   plt.plot('n_click', 'term_reward', data=model_pareto.loc[model, variance], 
+def plot_model_pareto(variance, model):
+    plt.plot('n_click', 'term_reward', data=model_pareto.loc[model, variance], 
         label=model, color=palette[model],
         lw=2,
-         # marker='.',
-         )
+        zorder=-PARETO_MODELS.index(model),
+        # marker='.',
+    )
 
 @figure()
 def plot_pareto(axes=None, legend=True, fit_reg=False, models=PARETO_MODELS):
@@ -38,21 +40,22 @@ def plot_pareto(axes=None, legend=True, fit_reg=False, models=PARETO_MODELS):
     X = tdf.reset_index().set_index('variance')
     for i, v in enumerate(VARIANCES):
         plt.sca(axes.flat[i])
+
+        g = X.loc[v].groupby('wid'); x = 'n_click'; y = 'term_reward'
+        plt.scatter(g[x].mean(), g[y].mean(), label='Human', color=palette['Human'], s=5).set_zorder(-10)
+
         for model in models:
-            if model == 'OptimalPlus':
-                model = 'Optimal'
             plot_model_pareto(v, model)
             
-        g = X.loc[v].groupby('wid'); x = 'n_click'; y = 'score'
-        sns.regplot(g[x].mean(), g[y].mean(), fit_reg=fit_reg, lowess=True, 
-            color=palette['Human'], label='Human', scatter=False).set_zorder(20)
-        plt.scatter(g[x].mean(), g[y].mean(), label='Human', color=palette['Human'], s=5).set_zorder(21)
+        # sns.regplot(g[x].mean(), g[y].mean(), fit_reg=fit_reg, lowess=True, 
+        #     color=palette['Human'], label='Human', scatter=False).set_zorder(20)
 
         # plt.errorbar(g[x].mean(), g[y].mean(), yerr=g[y].sem(), xerr=g[x].sem(), 
         #              label='Human', fmt='.', color='#333333', elinewidth=.5)
 
-        plt.ylabel("Reward")
+        plt.ylabel("Expeceted Reward")
         plt.xlabel("Number of Clicks")
+        # plt.ylim(-10, 25)
         if i == 0:
             if legend:
                 figs.reformat_legend()
@@ -83,6 +86,8 @@ def only(x):
 
 # %% --------
 def get_closest_term_reward(row, agent):
+    if row.n_click == 0:
+        return 0
     comp = agent.loc[row.mdp]
     x_diff = (comp['n_click'] - row['n_click']).values
     cross_point = (x_diff > 0).argmax()
@@ -105,28 +110,11 @@ df['random'] = df.apply(get_closest_term_reward, agent=random, axis=1)
 gain = df.score - df.random
 loss = df.optimal - df.score
 pct_loss = loss / df.optimal
+pct_loss[df.optimal == 0] = 0
+
 relative = (df.score - df.random) / (df.optimal - df.random)
 
 write_tex(f'pareto_loss', f'{loss.mean():.2f} ({pct_loss.mean()*100:.0f}\%)')
 write_tex(f'pareto_gain', f'{gain.mean():.2f}')
 write_tex(f'pareto_relative', f'{100*relative.mean():.1f}\%')
 write_tex(f'pareto_gain_wilcoxon', f'${pval(wilcoxon(gain).pvalue)}$')
-
-# %% --------
-x = 2.5
-a = 1
-b = 3
-(x - a) / (b - a)
-
-# %% --------
-
-loss, pct_loss = -human.apply(pareto_relative, comparison=optimal, axis=1, result_type='expand').values.T
-gain, pct_gain = human.apply(pareto_relative, comparison=random, axis=1, result_type='expand').values.T
-
-
-loss, pct_loss = -human.apply(pareto_relative, comparison=optimal, 
-    axis=1, result_type='expand').mean().values.T
-
-gain, pct_gain = human.apply(pareto_relative, comparison=random, 
-    axis=1, result_type='expand').mean().values.T
-gain

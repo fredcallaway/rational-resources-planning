@@ -3,20 +3,24 @@ using StatsBase
 using Glob
 using CSV
 using DataFrames
+using ProgressMeter
 
-println("Running model comparison for ", ARGS[1])
 include("conf.jl")
+println("Running model comparison for ", ARGS[1])
 
 @everywhere include("base.jl")
+@everywhere include("models.jl")
 
 import Random
-Random.seed!(123)
+Random.seed!(RANDOM_SEED)
 
 mkpath("$base_path/fits/full")
 mkpath("$base_path/fits/cv")
 mkpath("$base_path/fits/group")
 
+
 # %% ==================== LOAD DATA ====================
+
 all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
 flat_trials = flatten(values(all_trials));
 println(length(flat_trials), " trials")
@@ -25,24 +29,10 @@ all_data = all_trials |> values |> flatten |> get_data;
 @assert length(unique(hash.(flat_trials))) == length(flat_trials)
 @assert length(unique(hash.(all_data))) == length(all_data)
 
-# %% ==================== SOLVE MDPS AND PRECOMPUTE Q LOOKUP TABLE ====================
-
-# include("solve.jl")
-# @time solve_all()
-
-# include("Q_table.jl")
-# @time serialize("$base_path/Q_table", make_Q_table(all_data));
-
-# %% ==================== LOAD MODEL CODE ====================
-
-@everywhere include("models.jl")
-
-MODELS = eval(QUOTE_MODELS)
-
-
-# serialize("$base_path/models", MODELS)
 
 # %% ==================== FIT MODELS TO FULL DATASET ====================
+
+MODELS = eval(QUOTE_MODELS)
 
 @async begin
     @everywhere flat_trials = $flat_trials
@@ -61,12 +51,12 @@ MODELS = eval(QUOTE_MODELS)
     println("Wrote $base_path/group_fits")
 end
 
-# %% ==================== FIT MODELS TO INDIVIDUALS ====================
 
+# %% ==================== FIT MODELS TO INDIVIDUALS ====================
 
 full_fits = let
     full_jobs = Iterators.product(values(all_trials), MODELS);
-    @time full_fits = pmap(full_jobs) do (trials, M)
+    full_fits = @showprogress pmap(full_jobs) do (trials, M)
         wid = trials[1].wid; mname = name(M)
         file = "$base_path/fits/full/$mname-$wid"
         if isfile(file)
@@ -119,7 +109,7 @@ using Random: randperm, MersenneTwister
 function kfold_splits(n, k)
     @assert (n / k) % 1 == 0  # can split evenly
     x = Dict(
-        :random => randperm(MersenneTwister(123), n),  # seed again just to be sure!
+        :random => randperm(MersenneTwister(RANDOM_SEED), n),  # seed again just to be sure!
         :stratified => 1:n
     )[CV_METHOD]
 
@@ -134,7 +124,7 @@ folds = kfold_splits(n_trial, FOLDS)
 cv_jobs = Iterators.product(values(all_trials), MODELS, folds);
 
 cv_fits = let
-    @time cv_fits = pmap(cv_jobs) do (trials, M, fold)
+    cv_fits = @showprogress pmap(cv_jobs) do (trials, M, fold)
         wid = trials[1].wid; mname = name(M); fold_i = fold.test[1]
         file = "$base_path/fits/cv/$mname-$wid-$fold_i"
         if isfile(file)
@@ -192,7 +182,7 @@ end;
 
 # %% ==================== SAVE MODEL PREDICTIONS ====================
 
-@memoize function get_fold(i::Int)
+function get_fold(i::Int)
     # folds are identified by their first test trial index
     first(f for f in folds if i in f.test).test[1]
 end
@@ -228,4 +218,36 @@ map(all_data) do d
     predictions = Dict(name(M) => action_dist(get_model(M, d.t), d) for M in MODELS))
 end |> JSON.json |> write("$results_path/predictions.json")
 
+
+# %% ==================== GENERATE VISUALIZATION JSON ====================
+
+function demo_trial(t)
+    (
+        stateRewards = t.bs[end],
+        demo = (
+            clicks = t.cs[1:end-1] .- 1,
+            path = t.path .- 1,
+            predictions = Dict(name(M) => get_preds(M, t) for M in MODELS),
+            parameters = Dict(name(M) => get_params(M, t) for M in MODELS)
+        )
+    )
+end
+
+function sorter(xs)
+    sort(xs, by=x->(-x.score))
+end
+
+mkpath("$results_path/viz")
+map(collect(all_trials)) do (wid, trials)
+    (
+        wid = wid,
+        # variance = variance_structure(trials[1].m),
+        score = mean(t.score for t in trials),
+        clicks = mean(length(t.cs)-1 for t in trials),
+    )
+end |> sorter |> JSON.json |> write("$results_path/viz/table.json")
+
+foreach(collect(all_trials)) do (wid, trials)
+    demo_trial.(trials) |> JSON.json |> write("$results_path/viz/$wid.json")
+end
 

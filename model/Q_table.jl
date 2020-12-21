@@ -1,3 +1,4 @@
+using ProgressMeter
 
 function make_Q_table(data)
     println("Creating Q_table")
@@ -5,14 +6,12 @@ function make_Q_table(data)
     M = map(Iterators.product(base_mdps, COSTS)) do (m, cost)
         mutate(m, cost=cost)
     end
-
     grouped_ids = eachcol(id.(M))
-    all_qs = pmap(grouped_ids) do ids
+    res = @showprogress pmap(grouped_ids) do ids
         vs = map(load_V_nomem, ids)
         cost = vs[1].m.cost
         @assert all(v.m.cost == cost for v in vs)
         value_functions = Dict(v.m => v for v in vs)
-        println("Processing cost: $cost")
 
         qs = map(data) do d
             V = value_functions[mutate(d.t.m, cost=cost)]
@@ -21,8 +20,8 @@ function make_Q_table(data)
         end
         GC.gc()
         qs
-
-    end |> invert
+    end
+    all_qs = invert(res)
 
     @assert length(all_qs) == length(data)
     @assert length(all_qs[1]) == length(COSTS)

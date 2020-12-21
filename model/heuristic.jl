@@ -222,7 +222,13 @@ end
 
 function all_heuristic_models()
     base = ["Best", "Depth", "Breadth"]
-    whistles = ["Satisfice", "BestNext", "DepthLimit", "Prune"]
+    whistles = ["Satisfice", "BestNext"]
+    if EXPAND_ONLY
+        push!(whistles, "DepthLimit", "Prune")
+    else
+        push!(whistles, "Expand")
+    end
+    
     map(Iterators.product(base, powerset(whistles))) do (b, ws)
         spec = Symbol(join([b, ws...], "_"))
         Heuristic{spec}

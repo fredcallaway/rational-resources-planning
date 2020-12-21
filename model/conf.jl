@@ -5,8 +5,9 @@ if myid() == 1  # only run on the master process
             print("Experiment: ")
             x = readline()
             push!(ARGS, "exp" * replace(x, "exp" => ""))
+        else
+            error("Must pass configuration name as first argument!")
         end
-        error("Must pass configuration name as first argument!")
     end
     conf = ARGS[1]
     @everywhere begin
@@ -14,6 +15,7 @@ if myid() == 1  # only run on the master process
         COSTS = [0:0.05:4; 100]
         FOLDS = 5
         CV_METHOD = :random  # :stratified
+        RANDOM_SEED = 123
         OPT_METHOD = :bfgs
 
         conf = $conf

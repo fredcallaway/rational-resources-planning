@@ -1,43 +1,34 @@
 # %%
 %load_ext rpy2.ipython
 %run setup 1
-figs.nosave = True
-if EXPERIMENT > 1:
-    %run -i breadth_depth
+# figs.nosave = True
 %run -i pareto
 %run -i model_comparison
+if EXPERIMENT == 1
+    %run -i best_first
+    %run -i termination
+if EXPERIMENT > 1:
+    %run -i breadth_depth
 figs.nosave = False
 
-
 # %% ==================== Basic stuff ====================
-%run setup 1
-write_tex("recruited", len(full_pdf))
-
-failed = full_pdf.comprehension.dropna().apply(lambda x: not x[-1]['correct'])
-failed.sum(), len(failed)
-
-write_tex("excluded", "TODO")
-write_tex("incomplete", "TODO")
-write_tex("N", len(pdf))
+final = full_pdf.complete.sum()
+failed = (full_pdf.n_quiz == 3).sum()
+write_tex("recruited", final + failed)
+write_tex("failed_quiz", failed)
+write_tex("final", final)
 
 write_tex("bonus", mean_std(pdf.bonus, fmt='$'))
 write_tex("time", mean_std(pdf['total_time']))
 
-# %% --------
-
-wage = 60 * (pdf.bonus + 1.50) / pdf.total_time
-pdf['wage'] = wage
-np.mean(pdf.wage < pdf.set_index('worker_id').loc['5f4912fc3c25512e73761c48'].wage)
-
-
 # %% ==================== EXPERIMENT 1 ===================
 
-@figure()
-def exp1_main():
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8), gridspec_kw={'width_ratios': [1,2]})
-    plot_pareto(np.array(axes.flat[0]), models=['Random', 'MetaGreedy', 'Optimal', 'BestFirst'])
-    plot_average_predictive_accuracy(axes.flat[1])
-    cost_best_first(axes.flat[2])
+# @figure()
+# def exp1_main():
+#     fig, axes = plt.subplots(2, 2, figsize=(12, 8), gridspec_kw={'width_ratios': [1,2]})
+#     plot_pareto(np.array(axes.flat[0]), models=['Random', 'MetaGreedy', 'Optimal', 'BestFirst'])
+#     plot_geometric_mean_likelihood(axes.flat[1])
+#     cost_best_first(axes.flat[2])
 
 
 # %% ==================== EXPERIMENT 2 ====================
@@ -56,20 +47,23 @@ def exp2_make_base():
         # ax.imshow(task_image(v))
         ax.axis('off')
     plot_pareto(axes[1, :], legend=False, fit_reg=False)
-    for i, ax in enumerate(axes[1, :]):
-        ax.set_ylim(-1, 25)
-        if i != 0:
-            ax.set_yticks([])
-    plot_average_predictive_accuracy(axes[2, :])
+    # for i, ax in enumerate(axes[1, :]):
+    #     ax.set_ylim(-1, 25)
+    #     if i != 0:
+    
+    #         ax.set_yticks([])
+    plot_geometric_mean_likelihood(axes[2, :])
     plot_second_click(axes[3, :])
     axes[3,0].legend().remove()
     for i, ax in enumerate(axes[3, :]):
-        if i != 0:
-            ax.set_yticks([])
+        # if i != 0:
+        ax.set_yticks([0, 0.5, 1])
 
-    plt.savefig('fighist/exp2a.png', dpi=figs.dpi, bbox_inches='tight')
-    os.system('cp fighist/exp2a.png .')
+    plt.savefig('fighist/exp2a.pdf', bbox_inches='tight')
+    os.system('cp fighist/exp2a.pdf .')
 
+exp2_make_base()
+# finish in adobe illustrator
 
 # # %% --------
 # def exp2_add_task():
@@ -106,7 +100,7 @@ def exp2_make_base():
 # def pareto_fit():
 #     fig, axes = setup_variance_plot(2, label_offset=-0.4)
 #     plot_pareto(axes[0, :], legend=False, fit_reg=False)
-#     plot_average_predictive_accuracy(axes[1, :])
+#     plot_geometric_mean_likelihood(axes[1, :])
 #     # figs.reformat_ticks(yaxis=True, ax=axes[1,0])
 
 # %% --------
@@ -120,7 +114,7 @@ def exp2_main_alt():
         # models=['OptimalPlus', 'BestFirst']
         )
     plot_pareto(axes[2, :], legend=False, fit_reg=False)
-    plot_average_predictive_accuracy(axes[3, :])
+    plot_geometric_mean_likelihood(axes[3, :])
 
 
 # %% ==================== EXPERIMENT 3 ====================
@@ -129,7 +123,7 @@ def exp2_main_alt():
 def exp3_main():
     fig, axes = setup_variance_plot(2, height=3, label_offset=-0.5)
     first_click_depth(axes[0])
-    plot_average_predictive_accuracy(axes[1])
+    plot_geometric_mean_likelihood(axes[1])
 
 # %% --------
 
@@ -144,7 +138,7 @@ def exp4_make_base():
     plt.annotate('A', (-0.4, 1), xycoords='axes fraction', size=32, va='bottom')
     
     ax = fig.add_subplot(gs[0, 4:6])
-    plot_average_predictive_accuracy(np.array(ax))
+    plot_geometric_mean_likelihood(np.array(ax))
     ax.annotate('B', (-0.5, 1), xycoords='axes fraction', size=32, va='bottom')
     
     ax = fig.add_subplot(gs[1, 4:6])

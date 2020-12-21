@@ -23,17 +23,30 @@ def breadth_depth_data(models=MODELS, noclick='drop'):
     return data
 
 @figure()
-def plot_second_click(axes=None, models=['OptimalPlus', 'BestFirst', 'BreadthFirst', 'DepthFirst']):
-    noclick = 'drop'
+def plot_second_click(axes=None, models=['OptimalPlus', 'Best', 'Breadth', 'Depth'], noclick='drop'):
     bdd = breadth_depth_data(models, noclick=noclick)
     if axes is None:
         fig, axes = setup_variance_plot(title=True)
     for i, v in enumerate(VARIANCES):
         plt.sca(axes.flat[i])
         agents = [*reversed(models), 'Human']
-        data = bdd.loc[v].query('agent == @agents')
+        data = bdd.loc[v].query('agent == @agents').set_index('agent')
+
+        # for m in reversed(models):
+        #     highlight = {'decreasing': 'Breadth', 'constant': 'Best', 'increasing': 'Depth'}[v]
+        #     alpha = 1 if m in (highlight, 'OptimalPlus') else 0.3
+        #     # x = data.loc[m].groupby('first_revealed').mean().sort_index().values
+        #     # plt.plot(x, color=palette[m], lw=2.5, alpha=alpha)[0].set_zorder(-10)
+        #     sns.pointplot('first_revealed', 'second_same', color=palette[m], data=data.loc[m], 
+        #         ci=False)
+
+        # sns.pointplot('first_revealed', 'second_same', color=palette['Human'],
+        #     data=data.loc['Human'], legend=False)
+        
         sns.pointplot('first_revealed', 'second_same', hue='agent', hue_order=agents,
-            palette=palette, data=data, legend=False)
+            palette=palette, data=data.reset_index(), legend=None)
+        plt.legend().remove()
+
         plt.xlabel('First Revealed Value')
         plt.ylim(-0.05, 1.05)
         if i == 0:
@@ -41,75 +54,23 @@ def plot_second_click(axes=None, models=['OptimalPlus', 'BestFirst', 'BreadthFir
                 plt.ylabel('Probability of Second\nClick on Same Path')
             else:
                 plt.ylabel('Proportion of Second\nClicks on Same Path')
-            plt.legend()
-            figs.reformat_legend()
+            # plt.legend()
+            # figs.reformat_legend()
             plt.yticks([0,1])
         else:
-            plt.legend().remove()
-            plt.ylabel('')
-
-# %% ==================== Depth curve ====================
-
-
-@figure()
-def plot_depth_curve(axes=None):
-    # dcd = pd.concat(load_depth_curve(k) for k in ['Human', 'OptimalPlus', 'BestFirst']).set_index('variance')
-    dcd = load_depth_curve('Human')
-    if axes is None:
-        fig, axes = setup_variance_plot(title=True)
-    for i, v in enumerate(VARIANCES):
-        plt.sca(axes.flat[i])
-        sns.lineplot('click', 'cumdepth', hue='agent', 
-            palette=palette, data=dcd.loc[v])
-        plt.xlabel('Click Number')
-        # plt.ylim(-0.05, 1.05)
-        if i == 0:
-            plt.ylabel('Maximum Depth Clicked')
-            plt.legend()
-            figs.reformat_legend()
-        else:
-            plt.legend().remove()
+            # plt.legend().remove()
             plt.ylabel('')
 
 
-
-
-# %% ==================== HEATMAP ====================
-
-def plot_depth_heat(agent, axes):
-    # base = matplotlib.cm.get_cmap('Blues', 512)
-    # cmap = matplotlib.colors.ListedColormap(base(np.linspace(0.2, 1, 512 * 0.8)))
-    cmap = 'Blues'
-
-    dcd = load_depth_curve(agent)
-    D = dcd.set_index('variance')
-
-    for i, (ax, var) in enumerate(zip(axes.flat, VARIANCES)):
-        plt.sca(ax)
-        X = D.loc[var].groupby(['depth', 'click']).apply(len).unstack()
-        # n_trial = (tdf.variance == var).sum()
-        X /= X[1].sum()
-        g = sns.heatmap(X, cmap=cmap, vmin=0, vmax=1, linewidths=1, cbar=True)
-        g.invert_yaxis()
-        if i > 0:
-            plt.ylabel('')
-        figs.reformat_labels()
-    return g
-
-@figure()
-def depth_heat():
-    fig, axes = setup_variance_plot(2, title=True)
-    plot_depth_heat('Human', axes[0])
-    plot_depth_heat('OptimalPlus', axes[1])
-
-# %% ==================== BARS ====================
+# # %% ==================== First click depth ====================
 
 @figure()
 def first_click_depth(axes=None):
     if axes is None:
         fig, axes = setup_variance_plot(title=True)
 
-    agents = ['Human', 'OptimalPlus', 'OptimalPlusExpand', ]
+    agents = ['Human', 'OptimalPlus', 'OptimalPlusExpand']
+
     dd = pd.concat([load_depth_curve(h).query('click == 1')
         for h in agents]).set_index(['agent', 'variance']).depth
 
@@ -126,7 +87,61 @@ def first_click_depth(axes=None):
         ax.set_xlabel('First Clicked Depth')
         if i == 0:
             ax.set_ylabel('Proportion of Trials')
-            figs.reformat_legend(ax=ax, OptimalPlusExpand='Optimal + Forward')
+            figs.reformat_legend(ax=ax, OptimalPlusExpand='Optimal +Forward')
+
+
+
+# # %% ==================== Depth curve ====================
+# @figure()
+# def plot_depth_curve(axes=None):
+#     # dcd = pd.concat(load_depth_curve(k) for k in ['Human', 'OptimalPlus', 'BestFirst']).set_index('variance')
+#     dcd = load_depth_curve('Human')
+#     if axes is None:
+#         fig, axes = setup_variance_plot(title=True)
+#     for i, v in enumerate(VARIANCES):
+#         plt.sca(axes.flat[i])
+#         sns.lineplot('click', 'cumdepth', hue='agent', 
+#             palette=palette, data=dcd.loc[v])
+#         plt.xlabel('Click Number')
+#         # plt.ylim(-0.05, 1.05)
+#         if i == 0:
+#             plt.ylabel('Maximum Depth Clicked')
+#             plt.legend()
+#             figs.reformat_legend()
+#         else:
+#             plt.legend().remove()
+#             plt.ylabel('')
+
+
+
+
+# # %% ==================== HEATMAP ====================
+
+# def plot_depth_heat(agent, axes):
+#     # base = matplotlib.cm.get_cmap('Blues', 512)
+#     # cmap = matplotlib.colors.ListedColormap(base(np.linspace(0.2, 1, 512 * 0.8)))
+#     cmap = 'Blues'
+
+#     dcd = load_depth_curve(agent)
+#     D = dcd.set_index('variance')
+
+#     for i, (ax, var) in enumerate(zip(axes.flat, VARIANCES)):
+#         plt.sca(ax)
+#         X = D.loc[var].groupby(['depth', 'click']).apply(len).unstack()
+#         # n_trial = (tdf.variance == var).sum()
+#         X /= X[1].sum()
+#         g = sns.heatmap(X, cmap=cmap, vmin=0, vmax=1, linewidths=1, cbar=True)
+#         g.invert_yaxis()
+#         if i > 0:
+#             plt.ylabel('')
+#         figs.reformat_labels()
+#     return g
+
+# @figure()
+# def depth_heat():
+#     fig, axes = setup_variance_plot(2, title=True)
+#     plot_depth_heat('Human', axes[0])
+#     plot_depth_heat('OptimalPlus', axes[1])
 
 
 # %% --------

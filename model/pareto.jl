@@ -72,19 +72,12 @@ function pareto_front(M, m; n_candidate=N_CANDIDATE, n_eval=N_SIM)
     result
 end
 
-function write_pareto(::Type{M}, m::MetaMDP; force=false, kws...) where M <: AbstractModel
-    f = "mdps/pareto/$(id(m))-$(name(M)).csv"
-    if !force && isfile(f)
-        println("$f already exists")
-    else
-        println("Generating $f... ")
-        pareto_front(M, m; kws...) |> CSV.write(f)
-        println("Wrote ", f)
-    end
-end
-
 function write_optimal_pareto(;force=false)
-    @time pmap(readdir("mdps/withcost")) do i
+    all_ids = map(Iterators.product(mdps, COSTS)) do (m, cost)
+        id(mutate(m, cost=cost))
+    end
+
+    @showprogress pmap(all_ids) do i
         f = "mdps/pareto/$i-Optimal.csv"
         if !force && isfile(f)
             println("$f already exists")
@@ -95,7 +88,7 @@ function write_optimal_pareto(;force=false)
             pol = OptimalPolicy(m, V)
             res = (model="Optimal", mdp=id(m), cost=V.m.cost, mean_reward_clicks(pol)...)
             CSV.write(f, [res])  # one line csv
-            println("Wrote $f")
+            # println("Wrote $f")
         end
     end
 end
@@ -112,13 +105,8 @@ function write_heuristic_pareto(;force=false)
     # models = filter(eval(QUOTE_MODELS)) do M
     #     M <: Heuristic
     # end
-    models = [
-        RandomSelection,
-        MetaGreedy,
-        Heuristic{:Best_Full},
-        Heuristic{:Breadth_Full},
-        Heuristic{:Depth_Full},
-    ] 
+
+    models = eval(QUOTE_PARETO_MODELS)
 
     for M in models, m in mdps
         f = "mdps/pareto/$(id(m))-$(name(M)).csv"
@@ -139,7 +127,7 @@ if basename(PROGRAM_FILE) == basename(@__FILE__)
     #     mdps = 
     # end
     mkpath("mdps/pareto")
-    if !isempty(ARGS)
+    if length(ARGS) > 1
         if ARGS[2] == "optimal"
             write_optimal_pareto()
         elseif ARGS[2] == "heuristic"

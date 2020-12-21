@@ -3,6 +3,8 @@ using Distributed
 using Glob
 using CSV
 using DataFrames
+using ProgressMeter
+
 
 include("conf.jl")
 @everywhere include("base.jl")
@@ -25,7 +27,7 @@ end
         simulate(model, m; wid=model_wid)
     end
     serialize("$base_path/sims/$model_wid", sims)
-    println("Wrote $base_path/sims/$model_wid")
+    # println("Wrote $base_path/sims/$model_wid")
 
     if name(model) == "OptimalPlus"
         run_simulation(purify(model), wid, mdps)
@@ -46,21 +48,28 @@ function do_simulate(flag=:null)
         end
     end
     mdps = unique(t.m for t in flatten(values(all_trials)))
-    pmap(Iterators.product(mdps, COSTS)) do (m, cost)
-        model = Optimal(cost, 1e5, 0.)
-        run_simulation(model, "cost$cost-$(id(m))", [m]; n_repeat=10000)
+
+    if flag != :nonoptimal
+        println("Optimal simulations for each cost")
+        @showprogress pmap(Iterators.product(mdps, COSTS)) do (m, cost)
+            model = Optimal(cost, 1e5, 0.)
+            run_simulation(model, "cost$cost-$(id(m))", [m]; n_repeat=10000)
+        end
     end
     if flag == :optimal
+        println("Only simulating optimal model")
         filter!(jobs) do (model, )
             model isa OptimalPlus
         end
     elseif flag == :nonoptimal
+        println("Only simulating non-optimal models")
         filter!(jobs) do (model, )
             !(model isa OptimalPlus)
         end
     end
 
-    pmap(x->run_simulation(x...), jobs)
+    println("Simulations for fitted models")
+    @showprogress pmap(x->run_simulation(x...), jobs)
 end
 
 
