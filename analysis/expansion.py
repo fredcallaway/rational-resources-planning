@@ -27,45 +27,47 @@ def expansion():
     axes.flat[0].legend()
 
 # %% --------
+h = load_cf('Human').query('variance == "constant" and not is_term')
+m = load_cf('OptimalPlusPure').query('variance == "constant" and not is_term')
 
-human_rate = load_cf('Human').query('variance == "constant" and not is_term').groupby('wid').expand.mean()
-write_tex(f'expansion_Human', mean_std(human_rate, fmt='pct', digits=0))
+set(h.index) == set(m.index)
+# %% ==================== stats ====================
 
-model_rate = load_cf('OptimalPlus').query('variance == "constant" and not is_term').expand.mean()
-write_tex('expansion_OptimalPlus', f'{model_rate*100:.1f}\\%')
-
-model_rate
-# %% --------
-cfh = load_cf('Human').query('variance == "constant" and not is_term')
-cfo  = load_cf('OptimalPlus').query('variance == "constant" and not is_term')
-
-# %% --------
 from statsmodels.stats.proportion import proportions_ztest
-z, p = proportions_ztest(cfh.expand.sum(), len(cfh.expand), value=model_rate)
-write_tex('expand_proportion', rf'$z={z:.2f},\ {pval(p)}$')
-    
+human = load_cf('Human').query('variance == "constant" and not is_term').expand
+model = load_cf('OptimalPlusPure').query('variance == "constant" and not is_term').expand
 
-prop_p = cfh.groupby('wid').expand.apply(
-    lambda x: proportions_ztest(x.sum(), len(x), value=model_rate, alternative='larger')[1]
-)
-(prop_p < .05).sum()
+write_tex('expansion_human', f'{100*human.mean():.1f}\\%')
+# write_tex(f'expansion_human', mean_std(100*human.groupby('wid').mean(), fmt='pct', digits=0))
 
-cfh.groupby('wid').expand.mean()
+write_tex('expansion_optimal', f'{100*model.mean():.1f}\\%')
+
+z, p = proportions_ztest([human.sum(), model.sum()], [len(human), len(model)])
+write_tex("expansion_test", rf"$z={z:.1f},\ {pval(p)}$")
 
 # %% ==================== logistic curve ====================
 edf = pd.DataFrame(get_result(VERSION, 'expansion.json')).set_index('wid')
-edf['gain'] = edf.q_jump - edf.q_expand
+edf['gain'] = (edf.q_jump - edf.q_expand) * 10  # undo previous rescaling
+edf['gain_z'] = (edf.gain - edf.gain.mean()) / edf.gain.std()
 edf['jump'] = ~edf['expand']
 
-write_tex("jump", mean_std(edf.groupby('wid').jump.mean()*100, fmt='pct'))
+# write_tex("jump", mean_std(edf.groupby('wid').jump.mean()*100, fmt='pct'))
+write_tex("jump", f'{edf.jump.mean()*100:.1f}\%')
 
 # write_tex("best_first", mean_std(pdf.best_first, fmt='pct'))
-
+# %% --------
 @figure()
 def expansion_value():
-    sns.regplot('gain', 'jump', data=edf, logistic=True, x_bins=np.linspace(-0.75, 0.75, 5), color='black')
-    plt.xlabel('Value of Violating\nForward Search')
+    sns.regplot('gain', 'jump', data=edf, logistic=True, x_bins=np.linspace(-7.5, 7.5, 7), color='black')
+    plt.xlabel('Value of Violating Forward Search')
     plt.ylabel('Probability of Violating\nForward Search')
+
+# %% --------
+from statsmodels.formula.api import logit 
+
+m = logit(f'jump.astype(int) ~ gain_z', data=edf).fit()
+write_tex(f'expansion_logistic', rf'$\beta = {m.params.gain_z:.3f},\ {pval(m.pvalues.gain_z)}$')
+
 
 # %% --------
 rdf = edf[['gain', 'jump']].reset_index().dropna()

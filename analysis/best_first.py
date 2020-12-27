@@ -42,10 +42,13 @@ def best_first_by_clicks(ax=None):
 x = load_cf('Human').query('~is_term')
 bf_rate = x.groupby('wid').is_best.mean()
 bf_rand_rate = x.groupby('wid').p_best_rand.mean()
-write_tex("best_first", mean_std(bf_rate*100, fmt='pct'))
+
+# write_tex("best_first", mean_std(bf_rate*100, fmt='pct'))
+write_tex("best_first", f'{100*x.is_best.mean():.1f}\%')
 
 from statsmodels.stats.proportion import proportions_ztest
-r = load_cf('Random').query('~is_term').is_best
+r = load_cf('Random').query('not is_term').is_best
+load_cf('Random').is_term
 h = x.is_best
 z, p = proportions_ztest([h.sum(), r.sum()], [len(h), len(r)], alternative='larger')
 write_tex("best_first_random", rf"{bf_rand_rate.mean() * 100:.1f}\%" )

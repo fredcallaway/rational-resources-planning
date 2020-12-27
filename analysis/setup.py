@@ -44,34 +44,34 @@ if EXPERIMENT >= 3:
 # %% ==================== LOAD DATA ====================
 pdf, tdf = load_data(VERSION)
 pdf = pdf.rename(columns={'final_bonus': 'bonus'})
-if EXPERIMENT == 1:
-    pdf = pdf.drop('w29dd261')  # extra participant approved after reaching 100
+# if EXPERIMENT == 1:
+    # pdf = pdf.drop('w29dd261')  # extra participant approved after reaching 100
 
 full_pdf = pdf.copy()
 pdf = pdf.query('complete')
 tdf = tdf.loc[list(pdf.index)]
 pdf.variance = pd.Categorical(pdf.variance, categories=VARIANCES)
 
-assert (tdf.index.value_counts() == 25).all()
+assert len(tdf.index.value_counts().unique()) == 1
 assert set(tdf.index) == set(pdf.index)
 
+# %% ==================== ADD COLUMNS ====================
 
-# # %% ==================== EXCLUSION ====================
-# pdf = pdf.query('complete').copy()
-# tdf = tdf.loc[list(pdf.index)]
-# pdf = pdf.query('n_click >= 1')
-# # if EXPERIMENT == 3:
-# #     pdf = pdf.query('click_delay == "3.0s"')
-# #     print('DROPPING PARTICIPANTS: click_delay == "3.0s"')
+tdf['i'] = list(tdf.trial_index - tdf.trial_index.groupby('wid').min() + 1)
+assert all(tdf.groupby(['wid', 'i']).apply(len) == 1)
+tf = pd.DataFrame(get_result(VERSION, 'trial_features/Human.json'))
+n_click = tdf.pop('n_click')  # this is already in tf, we check that it's the same below
 
-# list(pdf.index) = list(pdf.index)
-# tdf = tdf.loc[list(pdf.index)]
-# %% ==================== LOAD MODEL RESULTS ====================
+assert set(pdf.index) <= set(tf.wid)
+tdf = tdf.join(tf.set_index(['wid', 'i']), on=['wid', 'i'])
+assert all(tdf.n_click == n_click)
 
-# fits = load_fits(VERSION, MODELS)
-# fits = fits.join(pdf[['variance', 'click_delay']], on='wid')
-# pdf['cost'] = fits.query('model == "OptimalPlus"').set_index('wid').cost.clip(upper=5)
+pdf['total_time'] = (pdf.time_end - pdf.time_start) / 1000 / 60
+pdf['instruct_time'] = (pdf.time_instruct - pdf.time_start) / 60000
+pdf['test_time'] = (pdf.time_end - pdf.time_instruct) / 60000
+# pdf['backward'] = tdf.groupby('wid').backward.mean()
 
+# %% ==================== LOADING MODEL RESULTS ====================
 
 def model_trial_features(model):
     tf = pd.DataFrame(get_result(VERSION, f'trial_features/{model}.json'))
@@ -89,9 +89,11 @@ def load_cf(k):
     except:
         print('Error computing potential_gain')
     cf['competing'] = cf.term_reward - cf.best_next
+    cf['is_term'] = cf['is_term'].astype(bool)
 
     if k != 'Human':
         cf.wid = cf.wid.apply(lambda x: x.split('-')[1])
+    assert set(cf.wid) == set(pdf.index)
 
     cf = cf.set_index('wid').loc[list(pdf.index)]
     cf['variance'] = pdf.variance
@@ -100,31 +102,6 @@ def load_cf(k):
     #     if v.dtype == float:
     #         cf[k] = v.astype(int)
     return cf.rename(columns={'expanding': 'expand'})
-
-def load_depth_curve(k):
-    d = pd.DataFrame(get_result(VERSION, f'depth_curve/{k}.json'))
-    if k != 'Human':
-        d.wid = d.wid.apply(lambda x: x.split('-')[1])
-    d.set_index('wid', inplace=True)
-    d['variance'] = pdf.variance
-    d['agent'] = k
-    return d.loc[list(pdf.index)]
-
-# %% ==================== ADD COLUMNS ====================
-
-tdf['i'] = list(tdf.trial_index - tdf.trial_index.groupby('wid').min() + 1)
-assert all(tdf.groupby(['wid', 'i']).apply(len) == 1)
-tf = pd.DataFrame(get_result(VERSION, 'trial_features/Human.json'))
-n_click = tdf.pop('n_click')  # this is already in tf, we check that it's the same below
-
-assert set(pdf.index) <= set(tf.wid)
-tdf = tdf.join(tf.set_index(['wid', 'i']), on=['wid', 'i'])
-assert all(tdf.n_click == n_click)
-
-pdf['total_time'] = (pdf.time_end - pdf.time_start) / 1000 / 60
-pdf['instruct_time'] = (pdf.time_instruct - pdf.time_start) / 60000
-pdf['test_time'] = (pdf.time_end - pdf.time_instruct) / 60000
-# pdf['backward'] = tdf.groupby('wid').backward.mean()
 
 # %% ==================== FIGURES ====================
 
@@ -154,7 +131,8 @@ figs.add_names({
     'OptimalPlus': 'Optimal',
     'OptimalPlusPure': 'Optimal',
     'MetaGreedy': 'Myopic',
-    'Random': 'Random'
+    'BestFirst': 'Best',
+    'RandomSelection': 'Random'
 })
 figs.add_names({name: prettify_name(name) 
     for name in model_names if name not in figs.names})
@@ -172,12 +150,14 @@ figs.add_names({name: prettify_name(name)
 #     })
 
 # %% --------
-lb, db, lg, dg, lr, dr, lo, do, lp, dp, *_ = sns.color_palette("Paired")
+
+lb, db, lg, dg, lr, dr, lo, do_, lp, dp, *_ = sns.color_palette("Paired")
 
 palette = {
     # 'BestFirst': dg,
     'Human': (0.1, 0.1, 0.1),
     'Random': (0.5, 0.5, 0.5),
+    'RandomSelection': (0.5, 0.5, 0.5),
     'MetaGreedy': dr,
     'OptimalPlus': db,
     'OptimalPlusPure': db,
@@ -196,7 +176,7 @@ def pick_color(name):
     if name.startswith('Best'):
         return lg if name.endswith('Expand') else dg
     if name.startswith('Breadth'):
-        return lo if name.endswith('Expand') else do
+        return lo if name.endswith('Expand') else do_
     if name.startswith('Depth'):
         return lp if name.endswith('Expand') else dp
 
@@ -207,7 +187,8 @@ for m in model_names:
 # lb, db, lg, dg, lr, dr, lo, do, *_ = 
 
 
-# %% --------
+# %% ==================== Other junk ====================
+
 plt.rc('legend', fontsize=10, handlelength=2)
 sns.set_style('ticks')
 
@@ -222,7 +203,7 @@ def setup_variance_plot(nrow=1, title=True, label=True, label_offset=-0.3, heigh
             ax.set_title(f'{v.title()} Variance', fontdict=dict(fontsize=titlesize))
     if nrow > 1 and label:
         for char, ax in zip('ABCDEFG', axes[:, 0]):
-            ax.annotate(char, (label_offset, 1), xycoords='axes fraction', size=32, va='bottom')
+            ax.annotate(char, (label_offset, 1), xycoords='axes fraction', size=24, va='bottom')
     return fig, axes
 
 def task_image(variance):

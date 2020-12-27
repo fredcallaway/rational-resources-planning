@@ -11,6 +11,13 @@ total = logp.sum()
 assert set(logp.reset_index().wid) == set(pdf.index)
 
 # %% ==================== Choose models to plot ====================
+BASIC = ['Random', 'MetaGreedy', 'OptimalPlus']
+HEURISTICS = ['Breadth', 'Depth', 'Best']
+MECHANISMS = ['Satisfice', 'BestNext']
+if EXPERIMENT >= 3:
+    MECHANISMS.append('Expand')
+else:
+    MECHANISMS.extend(['DepthLimit', 'Prune'])
 
 MODELS = list(BASIC)
 
@@ -23,23 +30,8 @@ best_heuristic_no_depthlimit = [
     for model_class in ['Breadth', 'Depth', 'Best']
 ]
 
-# full_heuristic = [f'{base}_Satisfice_BestNext_DepthLimit_Prune'
-#     for base in ['Breadth', 'Depth', 'Best']]
-
-# foo = [f'{base}_Satisfice_BestNext'
-#     for base in ['Breadth', 'Depth', 'Best']]
-
-if EXPERIMENT == 2:
-    MODELS.extend(best_heuristic_no_depthlimit)
-elif EXPERIMENT == 3:
-    MODELS.extend(['Expand', 'MetaGreedyExpand', 'OptimalPlusExpand'])
-    no_expand = [m.replace('_Expand', '') for m in best_heuristic]
-    MODELS.extend(no_expand)
-    MODELS.extend(m + '_Expand' for m in no_expand)
-else:
-    MODELS.extend(best_heuristic)
-
 if EXPERIMENT == 1:
+    MODELS.extend(best_heuristic)
     MODELS.extend([
         'Best_Satisfice_BestNext_DepthLimit_Prune',
         'Best_BestNext',
@@ -49,13 +41,15 @@ if EXPERIMENT == 1:
         'Best'
     ])
 
+elif EXPERIMENT == 2:
+    MODELS.extend(best_heuristic_no_depthlimit)
+else: # 3 and 4
+    MODELS.extend(['Expand', 'MetaGreedyExpand', 'OptimalPlusExpand'])
+    no_expand = [m.replace('_Expand', '') for m in best_heuristic]
+    MODELS.extend(no_expand)
+    MODELS.extend(m + '_Expand' for m in no_expand)
 
-    if EXPERIMENT == 3:
-    MODELS = [m.replace('_Expand', '') for m in MODELS]
-    with_expand = [m + '_Expand' for m in MODELS]
-    with_expand[0] = 'Expand'  # Random_Expand
-    MODELS.extend(with_expand)
-
+print(MODELS)
 # %% ==================== Plots ====================
 
 def plot_model_performance(L, label, axes=None):
@@ -105,6 +99,13 @@ def plot_model_performance_vertical(L, label, ax=None):
     figs.reformat_ticks()
     plt.ylabel(label)
 
+# %% --------
+for v, p in logp.groupby('variance'):
+    x = p.sum()
+    print(x.loc[x.index.str.startswith('Breadth')].idxmax())
+
+# %% --------
+
 def plot_model_performance_expansion(L, label, axes=None):
     # L = L.groupby('variance').mean()
     if axes is None:
@@ -138,48 +139,6 @@ def plot_geometric_mean_likelihood(axes=None):
         # 'Predictive Accuracy',
         axes
     )
-
-# # %% --------
-# @figure()
-# def plot_full_likelihood(axes=None):
-#     plot_model_performance(
-#         -logp.groupby('variance').sum(),
-#         'Cross Validated\nNegative Log-Likelihood',
-#         axes
-#     )
-
-# # %% --------
-
-# @figure()
-# def plot_average_predictive_accuracy(axes=None):
-#     plot_model_performance(np.exp(logp.groupby(['variance', 'wid']).mean()),
-#         'Predictive Accuracy', axes)
-# # %% --------
-
-@figure()
-def individual_predictive_accuracy():
-    models = MODELS
-    fig = plt.figure(figsize=(8,4))
-    L = np.exp(logp.groupby('wid').mean())
-    L = L.loc[pdf.index]
-
-    lm = L.mean().loc[models]
-    plt.scatter(lm, lm.index, s=100, color=[palette[m] for m in models]).set_zorder(20)
-
-    sns.stripplot(y='Model', x='value',
-        data=pd.melt(L, var_name='Model'),
-        order=models,  jitter=False, 
-        palette=palette,
-        alpha=0.1)
-
-    for wid, row in L.iterrows():
-        # c = palette[pdf.click_delay[w]]
-        c = 'k'
-        plt.plot(row.loc[models], models, color=c, lw=1, alpha=0.1)
-    plt.xlabel('Predictive Accuracy')
-    plt.ylabel('')
-    figs.reformat_ticks(yaxis=True)
-
 
 
 # %% ==================== Stats ====================
@@ -230,7 +189,7 @@ if EXPERIMENT == 1:
     write_tex(f'nfit_optimal', nbf.OptimalPlus)
     write_tex(f'nfit_other', nbf.drop(['Best', 'OptimalPlus']).sum())
 
-if EXPERIMENT == 2:
+elif EXPERIMENT == 2:
     # heuristics only
     deltas = []
     total = logp.groupby('variance').sum()
@@ -254,56 +213,80 @@ if EXPERIMENT == 2:
             delta = lp[best_model] - lp['OptimalPlus']
         write_tex(f'total_dnll_{v}', rf'$\dnll = {delta:.0f}$')
 
+    x = total.loc['constant'].sort_values()
+    delta = x.iloc[-1] - x.iloc[-2]
+    write_tex('top2', rf'$\dnll = {delta:.0f}$')
+    delta = x.iloc[-1] - x.loc[~x.index.str.startswith('Best')][-1]
+    write_tex('top2_class', rf'$\dnll = {delta:.0f}$')
 
 
-# # %% --------
-# best_fit = logp.groupby('wid').sum().T.idxmax()
-# pdf['best_fit'] = best_fit
-# pdf['best_fit_class'] = best_fit.apply(lambda x: x.split('_')[0])
-# pdf.groupby('variance').best_fit_class.value_counts()
 
 
-# best_fit = logp.groupby('wid').sum().T.drop('OptimalPlus').idxmax()
-# pdf['best_fit'] = best_fit
-# pdf['best_fit_class'] = best_fit.apply(lambda x: x.split('_')[0])
-# pdf.groupby('variance').best_fit_class.value_counts()
-# # %% --------
-# logp.groupby('variance').mean().T.idxmax()
+elif EXPERIMENT == 3:
+    deltas = []
+    total = logp.groupby('variance').sum()
+    for v in VARIANCES:
+        model, delta = get_best_with_delta(total.loc[v])
+        assert model == 'OptimalPlusExpand'
+        deltas.append(delta)
+
+    write_tex('min_dnll', fmt_min_delta(min(deltas)))
+
+elif EXPERIMENT == 4:
+    model, delta = get_best_with_delta(total)
+    assert model == 'OptimalPlusExpand'
+    write_tex('dnll', rf'$\dnll = {delta:.0f}$')
 
 
 
 # %% ==================== Build table ====================
-BASIC = ['Random', 'MetaGreedy', 'OptimalPlus']
-HEURISTICS = ['Breadth', 'Depth', 'Best']
-MECHANISMS = ['Satisfice', 'BestNext', 'DepthLimit', 'Prune']
 
 param_counts = get_result(VERSION, 'param_counts.json')
+param_counts['Random_Expand'] = param_counts.get('Expand', None)
+param_counts['MetaGreedy_Expand'] = param_counts.get('MetaGreedyExpand', None)
+param_counts['OptimalPlus_Expand'] = param_counts.get('OptimalPlusExpand', None)
 
-best_fit = logp.groupby('wid').sum().T.idxmax()
-nbf = best_fit.value_counts()
+def write_table(logp, postfix=''):
+    logp = logp.rename(columns={
+        'Expand': 'Random_Expand',
+        'MetaGreedyExpand': 'MetaGreedy_Expand',
+        'OptimalPlusExpand': 'OptimalPlus_Expand',
+        }) 
 
-def make_row(model):
-    row = {'Class': model.split('_')[0].replace('Plus', '')}
-    for mech in MECHANISMS:
-        row[mech] = mech in model
-    row['# Params'] = param_counts[model]
-    row['# Participants'] = nbf.get(model, 0)
-    row['Total NLL'] = -int(round(total[model]))
+    total = logp.sum()
+    best_fit = logp.groupby('wid').sum().T.idxmax()
+    nbf = best_fit.value_counts()
 
-    return row
+    def make_row(model):
+        row = {'Class': model.split('_')[0].replace('Plus', '')}
+        for mech in MECHANISMS:
+            row[mech] = mech in model
+        row['# Param'] = param_counts[model]
+        row['# Subj'] = nbf.get(model, 0)
+        row['Total NLL'] = -int(round(total[model]))
+        return row
 
-# h = HEURISTICS[0]
-# models = list(total.index[total.index.str.startswith(h)])
-models = list(total.index)
-t = pd.DataFrame(make_row(model) for model in models)
-t.Class = pd.Categorical(t.Class, ['Random', 'MetaGreedy', 'Optimal', *HEURISTICS])
-t = t.sort_values(['Class', 'Satisfice', 'BestNext', 'DepthLimit', 'Prune'])
+    models = total.index.unique()
+    t = pd.DataFrame(make_row(model) for model in models)
+    t.Class = pd.Categorical(t.Class, ['Random', 'MetaGreedy', 'Optimal', *HEURISTICS])
+    t = t.sort_values(['Class'] + MECHANISMS)
+    rename = {
+        'Satisfice': 'S',
+        'BestNext': 'BN',
+        'DepthLimit': 'DL',
+        'Prune': 'P',
+        'Expand': 'F'
 
-write_tex('modelcomp_table', t.to_latex(index=False, 
-    formatters={
-        mech: lambda x: {False: '', True: 'X'}[x]
-    for mech in MECHANISMS}))
+        }
+    t.rename(columns=rename, inplace=True)
 
+    write_tex(f'modelcomp_table_{postfix}', t.to_latex(index=False, 
+        formatters={
+            rename[mech]: lambda x: {False: '', True: 'X'}[x]
+        for mech in MECHANISMS}))
+
+for v, d in logp.groupby('variance'):
+    write_table(d, v)
 
 # %% ==================== Old figures ====================
 
@@ -348,3 +331,45 @@ write_tex('modelcomp_table', t.to_latex(index=False,
 #     )
 
 # # %% --------
+
+
+# # %% --------
+# @figure()
+# def plot_full_likelihood(axes=None):
+#     plot_model_performance(
+#         -logp.groupby('variance').sum(),
+#         'Cross Validated\nNegative Log-Likelihood',
+#         axes
+#     )
+
+# # %% --------
+
+# @figure()
+# def plot_average_predictive_accuracy(axes=None):
+#     plot_model_performance(np.exp(logp.groupby(['variance', 'wid']).mean()),
+#         'Predictive Accuracy', axes)
+# # %% --------
+
+# @figure()
+# def individual_predictive_accuracy():
+#     models = MODELS
+#     fig = plt.figure(figsize=(8,4))
+#     L = np.exp(logp.groupby('wid').mean())
+#     L = L.loc[pdf.index]
+
+#     lm = L.mean().loc[models]
+#     plt.scatter(lm, lm.index, s=100, color=[palette[m] for m in models]).set_zorder(20)
+
+#     sns.stripplot(y='Model', x='value',
+#         data=pd.melt(L, var_name='Model'),
+#         order=models,  jitter=False, 
+#         palette=palette,
+#         alpha=0.1)
+
+#     for wid, row in L.iterrows():
+#         # c = palette[pdf.click_delay[w]]
+#         c = 'k'
+#         plt.plot(row.loc[models], models, color=c, lw=1, alpha=0.1)
+#     plt.xlabel('Predictive Accuracy')
+#     plt.ylabel('')
+#     figs.reformat_ticks(yaxis=True)

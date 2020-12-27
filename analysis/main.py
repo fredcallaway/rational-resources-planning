@@ -1,5 +1,4 @@
 # %%
-%load_ext rpy2.ipython
 %run setup 1
 # figs.nosave = True
 %run -i pareto
@@ -12,35 +11,30 @@ if EXPERIMENT > 1:
 figs.nosave = False
 
 # %% ==================== Basic stuff ====================
-final = full_pdf.complete.sum()
+final = len(pdf)
+assert final == full_pdf.complete.sum()
 failed = (full_pdf.n_quiz == 3).sum()
 write_tex("recruited", final + failed)
-write_tex("failed_quiz", failed)
-write_tex("final", final)
+if EXPERIMENT < 4:
+    write_tex("failed_quiz", failed)
 
 write_tex("bonus", mean_std(pdf.bonus, fmt='$'))
 write_tex("time", mean_std(pdf['total_time']))
 
-# %% ==================== EXPERIMENT 1 ===================
-
-# @figure()
-# def exp1_main():
-#     fig, axes = plt.subplots(2, 2, figsize=(12, 8), gridspec_kw={'width_ratios': [1,2]})
-#     plot_pareto(np.array(axes.flat[0]), models=['Random', 'MetaGreedy', 'Optimal', 'BestFirst'])
-#     plot_geometric_mean_likelihood(axes.flat[1])
-#     cost_best_first(axes.flat[2])
-
+LABEL_PANELS = False
 
 # %% ==================== EXPERIMENT 2 ====================
 
 def exp2_make_base():
-    label_offset = -0.2
-    fig, axes = plt.subplots(4, 3, figsize=(12, (4+3+3+3)), constrained_layout=True,
-                             gridspec_kw={'height_ratios': [4,3,3,3]})
+    label_offset = -0.3
+    fig, axes = plt.subplots(4, 3, figsize=(12, 0.9 * (4.1+3+3+3)), 
+        constrained_layout=True, 
+        gridspec_kw=dict(height_ratios=[4.1,3,3,3]))
 
-    # letter labels
-    for char, ax in zip('ABCDEFG', axes[:, 0]):
-        ax.annotate(char, (label_offset, 1), xycoords='axes fraction', size=32, va='bottom')
+    if LABEL_PANELS:
+        for char, ax in zip('ABCDEFG', axes[:, 0]):
+            ax.annotate(char, (label_offset, 1.2), xycoords='axes fraction', size=24, va='bottom')
+    
     # task image
     for v, ax in zip(VARIANCES, axes[0, :]):
         ax.set_title(f'{v.title()} Variance', fontdict=dict(fontsize=20))
@@ -59,112 +53,73 @@ def exp2_make_base():
         # if i != 0:
         ax.set_yticks([0, 0.5, 1])
 
+
+    fig.set_constrained_layout_pads(h_pad=0.1)
     plt.savefig('fighist/exp2a.pdf', bbox_inches='tight')
     os.system('cp fighist/exp2a.pdf .')
 
 exp2_make_base()
 # finish in adobe illustrator
 
-# # %% --------
-# def exp2_add_task():
-#     base = Image.open('fighist/exp2a.png')
-#     w, h = base.size
-
-#     task = task_image('decreasing')
-#     wt, ht = task.size
-#     scaling = 0.19 * w / wt
-#     task = task.resize((int(wt * scaling), int(ht * scaling)))
-
-#     base.paste(task, (400, 110))
-
-#     dt = datetime.now().strftime('%m-%d-%H-%M-%S')
-#     base.save(f'fighist/{dt}-exp2b.png')
-#     base.save('figs/4/exp2_main.png')
-
-
-# exp2_add_task()
-    
-
-# # %% --------
-# @figure()
-# def exp2_main():
-#     fig, axes = setup_variance_plot(2)
-#     for v, ax in zip(VARIANCES, axes[0, :]):
-#         ax.imshow(task_image(v))
-#         ax.axis('off')
-#     plot_second_click(axes[1, :], 
-#         # models=['OptimalPlus', 'BestFirst']
-#         )
-
-# @figure()
-# def pareto_fit():
-#     fig, axes = setup_variance_plot(2, label_offset=-0.4)
-#     plot_pareto(axes[0, :], legend=False, fit_reg=False)
-#     plot_geometric_mean_likelihood(axes[1, :])
-#     # figs.reformat_ticks(yaxis=True, ax=axes[1,0])
-
-# %% --------
-@figure()
-def exp2_main_alt():
-    fig, axes = setup_variance_plot(4)
-    for v, ax in zip(VARIANCES, axes[0, :]):
-        ax.imshow(task_image(v))
-        ax.axis('off')
-    plot_second_click(axes[1, :], 
-        # models=['OptimalPlus', 'BestFirst']
-        )
-    plot_pareto(axes[2, :], legend=False, fit_reg=False)
-    plot_geometric_mean_likelihood(axes[3, :])
-
-
 # %% ==================== EXPERIMENT 3 ====================
 
-@figure()
+@figure(tight=False)
 def exp3_main():
-    fig, axes = setup_variance_plot(2, height=3, label_offset=-0.5)
+    fig, axes = plt.subplots(2, 3, figsize=(11.9, 0.9 * 6), 
+        constrained_layout=True,
+        gridspec_kw=dict(height_ratios=[1, 1.2]))
+    for v, ax in zip(VARIANCES, axes[0, :]):
+        ax.set_title(f'{v.title()} Variance', fontdict=dict(fontsize=20), pad=20)
+
     first_click_depth(axes[0])
+    fig.set_constrained_layout_pads(h_pad=0.1)
     plot_geometric_mean_likelihood(axes[1])
 
-# %% --------
+# %% ==================== EXPERIMENT 4 ====================
 
-def exp4_make_base():
-    fig = plt.figure(constrained_layout=True, figsize=(12, 6))
+@figure(tight=False)
+def exp4_main():
+    fig = plt.figure(constrained_layout=True, figsize=(12, 0.9 * 6),)
     gs = fig.add_gridspec(2, 6)
     
     plt.sca(fig.add_subplot(gs[:, 0:4]))
     # img = Image.open(f'imgs/roadtrip.png')
     # plt.imshow(img)
     plt.axis('off')
-    plt.annotate('A', (-0.4, 1), xycoords='axes fraction', size=32, va='bottom')
+    if LABEL_PANELS:
+        plt.annotate('A', (-0.4, 1), xycoords='axes fraction', size=32, va='bottom')
     
     ax = fig.add_subplot(gs[0, 4:6])
     plot_geometric_mean_likelihood(np.array(ax))
-    ax.annotate('B', (-0.5, 1), xycoords='axes fraction', size=32, va='bottom')
+    if LABEL_PANELS:
+        ax.annotate('B', (-0.5, 1), xycoords='axes fraction', size=32, va='bottom')
     
     ax = fig.add_subplot(gs[1, 4:6])
     plt.sca(ax)
     expansion_value()
-    ax.annotate('C', (-0.5, 1), xycoords='axes fraction', size=32, va='bottom')
-    
-    plt.savefig('fighist/exp4a.png', dpi=figs.dpi, bbox_inches='tight')
 
-def exp4_add_task():
-    base = Image.open('fighist/exp4a.png')
-    w, h = base.size
+    if LABEL_PANELS:
+        ax.annotate('C', (-0.5, 1), xycoords='axes fraction', size=32, va='bottom')
 
-    task = Image.open('imgs/roadtrip.png')
-    wt, ht = task.size
-    scaling = 0.64 * w / wt
-    task = task.resize((int(wt * scaling), int(ht * scaling)))
+    fig.set_constrained_layout_pads(h_pad=0.1)
 
-    base.paste(task, (0, 100))
+# # %% --------
+# def exp4_add_task():
+#     base = Image.open('fighist/exp4a.png')
+#     w, h = base.size
 
-    dt = datetime.now().strftime('%m-%d-%H-%M-%S')
-    base.save(f'fighist/exp4b-{dt}.png')
-    base.save('figs/4/exp4_main.png')
+#     task = Image.open('imgs/roadtrip.png')
+#     wt, ht = task.size
+#     scaling = 0.64 * w / wt
+#     task = task.resize((int(wt * scaling), int(ht * scaling)))
 
-exp4_make_base()
-exp4_add_task()
+#     base.paste(task, (0, 100))
+
+#     dt = datetime.now().strftime('%m-%d-%H-%M-%S')
+#     base.save(f'fighist/exp4b-{dt}.png')
+#     base.save('figs/4/exp4_main.png')
+
+# exp4_add_task()
 
 
 
@@ -231,6 +186,58 @@ def backwards_complex():
         plt.axhline(0, label='Forward Search', color=palette['BreadthFirst'])
         plt.axhline(1, label='Backward Search', color=palette['DepthFirst'])
     axes.flat[0].legend()
+
+
+# # %% --------
+# def exp2_add_task():
+#     base = Image.open('fighist/exp2a.png')
+#     w, h = base.size
+
+#     task = task_image('decreasing')
+#     wt, ht = task.size
+#     scaling = 0.19 * w / wt
+#     task = task.resize((int(wt * scaling), int(ht * scaling)))
+
+#     base.paste(task, (400, 110))
+
+#     dt = datetime.now().strftime('%m-%d-%H-%M-%S')
+#     base.save(f'fighist/{dt}-exp2b.png')
+#     base.save('figs/4/exp2_main.png')
+
+
+# exp2_add_task()
+    
+
+# # %% --------
+# @figure()
+# def exp2_main():
+#     fig, axes = setup_variance_plot(2)
+#     for v, ax in zip(VARIANCES, axes[0, :]):
+#         ax.imshow(task_image(v))
+#         ax.axis('off')
+#     plot_second_click(axes[1, :], 
+#         # models=['OptimalPlus', 'BestFirst']
+#         )
+
+# @figure()
+# def pareto_fit():
+#     fig, axes = setup_variance_plot(2, label_offset=-0.4)
+#     plot_pareto(axes[0, :], legend=False, fit_reg=False)
+#     plot_geometric_mean_likelihood(axes[1, :])
+#     # figs.reformat_ticks(yaxis=True, ax=axes[1,0])
+
+# # %% --------
+# @figure()
+# def exp2_main_alt():
+#     fig, axes = setup_variance_plot(4)
+#     for v, ax in zip(VARIANCES, axes[0, :]):
+#         ax.imshow(task_image(v))
+#         ax.axis('off')
+#     plot_second_click(axes[1, :], 
+#         # models=['OptimalPlus', 'BestFirst']
+#         )
+#     plot_pareto(axes[2, :], legend=False, fit_reg=False)
+#     plot_geometric_mean_likelihood(axes[3, :])
 
 
 

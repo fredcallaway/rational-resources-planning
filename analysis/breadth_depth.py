@@ -1,4 +1,13 @@
 
+def load_depth_curve(k):
+    d = pd.DataFrame(get_result(VERSION, f'depth_curve/{k}.json'))
+    if k != 'Human':
+        d.wid = d.wid.apply(lambda x: x.split('-')[1])
+    d.set_index('wid', inplace=True)
+    d['variance'] = pdf.variance
+    d['agent'] = k
+    return d.loc[list(pdf.index)]
+
 # %% ==================== Second click ====================
 
 def breadth_depth_data(models=MODELS, noclick='drop'):

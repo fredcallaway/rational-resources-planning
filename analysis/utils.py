@@ -62,6 +62,11 @@ def load_fits(exp, models, path='mle'):
     return fits.reset_index()
 
 
+# keeps the global namespace clean
+def do(f, cond):
+    if cond:
+        f()
+
 from datetime import datetime
 class Figures(object):
     """Plots and saves figures."""
