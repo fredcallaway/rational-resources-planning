@@ -1,6 +1,5 @@
 analysis/*.csv
 .ipynb_checkpoints/
-model/figs/
 model/notes.txt
 model/benchmark.ipynb
 model/pullfigs.sh
@@ -11,7 +10,6 @@ model/test_hashing.jl
 model/test_models.jl
 data
 results
-figs
 plots-Copy1.ipynb
 __pycache__/
 alt-analysis.ipynb
@@ -36,7 +34,6 @@ old/
 bonus.csv
 dump.py
 fighist/
-.figs/
 model/test_fitting.jl
 model/old_analysis.jl
 model/test_pruning.jl
