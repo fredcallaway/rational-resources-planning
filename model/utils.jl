@@ -5,6 +5,11 @@ using Printf
 using Serialization
 using Distributed
 
+if VERSION >= v"1.5"
+    using StableHashes
+    Base.hash(x, h::UInt64) = shash(x, h)
+end
+
 
 function logspace(low, high, n)
     x = range(0, 1, length=n)

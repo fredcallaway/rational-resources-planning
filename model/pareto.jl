@@ -107,6 +107,7 @@ function write_heuristic_pareto(;force=false)
     # end
 
     models = eval(QUOTE_PARETO_MODELS)
+    # models = [Heuristic{:Depth_NoDepthLimit}]
 
     for M in models, m in mdps
         f = "mdps/pareto/$(id(m))-$(name(M)).csv"

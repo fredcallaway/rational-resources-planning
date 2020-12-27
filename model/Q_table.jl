@@ -30,7 +30,6 @@ function make_Q_table(data)
     end |> Dict
 end
 
-
 if basename(PROGRAM_FILE) == basename(@__FILE__)
     @everywhere include("base.jl")
     all_trials = load_trials(EXPERIMENT)

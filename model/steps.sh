@@ -1,4 +1,4 @@
-exp=exp3
+exp=exp4
 
 julia -p auto solve.jl all
 # alternatively, solve on a cluster:

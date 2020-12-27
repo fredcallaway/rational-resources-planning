@@ -4,6 +4,8 @@ using Glob
 using CSV
 using DataFrames
 using ProgressMeter
+using Random: randperm, MersenneTwister
+
 
 include("conf.jl")
 println("Running model comparison for ", ARGS[1])
@@ -11,7 +13,6 @@ println("Running model comparison for ", ARGS[1])
 @everywhere include("base.jl")
 @everywhere include("models.jl")
 
-import Random
 Random.seed!(RANDOM_SEED)
 
 mkpath("$base_path/fits/full")
@@ -70,7 +71,7 @@ full_fits = let
             return result
         catch err
             @error "Error fitting $mname to $wid" err
-            return missing
+            rethrow()
         end
 
     end;
@@ -104,7 +105,6 @@ end;
 
 # %% ==================== CROSS VALIDATION ====================
 
-using Random: randperm, MersenneTwister
 
 function kfold_splits(n, k)
     @assert (n / k) % 1 == 0  # can split evenly
@@ -219,35 +219,35 @@ map(all_data) do d
 end |> JSON.json |> write("$results_path/predictions.json")
 
 
-# %% ==================== GENERATE VISUALIZATION JSON ====================
+# # %% ==================== GENERATE VISUALIZATION JSON ====================
 
-function demo_trial(t)
-    (
-        stateRewards = t.bs[end],
-        demo = (
-            clicks = t.cs[1:end-1] .- 1,
-            path = t.path .- 1,
-            predictions = Dict(name(M) => get_preds(M, t) for M in MODELS),
-            parameters = Dict(name(M) => get_params(M, t) for M in MODELS)
-        )
-    )
-end
+# function demo_trial(t)
+#     (
+#         stateRewards = t.bs[end],
+#         demo = (
+#             clicks = t.cs[1:end-1] .- 1,
+#             path = t.path .- 1,
+#             predictions = Dict(name(M) => get_preds(M, t) for M in MODELS),
+#             parameters = Dict(name(M) => get_params(M, t) for M in MODELS)
+#         )
+#     )
+# end
 
-function sorter(xs)
-    sort(xs, by=x->(-x.score))
-end
+# function sorter(xs)
+#     sort(xs, by=x->(-x.score))
+# end
 
-mkpath("$results_path/viz")
-map(collect(all_trials)) do (wid, trials)
-    (
-        wid = wid,
-        # variance = variance_structure(trials[1].m),
-        score = mean(t.score for t in trials),
-        clicks = mean(length(t.cs)-1 for t in trials),
-    )
-end |> sorter |> JSON.json |> write("$results_path/viz/table.json")
+# mkpath("$results_path/viz")
+# map(collect(all_trials)) do (wid, trials)
+#     (
+#         wid = wid,
+#         variance = variance_structure(trials[1].m),
+#         score = mean(t.score for t in trials),
+#         clicks = mean(length(t.cs)-1 for t in trials),
+#     )
+# end |> sorter |> JSON.json |> write("$results_path/viz/table.json")
 
-foreach(collect(all_trials)) do (wid, trials)
-    demo_trial.(trials) |> JSON.json |> write("$results_path/viz/$wid.json")
-end
+# foreach(collect(all_trials)) do (wid, trials)
+#     demo_trial.(trials) |> JSON.json |> write("$results_path/viz/$wid.json")
+# end
 

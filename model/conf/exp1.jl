@@ -20,6 +20,6 @@ QUOTE_PARETO_MODELS = quote
         Heuristic{:Best_Full},
         Heuristic{:Best_BestNext_Satisfice},
         Heuristic{:Best_BestNext_Satisfice_Prune},
-        Heuristic{:Best_BestNext_Satisfice_DepthLimits},
+        Heuristic{:Best_BestNext_Satisfice_DepthLimit},
     ]
 end

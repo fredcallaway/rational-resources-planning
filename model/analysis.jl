@@ -27,7 +27,7 @@ model_sims = map([name.(MODELS); "OptimalPlusPure"]) do mname
     end
 end |> Dict;
 
-comparison_models = ["OptimalPlus", "OptimalPlusPure"]
+comparison_models = ["Random", "OptimalPlus", "OptimalPlusPure"]
 if !EXPAND_ONLY
     push!(comparison_models, "OptimalPlusExpand")
 end
@@ -76,7 +76,7 @@ trial_features.(flat_trials) |> JSON.json |> writev("$results_path/trial_feature
 for nam in comparison_models
     sims = model_sims[nam]
     f = "$results_path/trial_features/$nam.json"
-    sims |> flatten .|> trial_features |> JSON.json |> write(f)
+    sims |> flatten .|> trial_features |> JSON.json |> writev(f)
 end
 
 # %% ==================== click features ====================
@@ -116,7 +116,7 @@ click_features.(all_data) |> JSON.json |> writev("$results_path/click_features/H
 for nam in comparison_models
     sims = model_sims[nam]
     f = "$results_path/click_features/$nam.json"
-    sims |> flatten  |> get_data.|> click_features |> JSON.json |> write(f)
+    sims |> flatten  |> get_data.|> click_features |> JSON.json |> writev(f)
 end
 
 # %% ==================== expansion ====================
