@@ -1,8 +1,6 @@
 # Code and data for a really cool paper on planning
 
-## Setup
-`julia install_deps.jl`
-check out demo.jl
+
 
 ## Modeling procedure
 1. Create a file in conf/, e.g. conf/cogsci-1.jl

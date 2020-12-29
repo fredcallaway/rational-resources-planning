@@ -8,7 +8,6 @@ model/scratch_base.jl
 model/test_grad.jl
 model/test_hashing.jl
 model/test_models.jl
-data
 results
 plots-Copy1.ipynb
 __pycache__/
@@ -44,3 +43,5 @@ analysis/imgs/constant-cropped.png
 analysis/imgs/decreasing-cropped.png
 analysis/imgs/increasing-cropped.png
 analysis/exp2_full.ai
+data/pilot/
+analysis/test.ipynb

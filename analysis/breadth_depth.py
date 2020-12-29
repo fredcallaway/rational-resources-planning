@@ -1,16 +1,7 @@
 
-def load_depth_curve(k):
-    d = pd.DataFrame(get_result(VERSION, f'depth_curve/{k}.json'))
-    if k != 'Human':
-        d.wid = d.wid.apply(lambda x: x.split('-')[1])
-    d.set_index('wid', inplace=True)
-    d['variance'] = pdf.variance
-    d['agent'] = k
-    return d.loc[list(pdf.index)]
-
 # %% ==================== Second click ====================
 
-def breadth_depth_data(models=MODELS, noclick='drop'):
+def breadth_depth_data(models, noclick='drop'):
     dfs = []
     d = tdf.set_index('variance').copy()
     d['agent'] = 'Human'
@@ -31,7 +22,7 @@ def breadth_depth_data(models=MODELS, noclick='drop'):
         raise ValueError("noclick")
     return data
 
-@figure()
+@figure(EXPERIMENT == 2)
 def plot_second_click(axes=None, models=['OptimalPlus', 'Best', 'Breadth', 'Depth'], noclick='drop'):
     bdd = breadth_depth_data(models, noclick=noclick)
     if axes is None:
@@ -58,6 +49,7 @@ def plot_second_click(axes=None, models=['OptimalPlus', 'Best', 'Breadth', 'Dept
 
         plt.xlabel('First Revealed Value')
         plt.ylim(-0.05, 1.05)
+        plt.yticks([0, 0.5, 1])
         if i == 0:
             if noclick == 'zero':
                 plt.ylabel('Probability of Second\nClick on Same Path')
@@ -65,15 +57,26 @@ def plot_second_click(axes=None, models=['OptimalPlus', 'Best', 'Breadth', 'Dept
                 plt.ylabel('Proportion of Second\nClicks on Same Path')
             # plt.legend()
             # figs.reformat_legend()
-            plt.yticks([0,1])
         else:
             # plt.legend().remove()
             plt.ylabel('')
 
+@figure(EXPERIMENT == 2)
+def plot_second_click_alt():
+    plot_second_click(models=COMPARISON_MODELS[2:])
 
 # # %% ==================== First click depth ====================
 
-@figure()
+def load_depth_curve(k):
+    d = pd.DataFrame(get_result(VERSION, f'depth_curve/{k}.json'))
+    if k != 'Human':
+        d.wid = d.wid.apply(lambda x: x.split('-')[1])
+    d.set_index('wid', inplace=True)
+    d['variance'] = pdf.variance
+    d['agent'] = k
+    return d.loc[list(pdf.index)]
+
+@figure(EXPERIMENT >= 3)
 def first_click_depth(axes=None):
     if axes is None:
         fig, axes = setup_variance_plot(title=True)
@@ -152,168 +155,4 @@ def first_click_depth(axes=None):
 #     plot_depth_heat('Human', axes[0])
 #     plot_depth_heat('OptimalPlus', axes[1])
 
-
-# %% --------
-# X = pd.concat(load_cf(x) for x in ['Human', ])
-
-
-
-
-# # %% --------
-# dd.groupby(['variance']).apply(make_hist)
-
-
-# def make_thing():
-#     for m in ['Human', 'OptimalPlus']:
-#         dd.loc[m, var].value_counts()
-#         x = dd.loc[m, var].value_counts(sort=False)
-#         x /= x.sum()
-#         yield x
-# fig, axes = setup_variance_plot(title=True)
-# for i, (ax, var) in enumerate(zip(axes.flat, VARIANCES)):
-
-#         # sns.distplot(dd.loc[m, var], kde=False, norm_hist=True, ax=ax)
-# show()
-
-
-
-# # %% --------
-
-# sns.distplot(dd.loc[m, var], kde=False, norm_hist=True)
-# show()
-
-# dd.value_counts().plot.bar()
-# show()
-
-# # %% --------
-
-# X = d.groupby(['click', 'cumdepth']).apply(len).unstack()
-# sns.heatmap(X.T)
-# show()
-
-# # %% --------
-
-# # def unroll(df):
-# #     rows = []
-# #     for row in df.itertuples():
-# #         cm = pd.Series(depth[c] for c in row.clicks).cummax()
-# #         for i, c in enumerate(cm):
-# #             rows.append([row.variance, i,])
-# #     return pd.DataFrame(rows, columns=['variance', 'idx', 'depth'])
-
-# # clicks = unroll(df)
-
-
-# # # In[614]:
-
-
-# # sns.lineplot('idx', 'depth', hue='variance', data=clicks)
-# # plt.xlabel('Click Number')
-# # plt.ylabel('Maximum Depth Clicked')
-# # savefig('maxdepth')
-
-
-# # # In[488]:
-
-
-# # tree = [[1, 5, 9, 13], [2], [3, 4], [], [], [6], [7, 8], [], [], [10], [11, 12], [], [], [14], [15, 16], [], []]
-# depth = [0, 1, 2, 3, 3, 1, 2, 3, 3, 1, 2, 3, 3, 1, 2, 3, 3]
-
-# def first_revealed(row):
-#     if len(row.clicks) < 1:
-#         return 0
-#     return row.state_rewards[row.clicks[0]]
-    
-# def second_click(row):
-#     if len(row.clicks) < 2:
-#         return 'none'
-#     c1 = row.clicks[1]
-#     if depth[c1] == 1:
-#         return 'breadth'
-#     if depth[c1] == 2:
-#         return 'depth'
-
-# tdf['second_click'] = tdf.apply(second_click, axis=1)
-# tdf['first_revealed'] = tdf.apply(first_revealed, axis=1)
-# X = tdf.groupby(['variance', 'first_revealed', 'second_click']).apply(len)
-# N = tdf.groupby(['variance', 'first_revealed']).apply(len)
-# X = (X / N).rename('rate').reset_index()
-
-# fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharey=True)
-# order = ['decreasing', 'constant', 'increasing']
-# for i, (var, d) in enumerate(X.query('second_click != "none"').groupby('variance')):
-#     i = order.index(var)
-#     ax = axes[i]; plt.sca(ax)
-#     sns.barplot('first_revealed', 'rate', hue='second_click', data=d)
-#     plt.title(f'{var.title()} Variance')
-#     plt.xlabel('First Revealed Value')
-#     if i == 0:
-#         plt.ylabel('Proportion')
-#     else:
-#         plt.ylabel('')
-#     if i == 2:
-#         ax.legend().set_label('Second Click')
-#     else:
-#         ax.legend().remove()
-# savefig('breadth-depth')
-
-
-# # In[ ]:
-
-
-# import json
-
-# def parse_sim_clicks(x):
-#     if x == "Int64[]":
-#         return []
-#     else:
-#         return json.loads(x)
-    
-# sdf = pd.concat(
-#     pd.read_csv(f"model/results/{code}/simulations.csv")
-#     for code in CODES
-# )
-# sdf['clicks'] = sdf.clicks.apply(parse_sim_clicks)
-# sdf.state_rewards = sdf.state_rewards.apply(json.loads)
-# sdf['second_click'] = sdf.apply(second_click, axis=1)
-# sdf['first_revealed'] = sdf.apply(first_revealed, axis=1)
-# sdf['model'] =  sdf.wid.str.split('-').str[0]
-
-# sdf.set_index('mdp', inplace=True)
-# sdf['variance'] = mdps.variance
-# sdf.reset_index(inplace=True)
-# sdf.set_index('model', inplace=True)
-
-
-# # In[547]:
-
-
-# def plot_breadth_depth_model(model):
-#     df = sdf.loc[model]
-#     X = df.groupby(['variance', 'first_revealed', 'second_click']).apply(len)
-#     N = df.groupby(['variance', 'first_revealed']).apply(len)
-#     X = (X / N).rename('rate').reset_index()
-
-#     fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharey=True)
-#     order = ['decreasing', 'constant', 'increasing']
-#     for i, (var, d) in enumerate(X.query('second_click != "none"').groupby('variance')):
-#         i = order.index(var)
-#         ax = axes[i]; plt.sca(ax)
-#         sns.barplot('first_revealed', 'rate', hue='second_click', data=d)
-#         plt.title(f'{var.title()} Variance')
-#         plt.xlabel('First Revealed Value')
-#         if i == 0:
-#             plt.ylabel(f'{model} Proportion')
-#         else:
-#             plt.ylabel('')
-#         if i == 2:
-#             ax.legend().set_label('Second Click')
-#         else:
-#             ax.legend().remove()
-#     savefig(f'breadth-depth-{model}')
-
-# # plot_breadth_depth_model('Optimal')
-# # plot_breadth_depth_model('BestFirst')
-# plot_breadth_depth_model('BreadthFirst')
-# plot_breadth_depth_model('DepthFirst')
 

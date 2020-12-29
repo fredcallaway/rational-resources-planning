@@ -3,7 +3,7 @@
 mdp2var = {}
 for x in tdf[['variance', 'mdp']].itertuples():
     mdp2var[x.mdp] = x.variance
-mdp2var
+
 model_pareto = pd.concat((pd.read_csv(f) for f in glob('../model/mdps/pareto/*')), sort=True)
 # model_pareto.model = model_pareto.model.str.replace('RandomSelection', 'Random')
 model_pareto = model_pareto.set_index('mdp').loc[tdf.mdp.unique()].reset_index()
@@ -11,24 +11,13 @@ model_pareto['variance'] = model_pareto.mdp.apply(mdp2var.get)
 model_pareto.set_index(['variance', 'model'], inplace=True)
 model_pareto.sort_values('cost', inplace=True)
 model_pareto.rename(columns={'clicks': 'n_click', 'reward': 'term_reward'}, inplace=True)
-model_pareto.index.unique()
 
-print(*model_pareto.reset_index().model.unique())
-# tdf.mdp.unique()
-
-# %% --------
 if EXPERIMENT == 1:
     PARETO_MODELS = ['Best', 'MetaGreedy', 'Optimal', 'RandomSelection', ]
 else:
     PARETO_MODELS = ['Best', 'Breadth', 'Depth', 'Optimal', 'RandomSelection']
 
-# PARETO_MODELS = [m for m in MODELS if not (m.endswith('Expand') or m.endswith('NoPrune'))]
-# palette['BreadthFirst'] = do
-# palette['DepthFirst'] = dp
-# palette['BestFirst'] = dg
-
 # %% --------
-
 
 def get_pareto(variance, model_class):
     if model_class == 'Optimal':
@@ -87,7 +76,9 @@ def plot_pareto(axes=None, legend=True, fit_reg=False, models=PARETO_MODELS):
 
 # %% --------
 
-if EXPERIMENT == 1:
+# This is like "if EXPERIMENT == 1:" except it doesn't pollute the global namespace
+@do_if(EXPERIMENT == 1)
+def compute_pareto_scores():
     def linear_interpolate(x1, x2, y1, y2, x):
         assert x1 < x < x2
         d = (x - x1) / (x2 - x1)

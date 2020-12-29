@@ -1,7 +1,9 @@
 cv_fits = pd.concat([pd.read_csv(f'../model/results/{VERSION}/mle/{model}-cv.csv') 
                      for model in MODELS], sort=False).set_index('wid')
 
-load_fits(VERSION, [''])
+X = load_fits(VERSION, ['Breadth_BestNext'])
+sns.regplot(X.β_best_next, X.β_depth)
+show()
 # %% --------
 full_fits.query('β_depthlim != 1e5').model.value_counts()
 

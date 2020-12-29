@@ -1,4 +1,16 @@
 
+def do_if(cond):
+    def wrapper(f):
+        if cond:
+            f()
+    return wrapper
+
+@do_if(1 == 1)
+def fun():
+    print('fun')
+
+
+# %% --------
 %run setup 1
 print(pdf.groupby(['click_delay', 'variance']).apply(len))
 %run setup 2

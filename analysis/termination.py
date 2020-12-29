@@ -81,40 +81,45 @@ def plot_satisfice():
     figs.reformat_labels()
 
 # %% ==================== stats  ====================
+
 from statsmodels.formula.api import logit 
-cf = load_cf('Human').query('n_revealed < 16')
-m = logit(f'is_term.astype(int) ~ term_reward + best_next', data=cf).fit()
-for k in ['term_reward', 'best_next']:
-    lo, hi = m.conf_int().loc[k]
-    write_tex(f'term_human_{k}', rf'$B = {m.params[k]:.3f}$ [{lo:.3f}, {hi:.3f}]')
-    # write_tex(f'term_human_{k}', rf'$B = {m.params[k]:.3f}$, {label} [{lo:.3f}, {hi:.3f}], ${pval(m.pvalues[k])}$'))
 
-# %% --------
-cf = load_cf('OptimalPlusPure').query('n_revealed < 16')
-m = logit(f'is_term.astype(int) ~ term_reward + best_next', data=cf).fit()
-for k in ['term_reward', 'best_next']:
-    write_tex(f'term_optimal_{k}', f'{m.params[k]:.3f}')
+@do_if(True)
+def this():
+    cf = load_cf('Human').query('n_revealed < 16')
+    m = logit(f'is_term.astype(int) ~ term_reward + best_next', data=cf).fit()
+    for k in ['term_reward', 'best_next']:
+        lo, hi = m.conf_int().loc[k]
+        write_tex(f'term_human_{k}', rf'$B = {m.params[k]:.3f}$ [{lo:.3f}, {hi:.3f}]')
+        # write_tex(f'term_human_{k}', rf'$B = {m.params[k]:.3f}$, {label} [{lo:.3f}, {hi:.3f}], ${pval(m.pvalues[k])}$'))
 
-# %% --------
-preds = ['best_next', 'term_reward', 'n_revealed']
-models = {
-    pred: logit(f'is_term ~ {pred}', data=X).fit()
-    for pred in preds
-}
-for pred in preds:
-    models[f'no_{pred}'] = logit('is_term ~ ' + ' + '.join([p for p in preds if p != pred]), data=X).fit()
-models['full'] = logit('is_term ~ best_next + term_reward + n_revealed', data=X).fit()
+@do_if(True)
+def this():
+    cf = load_cf('OptimalPlusPure').query('n_revealed < 16')
+    m = logit(f'is_term.astype(int) ~ term_reward + best_next', data=cf).fit()
+    for k in ['term_reward', 'best_next']:
+        write_tex(f'term_optimal_{k}', f'{m.params[k]:.3f}')
 
-# %% --------
-X = pd.DataFrame({k: {
-        'R^2': round(m.prsquared, 3),
-        'LL': round(m.llf),
-    } 
-    for k, m in models.items()}).T
-X
+# # %% --------
+# preds = ['best_next', 'term_reward', 'n_revealed']
+# models = {
+#     pred: logit(f'is_term ~ {pred}', data=X).fit()
+#     for pred in preds
+# }
+# for pred in preds:
+#     models[f'no_{pred}'] = logit('is_term ~ ' + ' + '.join([p for p in preds if p != pred]), data=X).fit()
+# models['full'] = logit('is_term ~ best_next + term_reward + n_revealed', data=X).fit()
 
-for p in preds:
-    print(p, X.LL.full - X.LL['no_' + p])
+# # %% --------
+# X = pd.DataFrame({k: {
+#         'R^2': round(m.prsquared, 3),
+#         'LL': round(m.llf),
+#     } 
+#     for k, m in models.items()}).T
+# X
+
+# for p in preds:
+#     print(p, X.LL.full - X.LL['no_' + p])
     
 
 

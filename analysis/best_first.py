@@ -1,11 +1,8 @@
-bfo = pd.DataFrame(get_result(VERSION, 'bestfirst_optimal.json'))
-bfo.sort_values('cost')
-bfr = pd.DataFrame(get_result(VERSION, 'bestfirst_random.json'))
-bfo = bfo.sort_values('n_click')
-bfr = bfr.sort_values('n_click')
+bestfirst_optimal = pd.DataFrame(get_result(VERSION, 'bestfirst_optimal.json')).sort_values('n_click')
+bestfirst_random = pd.DataFrame(get_result(VERSION, 'bestfirst_random.json')).sort_values('n_click')
 pdf['best_first'] = load_cf('Human').query('~is_term').groupby('wid').is_best.mean()
 
-# %% ==================== plot ====================
+# %% ==================== plots ====================
 
 @figure()
 def plot_best_first():    
@@ -23,10 +20,9 @@ def best_first_by_clicks(ax=None):
         plt.sca(ax)
 
     plt.axhline([1], label='BestFirst', color=palette['Best'], lw=3)
-    x = bfo.query('0 < cost < 50')
+    x = bestfirst_optimal.query('0 < cost < 50')
     plt.plot(x.n_click, x.best_first, label="Optimal", color=palette["Optimal"], lw=3, alpha=0.8)
-    
-    plt.plot(bfr.n_click, bfr.best_first, label="Random", color=palette["Random"], lw=3, alpha=0.8)
+    plt.plot(bestfirst_random.n_click, bestfirst_random.best_first, label="Random", color=palette["Random"], lw=3, alpha=0.8)
     
     plt.scatter('n_click', 'best_first', data=pdf, color=palette["Human"], label='Human', s=10)
 
@@ -38,31 +34,28 @@ def best_first_by_clicks(ax=None):
 
 
 # %% ==================== stats ====================
-
-x = load_cf('Human').query('~is_term')
-bf_rate = x.groupby('wid').is_best.mean()
-bf_rand_rate = x.groupby('wid').p_best_rand.mean()
-
-# write_tex("best_first", mean_std(bf_rate*100, fmt='pct'))
-write_tex("best_first", f'{100*x.is_best.mean():.1f}\%')
-
-from statsmodels.stats.proportion import proportions_ztest
-r = load_cf('Random').query('not is_term').is_best
-load_cf('Random').is_term
-h = x.is_best
-z, p = proportions_ztest([h.sum(), r.sum()], [len(h), len(r)], alternative='larger')
-write_tex("best_first_random", rf"{bf_rand_rate.mean() * 100:.1f}\%" )
-write_tex("best_first_test", rf"$z={z:.1f},\ {pval(p)}$")
-
 from scipy.stats import spearmanr
-r, p = spearmanr(pdf.best_first, pdf.n_click)
-write_tex('best_first_click', fr'$\rho={r:.3f},\ {pval(p)}$')
 
-# %% --------
-# from statsmodels.formula.api import ols
-# model = ols('best_first ~ n_click', data=pdf).fit()
-# write_tex('best_first_click', fr'$B={model.params.n_click:.4f},\ {pval(model.pvalues.n_click)}$')
 
+@do_if(EXPERIMENT == 1)
+def this():
+    x = load_cf('Human').query('~is_term')
+    bf_rate = x.groupby('wid').is_best.mean()
+    bf_rand_rate = x.groupby('wid').p_best_rand.mean()
+
+    # write_tex("best_first", mean_std(bf_rate*100, fmt='pct'))
+    write_tex("best_first", f'{100*x.is_best.mean():.1f}\\%')
+
+    from statsmodels.stats.proportion import proportions_ztest
+    r = load_cf('Random').query('not is_term').is_best
+    load_cf('Random').is_term
+    h = x.is_best
+    z, p = proportions_ztest([h.sum(), r.sum()], [len(h), len(r)], alternative='larger')
+    write_tex("best_first_random", rf"{bf_rand_rate.mean() * 100:.1f}\%" )
+    write_tex("best_first_test", rf"$z={z:.1f},\ {pval(p)}$")
+
+    r, p = spearmanr(pdf.best_first, pdf.n_click)
+    write_tex('best_first_click', fr'$\rho={r:.3f},\ {pval(p)}$')
 
 # %% ==================== correct for random ====================
 
@@ -85,11 +78,9 @@ def get_closest(row, comp, xvar, yvar):
         o = comp.iloc[cross_point-1:cross_point+1]
         return linear_interpolate(*o[xvar], *o[yvar], row.n_click)
 
-rand_best = pdf.apply(get_closest, axis=1, comp=bfr, xvar='n_click', yvar='best_first')
-r, p = spearmanr(pdf.best_first - rand_best, pdf.n_click)
-write_tex('best_first_click_corrected', fr'$\rho={r:.3f},\ {pval(p)}$')
+@do_if(EXPERIMENT == 1)
+def this():
+    rand_best = pdf.apply(get_closest, axis=1, comp=bestfirst_random, xvar='n_click', yvar='best_first')
+    r, p = spearmanr(pdf.best_first - rand_best, pdf.n_click)
+    write_tex('best_first_click_corrected', fr'$\rho={r:.3f},\ {pval(p)}$')
 
-
-# %% --------
-sns.regplot(pdf.n_click, pdf.best_first - rand_best)
-show()

@@ -7,39 +7,10 @@ EXPERIMENT = int(sys.argv[1])
 
 print('Setting up experiment', EXPERIMENT)
 VERSION = f'exp{EXPERIMENT}'
-
 VARIANCES = ['decreasing', 'constant', 'increasing'] if EXPERIMENT in (2,3) else ['constant']
 
-# if EXPERIMENT == 1:
-#     MODELS = ("""
-#         Random MetaGreedy OptimalPlus
-#         Breadth_Full Depth_Full
-#         Best_Full_NoPrune
-#         Best_Full Best_BestNext Best_Satisfice Best_DepthLimit Best_Prune Best
-#     """.split())
-
-if EXPERIMENT == 2:
-    MODELS = ("""
-        Random MetaGreedy OptimalPlus
-        Breadth_Full Depth_Full Best_Full
-    """.split())
-        # Breadth_Full_NoDepthLimit Depth_Full_NoDepthLimit Best_Satisfice_BestNext 
-
-if EXPERIMENT >= 3:
-    MODELS = ("""
-        Random MetaGreedy OptimalPlus
-        Best_Satisfice_BestNext Breadth_Satisfice_BestNext Depth_Satisfice_BestNext 
-        Expand MetaGreedyExpand OptimalPlusExpand
-        Best_Satisfice_BestNext_Expand Breadth_Satisfice_BestNext_Expand Depth_Satisfice_BestNext_Expand 
-    """.split())
-
-
-
-# else:
-#     MODELS.extend(['BreadthFirst', 'DepthFirst'])
-#     # MODELS.extend(['BestFirstNoPrune', 'DepthFirstNoPrune', 'BreadthFirstNoPrune'])
-# if EXPERIMENT >= 3:
-#     MODELS.extend([m + 'Expand' for m in MODELS])
+write_tex = TeX(path=f'stats/{EXPERIMENT}').write
+LABEL_PANELS = False
 
 # %% ==================== LOAD DATA ====================
 pdf, tdf = load_data(VERSION)
@@ -55,6 +26,15 @@ pdf.variance = pd.Categorical(pdf.variance, categories=VARIANCES)
 assert len(tdf.index.value_counts().unique()) == 1
 assert set(tdf.index) == set(pdf.index)
 
+
+if EXPERIMENT < 4:
+    final = len(pdf)
+    assert final == full_pdf.complete.sum()
+    failed = (full_pdf.n_quiz == 3).sum()
+    write_tex("recruited", final + failed)
+    if EXPERIMENT < 4:
+        write_tex("failed_quiz", failed)
+
 # %% ==================== ADD COLUMNS ====================
 
 tdf['i'] = list(tdf.trial_index - tdf.trial_index.groupby('wid').min() + 1)
@@ -69,6 +49,10 @@ assert all(tdf.n_click == n_click)
 pdf['total_time'] = (pdf.time_end - pdf.time_start) / 1000 / 60
 pdf['instruct_time'] = (pdf.time_instruct - pdf.time_start) / 60000
 pdf['test_time'] = (pdf.time_end - pdf.time_instruct) / 60000
+
+if EXPERIMENT < 4:
+    write_tex("bonus", mean_std(pdf.bonus, fmt='$'))
+    write_tex("time", mean_std(pdf['total_time']))
 # pdf['backward'] = tdf.groupby('wid').backward.mean()
 
 # %% ==================== LOADING MODEL RESULTS ====================
@@ -192,8 +176,6 @@ for m in model_names:
 plt.rc('legend', fontsize=10, handlelength=2)
 sns.set_style('ticks')
 
-write_tex = TeX(path=f'stats/{EXPERIMENT}').write
-
 def setup_variance_plot(nrow=1, title=True, label=True, label_offset=-0.3, height=4, width=4, **kws):
     titlesize = kws.pop('titlesize', 20)
     ncol = len(VARIANCES)
@@ -212,4 +194,5 @@ def task_image(variance):
     img = img.crop((700, 730, w-700, h-850))
     img.save(f'imgs/{variance}-cropped.png')
     return img
+
 

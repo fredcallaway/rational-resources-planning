@@ -63,9 +63,12 @@ def load_fits(exp, models, path='mle'):
 
 
 # keeps the global namespace clean
-def do(f, cond):
-    if cond:
-        f()
+def do_if(cond):
+    def wrapper(f):
+        if cond:
+            f()
+    return wrapper
+
 
 from datetime import datetime
 class Figures(object):
@@ -155,18 +158,19 @@ class Figures(object):
         finally:
             plt.close('all')
 
-    def figure(self, **kwargs):
+    def figure(self, run=True, **kwargs):
         """Decorator that calls a plotting function and saves the result."""
         def decorator(func):
             name = func.__name__
-            if name.startswith('plot_'):
-                name = name[len('plot_'):].lower()
-            try:
-                plt.figure()
-                func()
-                self.show(name, **kwargs)
-            finally:
-                plt.close('all')
+            if run:
+                if name.startswith('plot_'):
+                    name = name[len('plot_'):].lower()
+                try:
+                    plt.figure()
+                    func()
+                    self.show(name, **kwargs)
+                finally:
+                    plt.close('all')
             return func
         return decorator
 
