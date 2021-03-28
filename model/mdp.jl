@@ -6,7 +6,6 @@ using Memoize
 using LRUCache
 using DataStructures
 
-include("utils.jl")
 include("dnp.jl")
 
 const TERM = 0  # termination action
@@ -176,6 +175,11 @@ end
 function observe!(m::MetaMDP, b::Belief, c::Int)
     @assert allowed(m, b, c)
     b[c] = rand(m.rewards[c])
+end
+
+function observe!(m::MetaMDP, b::Belief, s::Vector{Float64}, c::Int)
+    @assert allowed(m, b, c)
+    b[c] = s[c]
 end
 
 # ========== Solution ========== #
@@ -376,4 +380,21 @@ end
 
 function rollout(callback::Function, pol::Policy; initial=nothing, max_steps=100)
     rollout(pol::Policy; initial=initial, max_steps=max_steps, callback=callback)
+end
+
+function rollout(pol::Policy, s::Vector{Float64}; initial=nothing, max_steps=100, callback=((b, c) -> nothing))
+    m = pol.m
+    b = initial != nothing ? initial : initial_belief(m)
+    reward = 0
+    for step in 1:max_steps
+        c = (step == max_steps) ? TERM : pol(b)
+        callback(b, c)
+        if c == TERM
+            reward += term_reward(m, b)
+            return (reward=reward, n_steps=step, belief=b)
+        else
+            reward -= m.cost
+            observe!(m, b, s, c)
+        end
+    end
 end
