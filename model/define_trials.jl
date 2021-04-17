@@ -105,7 +105,7 @@ function write_trials(name::String, m::MetaMDP)
     save(m)
     trials = map(1:300) do i
         rewards = rand.(m.rewards)
-        tid = id(m) * "-" * string(hash(rewards); base=62)
+        tid = id(m) * "-" * string(shash(rewards); base=62)
         (trial_id=tid, stateRewards=rewards)
     end
     f = "$base/rewards/$name.json"

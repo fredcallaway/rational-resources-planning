@@ -128,7 +128,7 @@ if !flat_trials[1].m.expand_only
         Dict(keys(all_trials) .=> getfield.(opt_fits, :cost))
     end
 
-    mle_qs(d::Datum) = Q_TABLE[hash(d)][mle_cost[d.t.wid]]
+    mle_qs(d::Datum) = Q_TABLE[shash(d)][mle_cost[d.t.wid]]
 
     function expansion_value(d::Datum)
         qs = mle_qs(d)[2:end]

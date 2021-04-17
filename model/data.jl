@@ -15,7 +15,7 @@ struct Trial
     rts::Vector
     path::Vector{Int}
 end
-Base.hash(t::Trial, h::UInt64) = hash(t.wid, hash(t.i, h))
+StableHashes.shash(t::Trial, h::UInt64) = shash(t.wid, shash(t.i, h))
 
 # Base.:(==)(x1::Trial, x2::Trial) = struct_equal(x2, x2)  # doesn't work because NaN ≠ NaN
 
@@ -26,7 +26,7 @@ struct Datum
     # c_last::Union{Int, Nothing}
 end
 
-Base.hash(d::Datum, h::UInt64) = hash(d.c, hash(d.t, h))
+StableHashes.shash(d::Datum, h::UInt64) = shash(d.c, shash(d.t, h))
 # Base.:(==)(x1::Datum, x2::Datum) = struct_equal(x2, x2)
 
 is_roadtrip(t::Dict) = startswith(get(t, "map", ""), "fantasy")

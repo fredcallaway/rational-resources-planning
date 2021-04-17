@@ -43,7 +43,7 @@ function make_Q_table(data)
     @assert length(all_qs) == length(data)
     @assert length(all_qs[1]) == length(COSTS)
     map(data, all_qs) do d, dqs
-        hash(d) => Dict(zip(COSTS, dqs))
+        shash(d) => Dict(zip(COSTS, dqs))
     end |> Dict
 end
 

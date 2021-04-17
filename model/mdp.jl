@@ -33,7 +33,7 @@ import Base: ==
     (probs(c1) == probs(c2) || all(probs(c1) .== probs(c2)))
 
 Base.show(io::IO, m::MetaMDP) = print(io, "M")
-id(m::MetaMDP) = string(hash(m); base=62)
+id(m::MetaMDP) = string(shash(m); base=62)
 
 function MetaMDP(g::Graph, reward::Distribution, cost::Float64, min_reward::Float64, expand_only::Bool)
     rewards = repeat([reward], length(g))
@@ -45,12 +45,12 @@ function MetaMDP(g::Graph, rdist::Distribution, cost::Float64; kws...)
     MetaMDP(graph=g, rewards=rewards, cost=cost; kws...)
 end
 
-function Base.hash(m::MetaMDP, h::UInt64)
+function StableHashes.shash(m::MetaMDP, h::UInt64)
     reduce(getfields(m); init=h) do acc, x
         if x == -Inf
             x = "-Inf"  # hash(Inf) varies by machine!
         end
-        hash(x, acc)
+        shash(x, acc)
     end
 end
 
@@ -193,32 +193,32 @@ end
 function symmetry_breaking_hash(m::MetaMDP, b::Belief)
     the_paths = paths(m)
     lp = length(the_paths)
-    sum(hash(b[pth]) >> 3 for pth in the_paths)
+    sum(shash(b[pth]) >> 3 for pth in the_paths)
 end
 
 function hash_312(m::MetaMDP, b::Belief)
-    hash(hash(b[2]) + hash(b[3]) >> 1, hash(b[4]) + hash(b[5])) +
-    hash(hash(b[6]) + hash(b[7]) >> 1, hash(b[8]) + hash(b[9])) +
-    hash(hash(b[10]) + hash(b[11]) >> 1, hash(b[12]) + hash(b[13]))
+    shash(shash(b[2]) + shash(b[3]) >> 1, shash(b[4]) + shash(b[5])) +
+    shash(shash(b[6]) + shash(b[7]) >> 1, shash(b[8]) + shash(b[9])) +
+    shash(shash(b[10]) + shash(b[11]) >> 1, shash(b[12]) + shash(b[13]))
 end
 
 function hash_412(m::MetaMDP, b::Belief)
-    hash(hash(b[2]) + hash(b[3]) >> 1, hash(b[4]) + hash(b[5])) +
-    hash(hash(b[6]) + hash(b[7]) >> 1, hash(b[8]) + hash(b[9])) +
-    hash(hash(b[10]) + hash(b[11]) >> 1, hash(b[12]) + hash(b[13])) +
-    hash(hash(b[14]) + hash(b[15]) >> 1, hash(b[16]) + hash(b[17]))
+    shash(shash(b[2]) + shash(b[3]) >> 1, shash(b[4]) + shash(b[5])) +
+    shash(shash(b[6]) + shash(b[7]) >> 1, shash(b[8]) + shash(b[9])) +
+    shash(shash(b[10]) + shash(b[11]) >> 1, shash(b[12]) + shash(b[13])) +
+    shash(shash(b[14]) + shash(b[15]) >> 1, shash(b[16]) + shash(b[17]))
 end
 
 function hash_412_iid(m::MetaMDP, b::Belief)
-    hash(hash(b[2]) + hash(b[3]), hash(b[4]) + hash(b[5])) +
-    hash(hash(b[6]) + hash(b[7]), hash(b[8]) + hash(b[9])) +
-    hash(hash(b[10]) + hash(b[11]), hash(b[12]) + hash(b[13])) +
-    hash(hash(b[14]) + hash(b[15]), hash(b[16]) + hash(b[17]))
+    shash(shash(b[2]) + shash(b[3]), shash(b[4]) + shash(b[5])) +
+    shash(shash(b[6]) + shash(b[7]), shash(b[8]) + shash(b[9])) +
+    shash(shash(b[10]) + shash(b[11]), shash(b[12]) + shash(b[13])) +
+    shash(shash(b[14]) + shash(b[15]), shash(b[16]) + shash(b[17]))
 end
 
 function make_spiral_hasher(m)
     the_paths = paths(m)
-    reward_hashes = Dict(i => hash(d) for (i, d) in enumerate(m.rewards))
+    reward_hashes = Dict(i => shash(d) for (i, d) in enumerate(m.rewards))
 
     # check conditions for correctness
     @assert sum(length(pth) for pth in the_paths) == length(m) - 1
@@ -231,18 +231,18 @@ function make_spiral_hasher(m)
         for pth in the_paths
             x = UInt64(0)
             for i in pth
-                x += hash(hash(b[i]), reward_hashes[i])
+                x += shash(shash(b[i]), reward_hashes[i])
             end
-            acc += hash(x)
+            acc += shash(x)
         end
         acc
     end
 end
 
-default_hash(m::MetaMDP, b::Belief) = hash(b)
+default_hash(m::MetaMDP, b::Belief) = shash(b)
 
 function choose_hash(m::MetaMDP)
-    length(m) == 11 && return ((m, b) -> hash(b))  # this is a hack for the road trip mdps which have little symmetry to exploit
+    length(m) == 11 && return ((m, b) -> shash(b))  # this is a hack for the road trip mdps which have little symmetry to exploit
     if m.graph == [[2, 6, 10], [3], [4, 5], [], [], [7], [8, 9], [], [], [11], [12, 13], [], []]
         hash_312
     elseif m.graph == [[2, 6, 10, 14], [3], [4, 5], [], [], [7], [8, 9], [], [], [11], [12, 13], [], [], [15], [16, 17], [], []]

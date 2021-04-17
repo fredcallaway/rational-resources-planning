@@ -33,4 +33,4 @@ end
     n == 1 ? d : sum_many(d, n-1) + d
 end
 
-Base.hash(d::DNP, h::UInt64) = hash_struct(d, h)
+StableHashes.shash(d::DNP, h::UInt64) = hash_struct(d, h)

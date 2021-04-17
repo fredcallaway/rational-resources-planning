@@ -23,8 +23,8 @@ flat_trials = flatten(values(all_trials));
 println(length(flat_trials), " trials")
 all_data = all_trials |> values |> flatten |> get_data;
 
-@assert length(unique(hash.(flat_trials))) == length(flat_trials)
-@assert length(unique(hash.(all_data))) == length(all_data)
+@assert length(unique(shash.(flat_trials))) == length(flat_trials)
+@assert length(unique(shash.(all_data))) == length(all_data)
 
 # %% ==================== LOAD MODEL CODE ====================
 

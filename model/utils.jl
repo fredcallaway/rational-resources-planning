@@ -4,12 +4,7 @@ using DataStructures: OrderedDict
 using Printf
 using Serialization
 using Distributed
-
-if VERSION >= v"1.5"
-    using StableHashes
-    Base.hash(x, h::UInt64) = shash(x, h)
-end
-
+using StableHashes
 
 function logspace(low, high, n)
     x = range(0, 1, length=n)
@@ -89,7 +84,7 @@ getfields(x) = (getfield(x, f) for f in fieldnames(typeof(x)))
 # ensures consistent hashes across runs
 function hash_struct(s, h::UInt64=UInt64(0))
     reduce(getfields(s); init=h) do acc, x
-        hash(x, acc)
+        shash(x, acc)
     end
 end
 

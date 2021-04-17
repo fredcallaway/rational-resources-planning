@@ -7,7 +7,7 @@ else
     myid() == 1 && @warn "Q_table not found. Can't fit Optimal model"
 end
 
-get_qs(d::Datum) = valmap(Q_TABLE[hash(d)]) do q
+get_qs(d::Datum) = valmap(Q_TABLE[shash(d)]) do q
     max.(q, NOT_ALLOWED)
 end
 
