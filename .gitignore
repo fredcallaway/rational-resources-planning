@@ -8,7 +8,10 @@ model/scratch_base.jl
 model/test_grad.jl
 model/test_hashing.jl
 model/test_models.jl
-results
+click_features
+demo
+viz
+predictions.json
 plots-Copy1.ipynb
 __pycache__/
 alt-analysis.ipynb

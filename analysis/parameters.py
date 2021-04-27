@@ -1,3 +1,10 @@
+
+fits = load_fits(VERSION, COMPARISON_MODELS)
+fits.groupby('model').ε.mean()
+
+
+
+# %% --------
 cv_fits = pd.concat([pd.read_csv(f'../model/results/{VERSION}/mle/{model}-cv.csv') 
                      for model in MODELS], sort=False).set_index('wid')
 

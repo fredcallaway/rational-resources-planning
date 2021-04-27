@@ -8,6 +8,7 @@ using ProgressMeter
     include("data.jl")
     include("models.jl")
 end
+redirect_worker_stderr("out/pareto")
 
 @everywhere N_SIM = 100000
 @everywhere N_CANDIDATE = 100000
@@ -87,7 +88,15 @@ function write_optimal_pareto(;force=false)
             m = mutate(V.m, cost=0)
             pol = OptimalPolicy(m, V)
             res = (model="Optimal", mdp=id(m), cost=V.m.cost, mean_reward_clicks(pol)...)
-            CSV.write(f, [res])  # one line csv
+            ress = [res]
+
+            if !EXPAND_ONLY
+                pol2 = OptimalPolicyExpandOnly(m, V)
+                res2 = (model="OptimalPlusExpand", mdp=id(m), cost=V.m.cost, mean_reward_clicks(pol2)...)
+                push!(ress, res2)
+            end
+
+            CSV.write(f, ress)  # one/two line csv
             # println("Wrote $f")
         end
     end
@@ -128,11 +137,12 @@ if basename(PROGRAM_FILE) == basename(@__FILE__)
     #     mdps = 
     # end
     mkpath("mdps/pareto")
+    force = length(ARGS) >= 3 && ARGS[3] == "force"
     if length(ARGS) > 1
         if ARGS[2] == "optimal"
-            write_optimal_pareto()
+            write_optimal_pareto(;force)
         elseif ARGS[2] == "heuristic"
-            write_heuristic_pareto()
+            write_heuristic_pareto(;force)
         else
             error("Bad arg: ", ARGS[2])
         end
@@ -141,12 +151,3 @@ if basename(PROGRAM_FILE) == basename(@__FILE__)
         write_heuristic_pareto()
     end
 end
-
-
-
-
-
-
-
-
-

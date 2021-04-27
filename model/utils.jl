@@ -6,6 +6,16 @@ using Serialization
 using Distributed
 using StableHashes
 
+function redirect_worker_stderr(logpath)
+    nprocs() == 1 && return
+    mkpath(logpath)
+    @everywhere workers() begin
+        logpath = $logpath
+        i = myid()
+        redirect_stderr(open("$logpath/$i", "w"))
+    end
+end
+
 function logspace(low, high, n)
     x = range(0, 1, length=n)
     @. exp(log(low) + x * (log(high) - log(low)))

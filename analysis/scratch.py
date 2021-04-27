@@ -1,3 +1,82 @@
+# %% ==================== Model comparison plots ====================
+
+from scipy.stats import ttest_rel, ttest_ind
+
+X = logp[COMPARISON_MODELS].groupby('wid').mean()
+opt = X.OptimalPlus
+for alt, x in X.iteritems():
+    tst = ttest_rel(x, opt)
+    print(f'{alt}: {tst.pvalue:.5f}')
+
+
+# %% --------
+models = [m for m in COMPARISON_MODELS if not m.endswith('Expand')]
+pal = [palette[m] for m in models]
+
+plt.figure(figsize=(8,4))
+pal = [palette[m] for m in COMPARISON_MODELS]
+for i in range(6, len(pal)):
+    pal[i] = lg
+sns.barplot('variable', 'value', data=pd.melt(logp[top_models]), 
+    estimator=lambda x: np.exp(np.mean(x)),
+    palette=pal, saturation=1, )
+plt.xticks(rotation=35, ha="right")
+plt.xlabel('')
+plt.ylabel('Geometric Mean\nLikelihood',)
+figs.reformat_ticks()
+show()
+
+
+# %% --------
+ptotal = logp.groupby(['variance', 'wid']).sum()
+X = ptotal[COMPARISON_MODELS]
+# X = X.sub(X.Random, axis=0)
+
+sns.barplot('variable', 'value', data=pd.melt(X), 
+    estimator=lambda x: np.sum(x) / n_obsq,
+    palette=pal, saturation=1, )
+show()
+
+# %% --------
+from scipy.stats import gstd
+L = X.groupby('variance').mean()
+Y = X.sub(X.Random, axis=0)
+V = Y.groupby('variance').var()
+# V = X.groupby('variance').var()
+
+n_obs = len(logp)
+obs_per_subj = n_obs / len(X)
+
+# L /= obs_per_subj
+# V /= obs_per_subj
+S = np.sqrt(V)
+print(S)
+
+
+label = "Foo"
+plt.figure(figsize=(8,4))
+ax = plt.gca()
+pal = [palette[m] for m in COMPARISON_MODELS]
+for i in range(6, len(pal)):
+    pal[i] = lg
+
+
+print(L.shape)
+x = L.groupby('variance').mean().loc['constant'].loc[COMPARISON_MODELS]
+x.plot.bar(color=pal, yerr=S.values[0])
+
+
+plt.xticks(rotation=35, ha="right")
+figs.reformat_ticks()
+plt.ylabel(label)
+
+show()
+
+
+
+
+# %% ====================  ====================
+
 
 def do_if(cond):
     def wrapper(f):
@@ -77,6 +156,7 @@ show()
 # %% --------
 MODELS = 'BreadthFirst DepthFirst BestFirst Optimal'.split()
 fits = load_fits(exp, MODELS, path='mle')
+COMPARISON_MODELS
 fits = fits.join(pdf[['variance', 'click_delay']], on='wid')
 pdf['cost'] = fits.query('model == "Optimal"').set_index('wid').cost.clip(upper=5)
 

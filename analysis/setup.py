@@ -113,6 +113,7 @@ figs.add_names({
     'best_next': 'Best - Next Best Path Value',
     'term_reward': 'Best Path Value',
     'OptimalPlus': 'Optimal',
+    'OptimalPlusExpand': 'Optimal Forward',
     'OptimalPlusPure': 'Optimal',
     'MetaGreedy': 'Myopic',
     'BestFirst': 'Best',
@@ -188,11 +189,9 @@ def setup_variance_plot(nrow=1, title=True, label=True, label_offset=-0.3, heigh
             ax.annotate(char, (label_offset, 1), xycoords='axes fraction', size=24, va='bottom')
     return fig, axes
 
-def task_image(variance):
+def task_image(variance, offset=0):
     img = Image.open(f'imgs/{variance}.png')
     w, h = img.size
-    img = img.crop((700, 730, w-700, h-850))
+    img = img.crop((700, 730-offset, w-700, h-850-offset))
     img.save(f'imgs/{variance}-cropped.png')
     return img
-
-

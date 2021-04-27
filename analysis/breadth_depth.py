@@ -63,7 +63,7 @@ def plot_second_click(axes=None, models=['OptimalPlus', 'Best', 'Breadth', 'Dept
 
 @figure(EXPERIMENT == 2)
 def plot_second_click_alt():
-    plot_second_click(models=COMPARISON_MODELS[2:])
+    plot_second_click(models=COMPARISON_MODELS)
 
 # # %% ==================== First click depth ====================
 
@@ -99,6 +99,7 @@ def first_click_depth(axes=None):
         ax.set_xlabel('First Clicked Depth')
         if i == 0:
             ax.set_ylabel('Proportion of Trials')
+            print('hello')
             figs.reformat_legend(ax=ax, OptimalPlusExpand='Optimal +Forward')
 
 

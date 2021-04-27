@@ -17,10 +17,16 @@ QUOTE_PARETO_MODELS = quote
         RandomSelection,
         MetaGreedy,
         
-        Heuristic{:Best_NoDepthLimit},
-        Heuristic{:Best_NoDepthLimit_NoPrune},
-
-        Heuristic{:Depth_NoDepthLimit},
-        Heuristic{:Breadth_NoDepthLimit}
+        Heuristic{:Best_Full},
+        Heuristic{:Depth_Full},
+        Heuristic{:Breadth_Full},
+        
+        # Heuristic{:Best_Satisfice_BestNext_Prune},
+        # Heuristic{:Depth_Satisfice_BestNext_Prune},
+        # Heuristic{:Breadth_Satisfice_BestNext_Prune},
+        
+        # Heuristic{:Best_Satisfice_BestNext},
+        # Heuristic{:Depth_Satisfice_BestNext},
+        # Heuristic{:Breadth_Satisfice_BestNext},
     ]
 end

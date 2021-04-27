@@ -2,6 +2,7 @@ using Distributed
 
 @everywhere include("utils.jl")
 @everywhere include("mdp.jl")
+@everywhere include("data.jl")
 
 COSTS = [0:0.05:4; 100]
 
@@ -87,6 +88,17 @@ if basename(PROGRAM_FILE) == basename(@__FILE__)
     else  # solve an MDP (or several)
         if ARGS[1] == "all"
             solve_all()
+        elseif startswith(ARGS[1], "exp")
+            include("conf.jl")
+            mdps = let
+                all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
+                flat_trials = flatten(values(all_trials));
+                unique(getfield.(flat_trials, :m))
+            end
+            all_ids = map(Iterators.product(mdps, COSTS)) do (m, cost)
+                id(mutate(m, cost=cost))
+            end
+            pmap(solve_mdp, all_ids)
         else
             do_job(eval(Meta.parse(ARGS[1])))
         end

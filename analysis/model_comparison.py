@@ -13,7 +13,6 @@ def get_logp():
 logp = get_logp()
 total = logp.sum()
 
-
 # %% ==================== Choose models to plot ====================
 BASIC = ['Random', 'MetaGreedy', 'OptimalPlus']
 HEURISTICS = ['Breadth', 'Depth', 'Best']
@@ -60,6 +59,7 @@ else: # 3 and 4
 
 print(COMPARISON_MODELS)
 
+
 # %% ==================== Plots ====================
 
 def plot_model_performance(L, label, axes=None):
@@ -90,6 +90,7 @@ def plot_model_performance_vertical(L, label, ax=None):
     for i in range(6, len(pal)):
         pal[i] = lg
 
+    print(L.shape)
     x = L.groupby('variance').mean().loc['constant'].loc[COMPARISON_MODELS]
     x.plot.bar(color=pal)
     
@@ -139,11 +140,10 @@ def plot_model_performance_expansion(L, label, axes=None):
 def plot_geometric_mean_likelihood(axes=None):
     plot_model_performance(
         np.exp(logp.groupby('variance').mean()),
-        'Geometric Mean\nLikelihood',
+        'Perplexity',
         # 'Predictive Accuracy',
         axes
     )
-
 
 # %% ==================== Stats ====================
 

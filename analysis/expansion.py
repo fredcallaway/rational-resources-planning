@@ -8,7 +8,7 @@ expansion['gain_z'] = (expansion.gain - expansion.gain.mean()) / expansion.gain.
 expansion['jump'] = ~expansion['expand']
 
 @do_if(True)
-def this():
+def expansion_stats():
     human = load_cf('Human').query('variance == "constant" and not is_term').expand
     model = load_cf('OptimalPlusPure').query('variance == "constant" and not is_term').expand
 
@@ -25,6 +25,24 @@ def this():
 
     m = logit(f'jump.astype(int) ~ gain_z', data=expansion).fit()
     write_tex(f'expansion_logistic', rf'$\beta = {m.params.gain_z:.3f},\ {pval(m.pvalues.gain_z)}$')
+
+# @do_if(True)
+# def expansion_stats_increasing():
+#     human = load_cf('Human').query('variance == "increasing" and not is_term').expand
+#     model = load_cf('OptimalPlusPure').query('variance == "increasing" and not is_term').expand
+
+#     write_tex('expansion_human_increasing', f'{100*human.mean():.1f}\\%')
+#     # write_tex(f'expansion_human', mean_std(100*human.groupby('wid').mean(), fmt='pct', digits=0))
+
+#     write_tex('expansion_optimal_increasing', f'{100*model.mean():.1f}\\%')
+
+#     constant = load_cf('Human').query('variance == "constant" and not is_term').expand
+
+#     z, p = proportions_ztest([human.sum(), constant.sum()], [len(human), len(constant)])
+#     human.sum() / len(human)
+#     constant.sum() / len(constant)
+#     write_tex("expansion_test_increasing_vs_constant", rf"$z={z:.1f},\ {pval(p)}$")
+
 
 @figure()
 def expansion_value():

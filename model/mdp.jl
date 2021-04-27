@@ -5,6 +5,7 @@ using Printf: @printf
 using Memoize
 using LRUCache
 using DataStructures
+using StableHashes
 
 include("dnp.jl")
 
@@ -340,6 +341,22 @@ end
 OptimalPolicy(V::ValueFunction) = OptimalPolicy(V.m, V)
 (pol::OptimalPolicy)(b::Belief) = begin
     argmax(noisy([Q(pol.V, b, c) for c in 0:length(b)])) - 1
+end
+
+
+struct OptimalPolicyExpandOnly <: Policy
+    m::MetaMDP
+    V::ValueFunction
+end
+OptimalPolicyExpandOnly(V::ValueFunction) = OptimalPolicyExpandOnly(V.m, V)
+(pol::OptimalPolicyExpandOnly)(b::Belief) = begin
+    q = [Q(pol.V, b, c) for c in 0:length(b)]
+    for c in eachindex(b)
+        if !has_observed_parent(pol.m.graph, b, c)
+            q[c + 1] = -Inf
+        end
+    end
+    argmax(noisy(q)) - 1
 end
 
 struct SoftOptimalPolicy <: Policy

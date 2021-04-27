@@ -4,30 +4,44 @@ mdp2var = {}
 for x in tdf[['variance', 'mdp']].itertuples():
     mdp2var[x.mdp] = x.variance
 
-model_pareto = pd.concat((pd.read_csv(f) for f in glob('../model/mdps/pareto/*')), sort=True)
+full_model_pareto = pd.concat((pd.read_csv(f) for f in glob('../model/mdps/pareto/*')), sort=True)
 # model_pareto.model = model_pareto.model.str.replace('RandomSelection', 'Random')
-model_pareto = model_pareto.set_index('mdp').loc[tdf.mdp.unique()].reset_index()
-model_pareto['variance'] = model_pareto.mdp.apply(mdp2var.get)
-model_pareto.set_index(['variance', 'model'], inplace=True)
-model_pareto.sort_values('cost', inplace=True)
-model_pareto.rename(columns={'clicks': 'n_click', 'reward': 'term_reward'}, inplace=True)
+
+def load_pareto(mdps):
+    model_pareto = full_model_pareto.set_index('mdp').loc[mdps].reset_index()
+    model_pareto['variance'] = model_pareto.mdp.apply(mdp2var.get)
+    model_pareto.set_index(['variance', 'model'], inplace=True)
+    model_pareto.sort_values('cost', inplace=True)
+    model_pareto.rename(columns={'clicks': 'n_click', 'reward': 'term_reward'}, inplace=True)
+    return model_pareto
+
+model_pareto = load_pareto(tdf.mdp.unique())
 
 if EXPERIMENT == 1:
-    PARETO_MODELS = ['Best', 'MetaGreedy', 'Optimal', 'RandomSelection', ]
+    PARETO_MODELS = ['Optimal','Best', 'MetaGreedy', 'RandomSelection', ]
+elif EXPERIMENT == 3:
+    PARETO_MODELS = ['Optimal', 'OptimalPlusExpand', 'RandomSelection']
 else:
-    PARETO_MODELS = ['Best', 'Breadth', 'Depth', 'Optimal', 'RandomSelection']
+    PARETO_MODELS = ['Best', 'Breadth', 'Depth', 'Optimal', 'MetaGreedy', 'RandomSelection']
 
+model_pareto.reset_index().model.unique()
 # %% --------
 
+
 def get_pareto(variance, model_class):
-    if model_class == 'Optimal':
-        return tuple(model_pareto.loc[variance, 'Optimal'][['n_click', 'term_reward']].values.T)
+    if model_class in ('Optimal', 'OptimalPlusExpand'):
+        return tuple(model_pareto.loc[variance, model_class][['n_click', 'term_reward']].values.T)
+
     X = model_pareto.loc[variance]
+    X = X.loc[X.index.str.startswith(model_class)].sort_values('n_click')
+
     if EXPERIMENT == 2:
         # exclude depth limits
-        X = X.loc[~(X.β_depthlim < 100000.0)]
+        pass
+        # X = X.loc[~X.index.str.contains('Full')]
+    if variance == 'constant' and model_class in ('Best', 'Breadth', 'Depth'):
+        print('Pareto using:', X.reset_index().model.unique())
 
-    X = X.loc[X.index.str.startswith(model_class)].sort_values('n_click')
     clicks = []; reward = []
     for (c, r) in zip(X.n_click, X.term_reward):
         if not reward or r >= reward[-1]:
@@ -37,10 +51,13 @@ def get_pareto(variance, model_class):
 
 def plot_model_pareto(variance, model):
     # plt.plot('n_click', 'term_reward', data=model_pareto.loc[model, variance], 
+    highlight = {'decreasing': 'Breadth', 'constant': 'Best', 'increasing': 'Depth'}
+
     plt.plot(*get_pareto(variance, model), 
         label=model, color=palette[model],
         lw=3,
-        zorder=-PARETO_MODELS.index(model),
+        alpha=0.8,
+        zorder=10 if highlight[variance] == model else -PARETO_MODELS.index(model),
         # marker='.',
     )
 
