@@ -26,12 +26,14 @@ pdf.variance = pd.Categorical(pdf.variance, categories=VARIANCES)
 assert len(tdf.index.value_counts().unique()) == 1
 assert set(tdf.index) == set(pdf.index)
 
-
 if EXPERIMENT < 4:
     final = len(pdf)
     assert final == full_pdf.complete.sum()
     failed = (full_pdf.n_quiz == 3).sum()
-    write_tex("recruited", final + failed)
+    write_tex("recruited", len(full_pdf))
+    
+    # write_tex("recruited", final + failed)
+
     if EXPERIMENT < 4:
         write_tex("failed_quiz", failed)
 

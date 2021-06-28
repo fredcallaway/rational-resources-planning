@@ -27,7 +27,6 @@ else:
 model_pareto.reset_index().model.unique()
 # %% --------
 
-
 def get_pareto(variance, model_class):
     if model_class in ('Optimal', 'OptimalPlusExpand'):
         return tuple(model_pareto.loc[variance, model_class][['n_click', 'term_reward']].values.T)
@@ -37,8 +36,7 @@ def get_pareto(variance, model_class):
 
     if EXPERIMENT == 2:
         # exclude depth limits
-        pass
-        # X = X.loc[~X.index.str.contains('Full')]
+        X = X.loc[~X.index.str.contains('Full')]
     if variance == 'constant' and model_class in ('Best', 'Breadth', 'Depth'):
         print('Pareto using:', X.reset_index().model.unique())
 
@@ -140,4 +138,5 @@ def compute_pareto_scores():
     write_tex(f'pareto_loss', f'{loss.mean():.2f} ({pct_loss.mean()*100:.0f}\%)')
     write_tex(f'pareto_gain', f'{gain.mean():.2f}')
     write_tex(f'pareto_relative', f'{100*relative.mean():.1f}\%')
-    write_tex(f'pareto_gain_wilcoxon', f'${pval(wilcoxon(gain).pvalue)}$')
+    W = wilcoxon(gain)
+    write_tex(f'pareto_gain_wilcoxon', f'$Z = {W.statistic:.2f}, {pval(W.pvalue)}$')

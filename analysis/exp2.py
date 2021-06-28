@@ -3,8 +3,8 @@
 figs.nosave = True
 %run -i pareto
 %run -i model_comparison
-%run -i breadth_depth
 figs.nosave = False
+%run -i breadth_depth
 # %% --------
 @figure(tight=False)
 def exp2_main():

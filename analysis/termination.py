@@ -90,7 +90,8 @@ def this():
     m = logit(f'is_term.astype(int) ~ term_reward + best_next', data=cf).fit()
     for k in ['term_reward', 'best_next']:
         lo, hi = m.conf_int().loc[k]
-        write_tex(f'term_human_{k}', rf'$B = {m.params[k]:.3f}$ [{lo:.3f}, {hi:.3f}]')
+        # write_tex(f'expansion_logistic', rf'$\beta = {m.params.gain_z:.3f} [{lo:.3f} {hi:.3f}], {pval(m.pvalues.gain_z)}$')
+        write_tex(f'term_human_{k}', rf'$B = {m.params[k]:.3f}$, 95\% CI [{lo:.3f}, {hi:.3f}], ${pval(m.pvalues[k])}$')
         # write_tex(f'term_human_{k}', rf'$B = {m.params[k]:.3f}$, {label} [{lo:.3f}, {hi:.3f}], ${pval(m.pvalues[k])}$'))
 
 @do_if(True)

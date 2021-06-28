@@ -13,6 +13,15 @@ total_score = tdf.loc[list(pdf.index)].query('block == "test"').groupby('wid').s
 # %% --------
 from datetime import datetime
 pdf['start'] = pdf.time_start.dropna().apply(lambda x: datetime.fromtimestamp(x/1000))
+pdf.start.dt.date.unique()
+pdf.time_start.dt.date.unique
+# %% --------
+
+
+
+
+# %% --------
+
 pdf = pdf.loc[pdf.start.dt.day == 15]
 bonus = pdf[['workerid', 'final_bonus']].dropna().query('final_bonus > 0')
 bonus.to_csv('bonus.csv', index=False, header=False)

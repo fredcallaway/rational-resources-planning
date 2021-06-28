@@ -24,7 +24,9 @@ def expansion_stats():
     # write_tex("jump", mean_std(expansion.groupby('wid').jump.mean()*100, fmt='pct'))
 
     m = logit(f'jump.astype(int) ~ gain_z', data=expansion).fit()
-    write_tex(f'expansion_logistic', rf'$\beta = {m.params.gain_z:.3f},\ {pval(m.pvalues.gain_z)}$')
+
+    lo, hi = m.conf_int().loc['gain_z']
+    write_tex(f'expansion_logistic', rf'$\beta = {m.params.gain_z:.3f}$, 95\% CI [{lo:.3f} {hi:.3f}], ${pval(m.pvalues.gain_z)}$')
 
 # @do_if(True)
 # def expansion_stats_increasing():

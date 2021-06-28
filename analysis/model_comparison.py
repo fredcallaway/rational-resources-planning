@@ -59,6 +59,12 @@ else: # 3 and 4
 
 print(COMPARISON_MODELS)
 
+# %% --------
+total = logp.sum()
+
+total.sort_values()
+total.loc[total.index.str.startswith('Best')].sort_values()
+
 
 # %% ==================== Plots ====================
 
