@@ -90,6 +90,12 @@ end
 
 getfields(x) = (getfield(x, f) for f in fieldnames(typeof(x)))
 
+function monte_carlo(f, N=10000)
+    N \ mapreduce(+, 1:N) do i
+        f()
+    end
+end
+
 # %% ====================  ====================
 # ensures consistent hashes across runs
 function hash_struct(s, h::UInt64=UInt64(0))

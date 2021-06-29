@@ -22,7 +22,6 @@ struct Heuristic{H,T} <: AbstractModel{T}
     ε::T
 end
 
-
 name(::Type{Heuristic{H}}) where H = string(H)
 name(::Type{Heuristic{H,T}}) where {H,T} = string(H)
 name(::Heuristic{H,T}) where {H,T} = string(H)

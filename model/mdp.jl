@@ -104,6 +104,20 @@ function paths(g::Graph)
 end
 @memoize paths(m::MetaMDP) = paths(m.graph)
 
+function path_value_dist(m::MetaMDP, b::Belief, path)
+    d = 0.
+    for i in path
+        if observed(b, i)
+            d += b[i]
+        else
+            d += m.rewards[i]
+        end
+    end
+    m.min_reward == -Inf || d isa Float64 && return d
+    map(d) do x
+        max(m.min_reward, x)
+    end
+end
 
 function easy_path_value(m::MetaMDP, b::Belief, path)
     d = 0.
@@ -114,21 +128,11 @@ function easy_path_value(m::MetaMDP, b::Belief, path)
 end
 
 function path_value(m::MetaMDP, b::Belief, path)
-    d = 0.
     if m.min_reward == -Inf
-        return easy_path_value(m, b, path)
+        easy_path_value(m, b, path)
+    else
+        mean(path_value_dist(m, b, path))
     end
-    for i in path
-        if observed(b, i)
-            d += b[i]
-        else
-            d += m.rewards[i]
-        end
-    end
-    d isa Float64 && return d
-    map(d) do x
-        max(m.min_reward, x)
-    end |> mean
 end
 
 function path_values(m::MetaMDP, b::Belief)
@@ -396,7 +400,11 @@ function rollout(pol::Policy; initial=nothing, max_steps=100, callback=((b, c) -
 end
 
 function rollout(callback::Function, pol::Policy; initial=nothing, max_steps=100)
-    rollout(pol::Policy; initial=initial, max_steps=max_steps, callback=callback)
+    rollout(pol; initial=initial, max_steps=max_steps, callback=callback)
+end
+
+function rollout(callback::Function, pol::Policy, s::Vector{Float64}; initial=nothing, max_steps=100)
+    rollout(pol, s; initial=initial, max_steps=max_steps, callback=callback)
 end
 
 function rollout(pol::Policy, s::Vector{Float64}; initial=nothing, max_steps=100, callback=((b, c) -> nothing))
