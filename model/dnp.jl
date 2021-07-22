@@ -16,17 +16,17 @@ function (Base.:+)(d1::DNP, d2::DNP)::DNP
     DNP(collect(keys(res)), collect(values(res)))
 end
 
-function (Base.:+)(d::DNP, x)::DNP
+function (Base.:+)(d::DNP, x::Real)::DNP
     DNP(d.support .+ x, d.p, )
 end
-(Base.:+)(x, d::DNP) = d + x
+(Base.:+)(x::Real, d::DNP) = d + x
 
-function Base.max(d::DNP, x)
+function Base.max(d::DNP, x::Real)
     map(d) do dx
         max(dx, x)
     end
 end
-Base.max(x, d::DNP) = max(d, x)
+Base.max(x::Real, d::DNP) = max(d, x)
 
 function Base.max(d1::DNP, d2::DNP)::DNP
     res = DefaultDict{Float64,Float64}(0.)

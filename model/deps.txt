@@ -1,4 +1,3 @@
-https://github.com/grero/StableHashes.jl
 StatsBase
 Glob
 Serialization

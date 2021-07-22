@@ -32,6 +32,14 @@ function softmax!(x, i)
     x[i] / sum(x)
 end
 
+function powerset(x::Vector{T}) where T
+    result = Vector{T}[[]]
+    for elem in x, j in eachindex(result)
+        push!(result, [result[j] ; elem])
+    end
+    result
+end
+
 dictkeys(d::Dict) = (collect(keys(d))...,)
 dictvalues(d::Dict) = (collect(values(d))...,)
 

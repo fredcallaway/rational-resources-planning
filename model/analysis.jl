@@ -105,7 +105,7 @@ function click_features(d)
         term_reward=pv[best],
         max_path=max_path,
         max_competing=max_competing,
-        best_next=best_vs_next(m, b),
+        best_next=best_vs_next_value(m, b),
     )
 end
 

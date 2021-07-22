@@ -4,7 +4,7 @@ using Glob
 using CSV
 using DataFrames
 using ProgressMeter
-using Random: randperm, MersenneTwister
+using Random: seed!, randperm, MersenneTwister
 
 
 include("conf.jl")
@@ -13,7 +13,7 @@ println("Running model comparison for ", ARGS[1])
 @everywhere include("base.jl")
 @everywhere include("models.jl")
 
-Random.seed!(RANDOM_SEED)
+seed!(RANDOM_SEED)
 
 mkpath("$base_path/fits/full")
 mkpath("$base_path/fits/cv")
