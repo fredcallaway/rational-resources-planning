@@ -2,9 +2,7 @@ from utils import *
 import sys
 from PIL import Image
 EXPERIMENT = int(sys.argv[1])
-
 # %% ==================== GLOBALS AND FLAGS ====================
-
 print('Setting up experiment', EXPERIMENT)
 VERSION = f'exp{EXPERIMENT}'
 VARIANCES = ['decreasing', 'constant', 'increasing'] if EXPERIMENT in (2,3) else ['constant']
@@ -13,6 +11,8 @@ write_tex = TeX(path=f'stats/{EXPERIMENT}').write
 LABEL_PANELS = False
 
 # %% ==================== LOAD DATA ====================
+
+
 pdf, tdf = load_data(VERSION)
 pdf = pdf.rename(columns={'final_bonus': 'bonus'})
 # if EXPERIMENT == 1:
@@ -27,15 +27,16 @@ assert len(tdf.index.value_counts().unique()) == 1
 assert set(tdf.index) == set(pdf.index)
 
 if EXPERIMENT < 4:
-    final = len(pdf)
-    assert final == full_pdf.complete.sum()
+    assert len(pdf) == full_pdf.complete.sum()
     failed = (full_pdf.n_quiz == 3).sum()
+
     write_tex("recruited", len(full_pdf))
+    write_tex("failed_quiz", failed)
+    write_tex("incomplete", len(full_pdf) - len(pdf) - failed)
+    write_tex("final", len(pdf))
     
     # write_tex("recruited", final + failed)
 
-    if EXPERIMENT < 4:
-        write_tex("failed_quiz", failed)
 
 # %% ==================== ADD COLUMNS ====================
 
@@ -98,6 +99,11 @@ model_names = get_result(VERSION, 'param_counts.json').keys()
 all_extra = ['Satisfice', 'BestNext', 'DepthLimit', 'Prune']
 
 def prettify_name(name):
+    fancy = ''
+    if name.startswith('Fancy_'):
+        fancy = 'Fancy '
+        name = name[len('Fancy_'):]
+
     spec = base, *extra = name.split('_')
     if EXPERIMENT > 1:
         return base
@@ -105,7 +111,7 @@ def prettify_name(name):
         return base + ' +All'
     elif len(extra) == len(all_extra) - 1:
         missing = [e for e in all_extra if e not in extra]
-        assert len(missing) <= 1
+        assert len(missing) <= 1, (missing, name)
         return base + ' -' + missing[0]
     else:
         return ' +'.join(spec)
