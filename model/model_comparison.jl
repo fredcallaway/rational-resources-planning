@@ -35,72 +35,74 @@ all_data = all_trials |> values |> flatten |> get_data;
 
 MODELS = eval(QUOTE_MODELS)
 
-@async begin
-    @everywhere flat_trials = $flat_trials
-    @time group_fits = pmap(MODELS) do M
-        mname = name(M)
-        file = "$base_path/fits/group/$mname"
-        if isfile(file)
-            println("$file already exists, skipping.")
-            return deserialize(file)
+if !(@isdefined(SKIP_GROUP) && SKIP_GROUP)
+    @async begin
+        @everywhere flat_trials = $flat_trials
+        @time group_fits = pmap(MODELS) do M
+            mname = name(M)
+            file = "$base_path/fits/group/$mname"
+            if isfile(file)
+                println("$file already exists, skipping.")
+                return deserialize(file)
+            end
+            result = fit(M, flat_trials; method=OPT_METHOD)
+            serialize(file, result)
+            return result
         end
-        result = fit(M, flat_trials; method=OPT_METHOD)
-        serialize(file, result)
-        return result
+        serialize("$base_path/group_fits", group_fits)
+        println("Wrote $base_path/group_fits")
     end
-    serialize("$base_path/group_fits", group_fits)
-    println("Wrote $base_path/group_fits")
 end
-
 
 # %% ==================== FIT MODELS TO INDIVIDUALS ====================
 
-full_fits = let
-    full_jobs = Iterators.product(values(all_trials), MODELS);
-    full_fits = @showprogress pmap(full_jobs) do (trials, M)
-        wid = trials[1].wid; mname = name(M)
-        file = "$base_path/fits/full/$mname-$wid"
-        if isfile(file)
-            println("$file already exists, skipping.")
-            return deserialize(file)
-        end
-        try
-            model, nll = fit(M, trials; method=OPT_METHOD)
-            result = (model=model, nll=nll, wid=wid)
-            serialize(file, result)
-            return result
-        catch err
-            @error "Error fitting $mname to $wid" err
-            rethrow()
+if !(@isdefined(SKIP_FULL) && SKIP_FULL)
+    full_fits = let
+        full_jobs = Iterators.product(values(all_trials), MODELS);
+        full_fits = @showprogress pmap(full_jobs) do (trials, M)
+            wid = trials[1].wid; mname = name(M)
+            file = "$base_path/fits/full/$mname-$wid"
+            if isfile(file)
+                println("$file already exists, skipping.")
+                return deserialize(file)
+            end
+            try
+                model, nll = fit(M, trials; method=OPT_METHOD)
+                result = (model=model, nll=nll, wid=wid)
+                serialize(file, result)
+                return result
+            catch err
+                @error "Error fitting $mname to $wid" err
+                rethrow()
+            end
+
+        end;
+        serialize("$base_path/full_fits", full_fits)
+
+        function mle_table(M)
+            i = findfirst(MODELS .== M)
+            map(zip(keys(all_trials), full_fits[:, i])) do (wid, (model, nll))
+                (wid=wid, model=name(M), nll=nll, namedtuple(model)...)
+            end |> DataFrame
         end
 
+        mkpath("$results_path/mle")
+        for M in MODELS
+            mle_table(M) |> CSV.write("$results_path/mle/$(name(M)).csv")
+        end
+        
+        nll = getfield.(full_fits, :nll)
+        total = sum(nll; dims=1)
+        best_model = [p.I[2] for p in argmin(nll; dims=2)]
+        n_fit = counts(best_model, 1:length(MODELS))
+        println("Model                  Likelihood   Best Fit")
+        for i in eachindex(MODELS)
+            @printf "%-22s       %4d         %d\n" name(MODELS[i]) total[i] n_fit[i]
+        end
+
+        full_fits
     end;
-    serialize("$base_path/full_fits", full_fits)
-
-    function mle_table(M)
-        i = findfirst(MODELS .== M)
-        map(zip(keys(all_trials), full_fits[:, i])) do (wid, (model, nll))
-            (wid=wid, model=name(M), nll=nll, namedtuple(model)...)
-        end |> DataFrame
-    end
-
-    mkpath("$results_path/mle")
-    for M in MODELS
-        mle_table(M) |> CSV.write("$results_path/mle/$(name(M)).csv")
-    end
-    
-    nll = getfield.(full_fits, :nll)
-    total = sum(nll; dims=1)
-    best_model = [p.I[2] for p in argmin(nll; dims=2)]
-    n_fit = counts(best_model, 1:length(MODELS))
-    println("Model                  Likelihood   Best Fit")
-    for i in eachindex(MODELS)
-        @printf "%-22s       %4d         %d\n" name(MODELS[i]) total[i] n_fit[i]
-    end
-
-    full_fits
-end;
-
+end
 
 
 # %% ==================== CROSS VALIDATION ====================
