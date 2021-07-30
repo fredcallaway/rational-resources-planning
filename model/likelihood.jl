@@ -51,8 +51,8 @@ function bfgs_random_restarts(loss, lower, upper, n_restart; max_err=n_restart/2
     function do_opt(algo, x0)
         res = optimize(loss, lower, upper, x0, algo, Optim.Options(time_limit=600); autodiff=:forward)
         if !(res.f_converged || res.g_converged) && res.time_run > res.time_limit
-            @warn "$id: Timed out" res.iterations res.f_calls x0=repr(round.(x0; digits=3))
             n_time += 1
+            @warn "$id: Timed out" n_time res.iterations res.f_calls x0=repr(round.(x0; digits=3))
             if n_time >= max_err
                 error("$id: Too many timeouts")
             end

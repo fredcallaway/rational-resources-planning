@@ -1,11 +1,11 @@
 EXPERIMENT = "exp1"
 EXPAND_ONLY = true
 
-# this quote thing allows us to refer to types that aren't defined yet
 
 #SKIP_GROUP = true
 #SKIP_FULL = true
 
+# this quote thing allows us to refer to types that aren't defined yet
 QUOTE_MODELS = quote 
     [
         OptimalPlus{:Default},

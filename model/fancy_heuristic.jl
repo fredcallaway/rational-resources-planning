@@ -76,29 +76,24 @@ function best_next(H::Type{<:FancyHeuristic}, m::MetaMDP, b::Belief)
     has_component(H, "BestNext") ? prob_best_maximal(m, b) : 0
 end
 
-
 "How likely is the best path actually the best"
 function prob_best_maximal(m, b)
-    pvals = path_values(m, b)
-    n_known = map(paths(m)) do path
-        !any(isnan(b[i]) for i in path)
-    end
-    # find best path, breaking ties in favor of less uncertain
-    # (this is conservative because it gives more opportunity for other paths to be better)
-    best = argmax(collect(zip(pvals, n_known)))
-    pth = paths(m)[best]
-
     rewards = [-10, -5, 5, 10]
     @assert EXPERIMENT == "exp1"
-
-    marginalizing = filter(i->!observed(b, i), pth)
-    b1 = copy(b)
-    mapreduce(+, Iterators.product(fill(rewards, length(marginalizing))...)) do z
-        b1[marginalizing] .= z
-        own_value = path_value(m, b1, pth)
-        competing_value = best_path_value_dist(m, b1)
-        cdf(competing_value, own_value)
-    end * (.25 ^ length(marginalizing))
+    pvals = path_values(m, b)
+    max_pval = maximum(pvals)
+    # if multiple best paths, take the maximum probability of any of them
+    maximum(zip(paths(m), pvals)) do (pth, val)
+        val != max_pval && return -Inf
+        unobs = filter(i->!observed(b, i), pth)
+        b1 = copy(b)
+        possible_unobs_vals = Iterators.product(fill(rewards, length(unobs))...)
+        sum(possible_unobs_vals) do z
+            b1[unobs] .= z
+            own_value = sum(b1[pth])  # same as path_value(m, b1, pth) because pth is fully observed
+            cdf(best_path_value_dist(m, b1), own_value)
+        end * (.25 ^ length(unobs))
+    end
 end
 
 function belief_tree(m, b)
