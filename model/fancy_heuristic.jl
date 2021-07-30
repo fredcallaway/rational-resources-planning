@@ -45,21 +45,11 @@ function Base.display(model::FancyHeuristic{H,T}) where {H, T}
     end
 end
 
+
 function termination_probability(model::FancyHeuristic{H,T}, φ::NamedTuple)::T where {H,T}
-    bpvd = φ.satisfice  # output of best_path_value_dist
-
-    if bpvd isa Int
-        p_worse = 1
-    else
-        # linear interpolation between multiplies of 5 to make the objective smooth
-        lo = 5 * fld(model.θ_satisfice, 5); hi = 5 * cld(model.θ_satisfice, 5)
-        hi_weight = (model.θ_satisfice - lo) / 5.  
-        p_worse_lo = cdf(bpvd, lo-1e-3); p_worse_hi = cdf(bpvd, hi-1e-3)
-        p_worse = p_worse_lo * (1 - hi_weight) + p_worse_hi * hi_weight
-    end
-
+    p_better = φ.satisfice isa Int ? 0 : prob_better(φ.satisfice, model.θ_satisfice)
     v = model.α_term + 
-        model.β_satisfice * (1 - p_worse)
+        model.β_satisfice * p_better
         model.β_best_next * φ.best_next
     p_term = logistic(v)
     if pruning_active(model)
@@ -68,15 +58,43 @@ function termination_probability(model::FancyHeuristic{H,T}, φ::NamedTuple)::T 
     p_term
 end
 
+# ---------- Fancy satisficing ---------- #
+
 function satisfice(H::Type{<:FancyHeuristic}, m::MetaMDP, b::Belief)
-    has_component(H, "Satisfice") ? best_path_value_dist(m, b) : 0
+    has_component(H, "Satisfice") ? best_paths_value_dists(m, b) : 0
 end
+
+"How likely is the best path to have value ≥ θ (maximize over ties)"
+function prob_better(best_dists, θ)
+    # linear interpolation between multiplies of 5 to make the objective smooth
+    lo = 5 * fld(θ, 5); hi = 5 * cld(θ, 5)
+    hi_weight = (θ - lo) / 5.; lo_weight = 1 - hi_weight
+    maximum(best_dists) do bpvd
+        p_worse_lo = cdf(bpvd, lo-1e-3); p_worse_hi = cdf(bpvd, hi-1e-3)
+        p_worse = p_worse_lo * lo_weight + p_worse_hi * hi_weight
+        1 - p_worse
+    end
+end
+
+"Distributions of value of all paths with maximal expected value"
+function best_paths_value_dists(m, b)
+    rewards = [-10, -5, 5, 10]
+    @assert EXPERIMENT == "exp1"
+    pvals = path_values(m, b)
+    max_pval = maximum(pvals)
+
+    map(paths(m)[pvals .== max_pval]) do pth
+        path_value_dist(m, b, pth)
+    end |> unique
+end
+
+# ---------- Fancy best vs next ---------- #
 
 function best_next(H::Type{<:FancyHeuristic}, m::MetaMDP, b::Belief)
     has_component(H, "BestNext") ? prob_best_maximal(m, b) : 0
 end
 
-"How likely is the best path actually the best"
+"How likely is the best path actually the best (maximize over ties)"
 function prob_best_maximal(m, b)
     rewards = [-10, -5, 5, 10]
     @assert EXPERIMENT == "exp1"
@@ -91,9 +109,15 @@ function prob_best_maximal(m, b)
         sum(possible_unobs_vals) do z
             b1[unobs] .= z
             own_value = sum(b1[pth])  # same as path_value(m, b1, pth) because pth is fully observed
-            cdf(best_path_value_dist(m, b1), own_value)
+            cdf(max_value_dist(m, b1), own_value)
         end * (.25 ^ length(unobs))
     end
+end
+
+"Distribution of value of the best path if you knew all the rewards"
+function max_value_dist(m, b)
+    v = tree_value_dist(belief_tree(m, b))
+    DNP([0.], [1.]) + v  # ensure it's a DNP
 end
 
 function belief_tree(m, b)
@@ -109,12 +133,6 @@ function tree_value_dist(btree)
     isempty(children) && return self # base case
     self + maximum(map(tree_value_dist, children))
 end
-
-function best_path_value_dist(m, b)
-    v = tree_value_dist(belief_tree(m, b))
-    DNP([0.], [1.]) + v  # ensure it's a DNP
-end
-
 
 # ---------- Define parameter ranges for individual models ---------- #
 
