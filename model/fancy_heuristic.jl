@@ -49,8 +49,9 @@ end
 function termination_probability(model::FancyHeuristic{H,T}, φ::NamedTuple)::T where {H,T}
     p_better = φ.satisfice isa Int ? 0 : prob_better(φ.satisfice, model.θ_satisfice)
     v = model.α_term + 
-        model.β_satisfice * p_better
+        model.β_satisfice * p_better +
         model.β_best_next * φ.best_next
+
     p_term = logistic(v)
     if pruning_active(model)
         p_term += (1-p_term) * prod(pruning(model, φ))
@@ -142,8 +143,8 @@ function default_space(::Type{FancyHeuristic{H}}) where H
         "Best" => (β_best=(0, 3),),
         "Depth" => (β_depth=(0, 3),),
         "Breadth" => (β_depth=(-3, 0),),
-        "Satisfice" => (β_satisfice=(0, 30), θ_satisfice=(-30,30)),
-        "BestNext" => (β_best_next=(0, 30),),
+        "Satisfice" => (β_satisfice=(0, 100), θ_satisfice=(-100,100)),
+        "BestNext" => (β_best_next=(0, 100),),
         "DepthLimit" => (β_depthlim=(0, 30), θ_depthlim=(0, 5)),
         "Prune" => (β_prune=(0, 3), θ_prune=(-30, 30)),
         "Expand" => (β_expand=(0, 50),),
@@ -169,7 +170,7 @@ function default_space(::Type{FancyHeuristic{H}}) where H
         :β_satisfice => 0.,
         :β_best_next => 0.,
         :θ_satisfice => 0.,
-        :α_term => (-30, 30),
+        :α_term => (-1000, 1000),
         :β_depthlim => 1e5,  # flag for inactive
         :θ_depthlim => 1e10,  # Inf breaks gradient
         :β_prune => 1e5,

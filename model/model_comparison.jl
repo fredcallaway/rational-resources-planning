@@ -107,6 +107,10 @@ end
 
 # %% ==================== CROSS VALIDATION ====================
 
+if @isdefined(SKIP_GROUP) && SKIP_GROUP
+    println("Skipping cross validation and prediction")
+    exit()
+end
 
 function kfold_splits(n, k)
     @assert (n / k) % 1 == 0  # can split evenly
