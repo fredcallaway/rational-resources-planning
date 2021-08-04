@@ -143,7 +143,7 @@ function default_space(::Type{FancyHeuristic{H}}) where H
         "Best" => (β_best=(0, 3),),
         "Depth" => (β_depth=(0, 3),),
         "Breadth" => (β_depth=(-3, 0),),
-        "Satisfice" => (β_satisfice=(0, 100), θ_satisfice=(-100,100)),
+        "Satisfice" => (β_satisfice=(0, 100), θ_satisfice=(-30, 30)),
         "BestNext" => (β_best_next=(0, 100),),
         "DepthLimit" => (β_depthlim=(0, 30), θ_depthlim=(0, 5)),
         "Prune" => (β_prune=(0, 3), θ_prune=(-30, 30)),
