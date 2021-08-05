@@ -1,4 +1,4 @@
-"Heuristic models with stopping rules based on probability rather than values"
+"Heuristic models with stopping rules based on value distributions"
 
 using StatsFuns: logistic
 
@@ -12,9 +12,11 @@ struct FancyHeuristic{H,T} <: AbstractHeuristic{H,T}
     # Stopping rule weights
     β_satisfice::T
     β_best_next::T
+    β_prob_best::T
+    β_prob_better::T
     # Stopping rule thresholds
-    θ_satisfice::T
-    α_term::T
+    θ_term::T
+    θ_prob_better::T
     # Depth limits
     β_depthlim::T
     θ_depthlim::T
@@ -46,11 +48,24 @@ function Base.display(model::FancyHeuristic{H,T}) where {H, T}
 end
 
 
+function features(::Type{M}, m::MetaMDP, b::Belief) where M <: FancyHeuristic{H,T} where {H, T}
+    non_fancy = features(Heuristic{H,T}, m, b)
+    (
+        non_fancy..., 
+        prob_best = has_component(M, "ProbBest") ? prob_best_maximal(m, b) : 0,
+        best_path_dists = has_component(M, "ProbBetter") ? best_paths_value_dists(m, b) : missing
+    )
+
+end
+
 function termination_probability(model::FancyHeuristic{H,T}, φ::NamedTuple)::T where {H,T}
-    p_better = φ.satisfice isa Int ? 0 : prob_better(φ.satisfice, model.θ_satisfice)
-    v = model.α_term + 
-        model.β_satisfice * p_better +
-        model.β_best_next * φ.best_next
+    p_better = ismissing(φ.best_path_dists) ? 0. : prob_better(φ.best_path_dists, model.θ_prob_better)
+    
+    v = model.θ_term + 
+        model.β_satisfice * φ.term_reward +
+        model.β_best_next * φ.best_next +
+        model.β_prob_better * p_better +
+        model.β_prob_best * φ.prob_best
 
     p_term = logistic(v)
     if pruning_active(model)
@@ -90,10 +105,6 @@ function best_paths_value_dists(m, b)
 end
 
 # ---------- Fancy best vs next ---------- #
-
-function best_next(H::Type{<:FancyHeuristic}, m::MetaMDP, b::Belief)
-    has_component(H, "BestNext") ? prob_best_maximal(m, b) : 0
-end
 
 "How likely is the best path actually the best (maximize over ties)"
 function prob_best_maximal(m, b)
@@ -138,16 +149,21 @@ end
 # ---------- Define parameter ranges for individual models ---------- #
 
 
+
+
 function default_space(::Type{FancyHeuristic{H}}) where H
     ranges = Dict(
         "Best" => (β_best=(0, 3),),
         "Depth" => (β_depth=(0, 3),),
         "Breadth" => (β_depth=(-3, 0),),
-        "Satisfice" => (β_satisfice=(0, 100), θ_satisfice=(-30, 30)),
-        "BestNext" => (β_best_next=(0, 100),),
+        "Satisfice" => (β_satisfice=(0, 3), θ_term=(-150, 0)),
+        "BestNext" => (β_best_next=(0, 3), θ_term=(-150, 0)),
         "DepthLimit" => (β_depthlim=(0, 30), θ_depthlim=(0, 5)),
         "Prune" => (β_prune=(0, 3), θ_prune=(-30, 30)),
         "Expand" => (β_expand=(0, 50),),
+
+        "ProbBetter" => (β_prob_better=(0, 100), θ_term=(-90, 90), θ_prob_better=(-30, 30)),
+        "ProbBest" => (β_prob_best=(0, 100), θ_term=(-90, 90))
     )
     x = string(H)
     components = Set()
@@ -155,22 +171,18 @@ function default_space(::Type{FancyHeuristic{H}}) where H
     push!(components, popfirst!(spec))
 
     for ex in spec
-        if ex == "Full"
-            push!(components, "Satisfice", "BestNext", "DepthLimit", "Prune")
-        elseif startswith(ex, "No") 
-            delete!(components, ex[3:end])
-        else
-            push!(components, ex)
-        end
+        push!(components, ex)
     end
     space = Space(
-        :β_best => 0.,
-        :β_depth => 0.,
+        :β_best => 0,
+        :β_depth => 0,
         :β_expand => 0,
-        :β_satisfice => 0.,
-        :β_best_next => 0.,
-        :θ_satisfice => 0.,
-        :α_term => (-150, 0),
+        :β_satisfice => 0,
+        :β_best_next => 0,
+        :β_prob_best => 0,
+        :β_prob_better => 0,
+        :θ_term => (-150, 0),
+        :θ_prob_better => 0,
         :β_depthlim => 1e5,  # flag for inactive
         :θ_depthlim => 1e10,  # Inf breaks gradient
         :β_prune => 1e5,

@@ -43,7 +43,7 @@ function Base.display(model::Heuristic{H,T}) where {H, T}
     end
 end
 
-function features(::Type{X}, m::MetaMDP, b::Belief) where X <: AbstractHeuristic{H,T} where {H, T}
+function features(::Type{X}, m::MetaMDP, b::Belief) where X <: Heuristic{H,T} where {H, T}
     frontier = get_frontier(m, b)
     expansion = map(frontier) do c
         has_observed_parent(m.graph, b, c)
@@ -53,8 +53,8 @@ function features(::Type{X}, m::MetaMDP, b::Belief) where X <: AbstractHeuristic
         expansion = expansion,
         frontier_values = node_values(m, b)[frontier],
         frontier_depths = node_depths(m)[frontier],
-        satisfice = satisfice(X, m, b),
-        best_next = best_next(X, m, b),
+        term_reward = term_reward(m, b),
+        best_next = best_vs_next_value(m, b),
         tmp = zeros(T, length(frontier)),  # pre-allocate for use in selection_probability
         tmp2 = zeros(T, length(frontier)),  # pre-allocate for use in selection_probability
         tmp3 = zeros(T, length(frontier)),  # pre-allocate for use in selection_probability
@@ -124,7 +124,7 @@ end
 
 function termination_probability(model::Heuristic{H,T}, φ::NamedTuple)::T where {H,T}
     v = model.θ_term + 
-        model.β_satisfice * φ.satisfice +
+        model.β_satisfice * φ.term_reward +
         model.β_best_next * φ.best_next
     p_term = logistic(v)
     if pruning_active(model)
@@ -155,14 +155,6 @@ function best_vs_next_value(m, b)
         end
     end
     pvals[best] - competing_value
-end
-
-function satisfice(H::Type{<:Heuristic}, m::MetaMDP, b::Belief)
-    has_component(H, "Satisfice") ? term_reward(m, b) : 0.
-end
-
-function best_next(H::Type{<:Heuristic}, m::MetaMDP, b::Belief)
-    has_component(H, "BestNext") ? best_vs_next_value(m, b) : 0.
 end
 
 # ---------- Define parameter ranges for individual models ---------- #
