@@ -21,16 +21,17 @@ write_pct(name, x; digits=1) = write_tex(name, string(round(100 * x; digits=digi
 
 # %% --------
 
-model_sims = map([name.(MODELS); "OptimalPlusPure"]) do mname
-    mname => map(collect(keys(all_trials))) do wid
-        deserialize("$base_path/sims/$mname-$wid")
-    end
-end |> Dict;
-
 comparison_models = ["Random", "OptimalPlus", "OptimalPlusPure"]
 if !EXPAND_ONLY
     push!(comparison_models, "OptimalPlusExpand")
 end
+
+#model_sims = map([name.(MODELS); "OptimalPlusPure"]) do mname
+model_sims = map(comparison_models) do mname
+    mname => map(collect(keys(all_trials))) do wid
+        deserialize("$base_path/sims/$mname-$wid")
+    end
+end |> Dict;
 
 # %% --------
 map(MODELS) do m
@@ -106,8 +107,10 @@ function click_features(d)
         max_path=max_path,
         max_competing=max_competing,
         best_next=best_vs_next_value(m, b),
+        prob_maximal=prob_best_maximal(m, b),
     )
 end
+
 
 println("Computing click features")
 mkpath("$results_path/click_features")

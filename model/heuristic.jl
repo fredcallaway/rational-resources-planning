@@ -213,8 +213,7 @@ function default_space(::Type{Heuristic{H}}) where H
     change_space(Heuristic{:Random}; ε=(1e-3, 1), space...)
 end
 
-function all_heuristic_models()
-    base = ["Best", "Depth", "Breadth"]
+function all_heuristic_models(base = ["Best", "Depth", "Breadth"])
     whistles = ["Satisfice", "BestNext"]
     if EXPAND_ONLY
         push!(whistles, "DepthLimit", "Prune")

@@ -1,6 +1,5 @@
 # %% ==================== Load predictions ====================
 def get_logp():
-
     preds = pd.DataFrame(get_result(VERSION, 'predictions.json')).set_index('wid')
     res = preds.apply(lambda d: {k: p[d.c] for k, p in d.predictions.items()}, axis=1)
     logp = np.log(pd.DataFrame(list(res.values)))
@@ -13,9 +12,33 @@ def get_logp():
 logp = get_logp()
 total = logp.sum()
 
+# %% --------
+
+logp.Fancy_Best_Satisfice_BestNext.sum()
+logp.Fancy_Best_Satisfice.sum()
+
+total.loc[['Fancy_Best_Satisfice', 'Best_Satisfice', 'Fancy_Best_BestNext', 'Best_BestNext']]
+
+# %% --------
+base = total.filter(regex='^Best')
+fancy = total.filter(regex='^Fancy_Best')
+fancy.index = fancy.index.str.strip('Fancy_')
+X = pd.DataFrame({'value': base, 'probability': fancy})
+X.plot()
+show()
+# %% --------
+# plt.scatter(X.value, X.probability)
+show()
+# %% --------
+plt.plot(X.values.T, color='k')
+plt.xticks([0, 1], ["Value", "Probability"])
+plt.xlim(-0.2, 1.2)
+show()
+
 # %% ==================== Choose models to plot ====================
+
 BASIC = ['Random', 'MetaGreedy', 'OptimalPlus']
-HEURISTICS = ['Breadth', 'Depth', 'Best']
+HEURISTICS = ['Fancy_Breadth', 'Fancy_Depth', 'Fancy_Best']
 MECHANISMS = ['Satisfice', 'BestNext']
 
 if EXPERIMENT >= 3:
@@ -41,9 +64,10 @@ best_heuristic_no_depthlimit_noprune = [
 if EXPERIMENT == 1:
     COMPARISON_MODELS.extend(best_heuristic)
     COMPARISON_MODELS.extend([
-        'Best_Satisfice_BestNext_DepthLimit_Prune',
-        'Best_BestNext',
-        'Best_Satisfice',
+        'Fancy_Best_BestNext_DepthLimit',
+        'Fancy_Best_Satisfice_BestNext_DepthLimit_Prune',
+        'Fancy_Best_BestNext',
+        'Fancy_Best_Satisfice',
         'Best_DepthLimit',
         'Best_Prune',
         'Best'
@@ -58,13 +82,6 @@ else: # 3 and 4
     COMPARISON_MODELS.extend(m + '_Expand' for m in no_expand)
 
 print(COMPARISON_MODELS)
-
-# %% --------
-total = logp.sum()
-
-total.sort_values()
-total.loc[total.index.str.startswith('Best')].sort_values()
-
 
 # %% ==================== Plots ====================
 

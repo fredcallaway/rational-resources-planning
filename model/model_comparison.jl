@@ -7,6 +7,7 @@ using ProgressMeter
 using Random: seed!, randperm, MersenneTwister
 
 
+
 include("conf.jl")
 println("Running model comparison for ", ARGS[1])
 
@@ -18,6 +19,11 @@ seed!(RANDOM_SEED)
 mkpath("$base_path/fits/full")
 mkpath("$base_path/fits/cv")
 mkpath("$base_path/fits/group")
+
+redirect_worker_stderr("workerlog")
+
+
+
 
 
 # %% ==================== LOAD DATA ====================
@@ -188,12 +194,6 @@ end;
 
 # %% ==================== SAVE MODEL PREDICTIONS ====================
 
-function get_fold(i::Int)
-    # folds are identified by their first test trial index
-    first(f for f in folds if i in f.test).test[1]
-end
-get_fold(t::Trial) = get_fold(t.i)
-
 fit_lookup = let
     ks = map(cv_jobs) do (trials, M, fold)
         trials[1].wid, M, fold.test[1]
@@ -202,27 +202,41 @@ fit_lookup = let
     Dict(zip(ks, getfield.(cv_fits, :model)))
 end
 
-function get_model(M::Type, t::Trial)
-    fit_lookup[t.wid, M, get_fold(t)]
-end
+@everywhere begin
+    folds = $folds
+    fit_lookup = $fit_lookup
 
-function get_preds(M::Type, t::Trial)
-    model = get_model(M, t)
-    map(get_data(t)) do d
-        action_dist(model, d)
+    function get_fold(i::Int)
+        # folds are identified by their first test trial index
+        first(f for f in folds if i in f.test).test[1]
+    end
+    get_fold(t::Trial) = get_fold(t.i)
+
+
+    function get_model(M::Type, t::Trial)
+        fit_lookup[t.wid, M, get_fold(t)]
+    end
+
+    function get_preds(M::Type, t::Trial)
+        model = get_model(M, t)
+        map(get_data(t)) do d
+            action_dist(model, d)
+        end
+    end
+
+    function get_params(M::Type, t::Trial)
+        model = get_model(M, t)
+        Dict(fn => getfield(model, fn) for fn in fieldnames(typeof(model)))
     end
 end
 
-function get_params(M::Type, t::Trial)
-    model = get_model(M, t)
-    Dict(fn => getfield(model, fn) for fn in fieldnames(typeof(model)))
-end
-
-map(all_data) do d
+preds = @showprogress "Generating predictions " pmap(all_data) do d
     (wid = d.t.wid, 
      c=d.c,
     predictions = Dict(name(M) => action_dist(get_model(M, d.t), d) for M in MODELS))
-end |> JSON.json |> write("$results_path/predictions.json")
+end 
+
+preds |> JSON.json |> write("$results_path/predictions.json")
 
 
 # # %% ==================== GENERATE VISUALIZATION JSON ====================

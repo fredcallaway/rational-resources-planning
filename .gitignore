@@ -48,3 +48,5 @@ analysis/imgs/increasing-cropped.png
 analysis/exp2_full.ai
 data/pilot/
 analysis/test.ipynb
+model/results/
+model/other/

@@ -170,7 +170,7 @@ function default_space(::Type{FancyHeuristic{H}}) where H
         :β_satisfice => 0.,
         :β_best_next => 0.,
         :θ_satisfice => 0.,
-        :α_term => (-1000, 1000),
+        :α_term => (-150, 0),
         :β_depthlim => 1e5,  # flag for inactive
         :θ_depthlim => 1e10,  # Inf breaks gradient
         :β_prune => 1e5,

@@ -4,6 +4,7 @@ EXPAND_ONLY = true
 
 #SKIP_GROUP = true
 #SKIP_FULL = true
+#SKIP_CV = true
 
 # this quote thing allows us to refer to types that aren't defined yet
 QUOTE_MODELS = quote 
@@ -11,8 +12,8 @@ QUOTE_MODELS = quote
         OptimalPlus{:Default},
         MetaGreedy{:Default},
         Heuristic{:Random},
-        all_heuristic_models()...,
-        all_fancy_heuristic_models()...
+        all_fancy_heuristic_models()...,
+        all_heuristic_models()...
     ] 
 end
 

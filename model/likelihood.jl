@@ -33,60 +33,69 @@ function logp(L::Likelihood, model::M)::T where M <: AbstractModel{T} where T <:
     total
 end
 
-@memoize function get_sobol(lower, upper, n)
-    seq = SobolSeq(lower, upper)
-    skip(seq, n)
-    x0s = [Sobol.next!(seq) for i in 1:n]
-end
-
-function bfgs_random_restarts(loss, lower, upper, n_restart; max_err=n_restart/2, id="null")
-    algorithms = [
-        Fminbox(LBFGS()),
-        Fminbox(LBFGS(linesearch=Optim.LineSearches.BackTracking())),
-    ] |> Iterators.cycle |> Iterators.Stateful
-    algo = first(algorithms)
+function bfgs_random_restarts(loss, lower, upper, n_restart; 
+                              time_limit=120, max_err=10, max_timeout=50, max_finite=10, id="null")
+    #algorithms = [
+    #    Fminbox(LBFGS()),
+    #    Fminbox(LBFGS(linesearch=Optim.LineSearches.BackTracking())),
+    #] |> Iterators.cycle |> Iterators.Stateful
     n_err = 0
     n_time = 0
+    n_finite = 0
 
-    function do_opt(algo, x0)
-        res = optimize(loss, lower, upper, x0, algo, Optim.Options(time_limit=600); autodiff=:forward)
-        if !(res.f_converged || res.g_converged) && res.time_run > res.time_limit
-            n_time += 1
-            @warn "$id: Timed out" n_time res.iterations res.f_calls x0=repr(round.(x0; digits=3))
-            if n_time >= max_err
-                error("$id: Too many timeouts")
-            end
-        end
-        res
-    end
-
-    opts = map(get_sobol(lower, upper, n_restart)) do x0
-        while !isfinite(loss(x0))
-            # don't start with infinite loss!
-            x0 = lower .+ rand(length(lower)) .* (upper .- lower)
+    function do_opt(x0)
+        if !isfinite(loss(x0))  # hopeless!
+            n_finite += 1
+            @debug "nonfinite loss" n_finite
+            return missing
         end
         try
-            do_opt(algo, x0)
+            # >30s indicates that the optimizer is stuck, which means it's not likely to find a good minimum anyway
+            res = optimize(loss, lower, upper, x0, Fminbox(LBFGS()), Optim.Options(;time_limit); autodiff=:forward)
+            if !(res.f_converged || res.g_converged) && res.time_run > res.time_limit
+                n_time += 1
+                @debug "timeout" n_time
+                return missing
+            else
+                return res
+            end
         catch err
             err isa InterruptException && rethrow(err)
-            # @warn "First BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name
-            # try the other line search method
-            algo = first(algorithms)  # this cycles
-            try
-                do_opt(algo, x0)
-            catch err
-                err isa InterruptException && rethrow(err)
-                @warn "$id: Second BFGS attempt failed" err linesearch=typeof(algo.method.linesearch!).name x0=repr(round.(x0; digits=3))
-                n_err += 1
-                if n_err >= max_err
-                    @error "$id: Too many optimization errors"
-                    rethrow(err)
-                end
-                return missing
+            n_err += 1
+            @debug "error" n_err
+            return missing
+        end
+    end
+
+    x0s = SobolSeq(lower, upper)
+    results = Any[]
+    while length(results) < n_restart
+        res = do_opt(next!(x0s))
+        if !ismissing(res)
+            push!(results, res)
+        else
+            if n_err > max_err
+                @error "$id: Too many errors while optimizing"
+                rethrow(err)
+            elseif n_time > max_timeout
+                @error "$id: Too many timeouts while optimizing"
+                error("Optimization timeouts")
+            elseif n_finite > max_finite
+                @error "$id: Too many timeouts while optimizing"
+                error("Optimization timeouts")
             end
         end
-    end |> skipmissing |> collect
-    isempty(opts) ? missing : partialsort(opts, 1; by=o->o.minimum)
+    end
+    if n_err > max_err/2 || n_time > max_timeout/2 || n_finite > max_finite/2
+        @warn "$id: Difficulty optimizing" n_err n_time n_finite
+    end
+    losses = getfield.(results, :minimum)
+    very_good = minimum(losses) * 1.01
+    n_good = sum(losses .< very_good)
+    if n_good < 5
+        @warn "$id: Only $n_good random restarts produced a very good minimum"
+    end
+    partialsort(results, 1; by=o->o.minimum)  # best result
 end
 
 function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_restart=20) where M <: AbstractModel
@@ -122,7 +131,8 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_res
                 optimize(loss, lower, upper, x0, SAMIN(verbosity=0), Optim.Options(iterations=10^6))
             elseif method == :bfgs
                 t = trials[1]
-                bfgs_random_restarts(loss, lower, upper, n_restart; id="$M-$(t.wid)-$(t.i)")
+                id = "$(name(M))-$(t.wid)-$(t.i)"
+                bfgs_random_restarts(loss, lower, upper, n_restart; id)
             end
         end
         ismissing(opt) && return missing

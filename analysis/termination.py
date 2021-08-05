@@ -87,7 +87,8 @@ from statsmodels.formula.api import logit
 @do_if(True)
 def this():
     cf = load_cf('Human').query('n_revealed < 16')
-    m = logit(f'is_term.astype(int) ~ term_reward + best_next', data=cf).fit()
+    m = logit(f'is_term.astype(int) ~ term_reward + best_next + prob_maximal', data=cf).fit()
+    m.summary()
     for k in ['term_reward', 'best_next']:
         lo, hi = m.conf_int().loc[k]
         # write_tex(f'expansion_logistic', rf'$\beta = {m.params.gain_z:.3f} [{lo:.3f} {hi:.3f}], {pval(m.pvalues.gain_z)}$')
@@ -97,7 +98,8 @@ def this():
 @do_if(True)
 def this():
     cf = load_cf('OptimalPlusPure').query('n_revealed < 16')
-    m = logit(f'is_term.astype(int) ~ term_reward + best_next', data=cf).fit()
+    m = logit(f'is_term.astype(int) ~ term_reward + best_next + prob_maximal', data=cf).fit()
+    m.summary()
     for k in ['term_reward', 'best_next']:
         write_tex(f'term_optimal_{k}', f'{m.params[k]:.3f}')
 
