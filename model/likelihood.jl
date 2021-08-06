@@ -33,7 +33,7 @@ function logp(L::Likelihood, model::M)::T where M <: AbstractModel{T} where T <:
     total
 end
 
-function bfgs_random_restarts(loss, lower, upper, n_restart; 
+function bfgs_random_restarts(loss, hard_lower, soft_lower, soft_upper, hard_upper, n_restart; 
                               time_limit=120, max_err=10, max_timeout=50, max_finite=10, id="null")
     #algorithms = [
     #    Fminbox(LBFGS()),
@@ -51,7 +51,7 @@ function bfgs_random_restarts(loss, lower, upper, n_restart;
         end
         try
             # >30s indicates that the optimizer is stuck, which means it's not likely to find a good minimum anyway
-            res = optimize(loss, lower, upper, x0, Fminbox(LBFGS()), Optim.Options(;time_limit); autodiff=:forward)
+            res = optimize(loss, hard_lower, hard_upper, x0, Fminbox(LBFGS()), Optim.Options(;time_limit); autodiff=:forward)
             if !(res.f_converged || res.g_converged) && res.time_run > res.time_limit
                 n_time += 1
                 @debug "timeout" n_time
@@ -67,10 +67,10 @@ function bfgs_random_restarts(loss, lower, upper, n_restart;
         end
     end
 
-    x0s = SobolSeq(lower, upper)
+    x0s = SobolSeq(soft_lower, soft_upper)
     results = Any[]
     while length(results) < n_restart
-        res = do_opt(next!(x0s))
+        @time res = do_opt(next!(x0s))
         if !ismissing(res)
             push!(results, res)
         else
@@ -100,13 +100,7 @@ end
 
 function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_restart=20) where M <: AbstractModel
     space = default_space(M)
-    lower, upper = bounds(space)
-    space_size = upper .- lower
-    @assert all(space_size .> 0)
-
-    # Initialize in the center of the space? This doesn't seem to help
-    # q = space_size ./ 4; lower += q; upper -= q
-
+    hard_lower, soft_lower, soft_upper, hard_upper = all_bounds = bounds(space)
     L = Likelihood(trials)
     
     if isempty(lower)  # no free parameters
@@ -127,12 +121,12 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_res
 
         opt = begin
             if method == :samin
-                x0 = lower .+ rand(length(lower)) .* space_size
-                optimize(loss, lower, upper, x0, SAMIN(verbosity=0), Optim.Options(iterations=10^6))
+                x0 = soft_lower .+ rand(length(lower)) .* (soft_upper .- soft_lower)
+                optimize(loss, hard_lower, hard_upper, x0, SAMIN(verbosity=0), Optim.Options(iterations=10^6))
             elseif method == :bfgs
                 t = trials[1]
                 id = "$(name(M))-$(t.wid)-$(t.i)"
-                bfgs_random_restarts(loss, lower, upper, n_restart; id)
+                bfgs_random_restarts(loss, all_bounds..., n_restart; id)
             end
         end
         ismissing(opt) && return missing

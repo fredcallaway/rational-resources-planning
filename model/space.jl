@@ -1,13 +1,15 @@
 Space = OrderedDict{Symbol,Any}
 
 function bounds(space::Space)
-    lo, hi = Float64[], Float64[]
+    x = (Float64[], Float64[], Float64[], Float64[])
     for spec in values(space)
-        if spec isa Tuple
-            push!(lo, spec[1]); push!(hi, spec[2])
+        if length(spec) == 4
+            for i in 1:4
+                push!(x[i], spec[i])
+            end
         end
     end
-    lo, hi
+    x
 end
 
 function combinations(space::Space)

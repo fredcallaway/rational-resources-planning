@@ -1,6 +1,7 @@
 EXPERIMENT = "exp1"
 EXPAND_ONLY = true
-
+MAX_VALUE = 30.
+MAX_DEPTH = 3.
 
 #SKIP_GROUP = true
 #SKIP_FULL = true

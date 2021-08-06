@@ -47,15 +47,24 @@ function Base.display(model::FancyHeuristic{H,T}) where {H, T}
     end
 end
 
-
 function features(::Type{M}, m::MetaMDP, b::Belief) where M <: FancyHeuristic{H,T} where {H, T}
-    non_fancy = features(Heuristic{H,T}, m, b)
+    frontier = get_frontier(m, b)
+    expansion = map(frontier) do c
+        has_observed_parent(m.graph, b, c)
+    end
     (
-        non_fancy..., 
+        frontier = frontier,
+        expansion = expansion,
+        frontier_values = node_values(m, b)[frontier] ./ MAX_VALUE,
+        frontier_depths = node_depths(m)[frontier] ./ MAX_DEPTH,
+        term_reward = term_reward(m, b) ./ MAX_VALUE,
+        best_next = best_vs_next_value(m, b) ./ MAX_VALUE,
         prob_best = has_component(M, "ProbBest") ? prob_best_maximal(m, b) : 0,
-        best_path_dists = has_component(M, "ProbBetter") ? best_paths_value_dists(m, b) : missing
+        best_path_dists = has_component(M, "ProbBetter") ? best_paths_value_dists(m, b) : missing,
+        tmp = zeros(T, length(frontier)),  # pre-allocate for use in selection_probability
+        tmp2 = zeros(T, length(frontier)),  # pre-allocate for use in selection_probability
+        tmp3 = zeros(T, length(frontier)),  # pre-allocate for use in selection_probability
     )
-
 end
 
 function termination_probability(model::FancyHeuristic{H,T}, φ::NamedTuple)::T where {H,T}
@@ -148,23 +157,28 @@ end
 
 # ---------- Define parameter ranges for individual models ---------- #
 
-
-
-
 function default_space(::Type{FancyHeuristic{H}}) where H
-    ranges = Dict(
-        "Best" => (β_best=(0, 3),),
-        "Depth" => (β_depth=(0, 3),),
-        "Breadth" => (β_depth=(-3, 0),),
-        "Satisfice" => (β_satisfice=(0, 3), θ_term=(-150, 0)),
-        "BestNext" => (β_best_next=(0, 3), θ_term=(-150, 0)),
-        "DepthLimit" => (β_depthlim=(0, 30), θ_depthlim=(0, 5)),
-        "Prune" => (β_prune=(0, 3), θ_prune=(-30, 30)),
-        "Expand" => (β_expand=(0, 50),),
+    # note that values and depths are all scaled to (usually) be between 0 and 1
+    β_pos = (0, 0, 10, Inf)  # hard lower, plausible lower, plausible upper, hard upper
+    β_neg = (-Inf, -10, 0, 0)
+    θ_term = (-Inf, -10, 0, Inf)
+    θ_depthlim = (-Inf, 0, 1, Inf)
+    θ_prune = (-Inf, -1, 0, Inf)
+    θ_prob_better = (-Inf, 0, 1, Inf)
 
-        "ProbBetter" => (β_prob_better=(0, 100), θ_term=(-90, 90), θ_prob_better=(-30, 30)),
-        "ProbBest" => (β_prob_best=(0, 100), θ_term=(-90, 90))
+    ranges = Dict(
+        "Best" => (β_best=β_pos,),
+        "Depth" => (β_depth=β_pos,),
+        "Breadth" => (β_depth=β_neg,),
+        "Satisfice" => (β_satisfice=β_pos, θ_term),
+        "BestNext" => (β_best_next=β_pos, θ_term),
+        "DepthLimit" => (β_depthlim=β_pos, θ_depthlim),
+        "Prune" => (β_prune=β_pos, θ_prune),
+        "Expand" => (β_expand=β_pos,),
+        "ProbBetter" => (β_prob_better=β_pos, θ_term, θ_prob_better),
+        "ProbBest" => (β_prob_best=β_pos, θ_term)
     )
+
     x = string(H)
     components = Set()
     spec = split(x, "_")
@@ -181,13 +195,13 @@ function default_space(::Type{FancyHeuristic{H}}) where H
         :β_best_next => 0,
         :β_prob_best => 0,
         :β_prob_better => 0,
-        :θ_term => (-150, 0),
+        :θ_term => (θ_term,),
         :θ_prob_better => 0,
         :β_depthlim => 1e5,  # flag for inactive
         :θ_depthlim => 1e10,  # Inf breaks gradient
         :β_prune => 1e5,
         :θ_prune => -1e10,
-        :ε => (1e-3, 1),
+        :ε => (1e-3, .1, .5, 1.),
     )
     for (k, v) in pairs(merge((ranges[k] for k in components)...))
         @assert k in keys(space)
@@ -199,7 +213,7 @@ end
 
 function all_fancy_heuristic_models()
     base = ["Best", "Depth", "Breadth"]
-    whistles = ["Satisfice", "BestNext"]
+    whistles = ["Satisfice", "BestNext", "ProbBetter", "ProbBest"]
     if EXPAND_ONLY
         push!(whistles, "DepthLimit", "Prune")
     else
