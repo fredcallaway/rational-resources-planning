@@ -34,7 +34,7 @@ function logp(L::Likelihood, model::M)::T where M <: AbstractModel{T} where T <:
 end
 
 function bfgs_random_restarts(loss, hard_lower, soft_lower, soft_upper, hard_upper, n_restart; 
-                              time_limit=120, max_err=10, max_timeout=50, max_finite=10, id="null")
+                              time_limit=30, max_err=10, max_timeout=50, max_finite=10, id="null")
     #algorithms = [
     #    Fminbox(LBFGS()),
     #    Fminbox(LBFGS(linesearch=Optim.LineSearches.BackTracking())),
@@ -42,27 +42,44 @@ function bfgs_random_restarts(loss, hard_lower, soft_lower, soft_upper, hard_upp
     n_err = 0
     n_time = 0
     n_finite = 0
+    box = Box(hard_lower, hard_upper)
+    function wrap_loss(x)
+        loss(squash!(box, copy(x)))
+    end
 
     function do_opt(x0)
         if !isfinite(loss(x0))  # hopeless!
             n_finite += 1
             @debug "nonfinite loss" n_finite
+            if n_finite > max_finite
+                @error "$id: Too many timeouts while optimizing"
+                error("Optimization timeouts")
+            end
             return missing
         end
         try
-            # >30s indicates that the optimizer is stuck, which means it's not likely to find a good minimum anyway
-            res = optimize(loss, hard_lower, hard_upper, x0, Fminbox(LBFGS()), Optim.Options(;time_limit); autodiff=:forward)
+            # >~30s indicates that the optimizer is stuck, which means it's not likely to find a good minimum anyway
+            res = optimize(wrap_loss, unsquash!(box, copy(x0)), Optim.Options(;time_limit); autodiff=:forward)
             if !(res.f_converged || res.g_converged) && res.time_run > res.time_limit
                 n_time += 1
                 @debug "timeout" n_time
+                if n_time > max_timeout
+                    @error "$id: Too many timeouts while optimizing"
+                    error("Optimization timeouts")
+                end
                 return missing
             else
+                squash!(box, res.minimizer)
                 return res
             end
         catch err
             err isa InterruptException && rethrow(err)
             n_err += 1
-            @debug "error" n_err
+            @debug "error" err n_err
+            if n_err > max_err
+                @error "$id: Too many errors while optimizing"
+                rethrow(err)
+            end
             return missing
         end
     end
@@ -70,20 +87,9 @@ function bfgs_random_restarts(loss, hard_lower, soft_lower, soft_upper, hard_upp
     x0s = SobolSeq(soft_lower, soft_upper)
     results = Any[]
     while length(results) < n_restart
-        @time res = do_opt(next!(x0s))
+        res = do_opt(next!(x0s))
         if !ismissing(res)
             push!(results, res)
-        else
-            if n_err > max_err
-                @error "$id: Too many errors while optimizing"
-                rethrow(err)
-            elseif n_time > max_timeout
-                @error "$id: Too many timeouts while optimizing"
-                error("Optimization timeouts")
-            elseif n_finite > max_finite
-                @error "$id: Too many timeouts while optimizing"
-                error("Optimization timeouts")
-            end
         end
     end
     if n_err > max_err/2 || n_time > max_timeout/2 || n_finite > max_finite/2
@@ -103,8 +109,8 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_res
     hard_lower, soft_lower, soft_upper, hard_upper = all_bounds = bounds(space)
     L = Likelihood(trials)
     
-    if isempty(lower)  # no free parameters
-        model = create_model(M, lower, (), space)
+    if isempty(hard_lower)  # no free parameters
+        model = create_model(M, hard_lower, (), space)
         return model, -logp(L, model)
     end
 
