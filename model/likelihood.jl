@@ -104,7 +104,7 @@ function bfgs_random_restarts(loss, hard_lower, soft_lower, soft_upper, hard_upp
     partialsort(results, 1; by=o->o.minimum)  # best result
 end
 
-function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_restart=20) where M <: AbstractModel
+function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_restart=100) where M <: AbstractModel
     space = default_space(M)
     hard_lower, soft_lower, soft_upper, hard_upper = all_bounds = bounds(space)
     L = Likelihood(trials)

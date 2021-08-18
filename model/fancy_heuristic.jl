@@ -161,32 +161,23 @@ function default_space(::Type{FancyHeuristic{H}}) where H
     # note that values and depths are all scaled to (usually) be between 0 and 1
     β_pos = (0, 0, 10, Inf)  # hard lower, plausible lower, plausible upper, hard upper
     β_neg = (-Inf, -10, 0, 0)
-    θ_term = (-Inf, -10, 0, Inf)
     θ_depthlim = (-Inf, 0, 1, Inf)
     θ_prune = (-Inf, -1, 0, Inf)
     θ_prob_better = (-Inf, 0, 1, Inf)
 
-    ranges = Dict(
+    ranges = Dict{String,NamedTuple}(
         "Best" => (β_best=β_pos,),
         "Depth" => (β_depth=β_pos,),
         "Breadth" => (β_depth=β_neg,),
-        "Satisfice" => (β_satisfice=β_pos, θ_term),
-        "BestNext" => (β_best_next=β_pos, θ_term),
+        "Satisfice" => (β_satisfice=β_pos,),
+        "BestNext" => (β_best_next=β_pos,),
         "DepthLimit" => (β_depthlim=β_pos, θ_depthlim),
         "Prune" => (β_prune=β_pos, θ_prune),
         "Expand" => (β_expand=β_pos,),
-        "ProbBetter" => (β_prob_better=β_pos, θ_term, θ_prob_better),
-        "ProbBest" => (β_prob_best=β_pos, θ_term)
+        "ProbBetter" => (β_prob_better=β_pos, θ_prob_better),
+        "ProbBest" => (β_prob_best=β_pos,)
     )
 
-    x = string(H)
-    components = Set()
-    spec = split(x, "_")
-    push!(components, popfirst!(spec))
-
-    for ex in spec
-        push!(components, ex)
-    end
     space = Space(
         :β_best => 0,
         :β_depth => 0,
@@ -195,24 +186,25 @@ function default_space(::Type{FancyHeuristic{H}}) where H
         :β_best_next => 0,
         :β_prob_best => 0,
         :β_prob_better => 0,
-        :θ_term => (θ_term,),
+        :θ_term => (-Inf, -10, 0, Inf),
         :θ_prob_better => 0,
         :β_depthlim => 1e5,  # flag for inactive
         :θ_depthlim => 1e10,  # Inf breaks gradient
         :β_prune => 1e5,
         :θ_prune => -1e10,
-        :ε => (1e-3, .1, .5, 1.),
+        :ε => (.01, .1, .5, 1.),
     )
-    for (k, v) in pairs(merge((ranges[k] for k in components)...))
-        @assert k in keys(space)
-        space[k] = v
+
+    for component in split(string(H), "_")
+        for (k, v) in pairs(ranges[component])
+            @assert k in keys(space)
+            space[k] = v
+        end
     end
     space
 end
 
-
-function all_fancy_heuristic_models()
-    base = ["Best", "Depth", "Breadth"]
+function all_fancy_heuristic_models(base = ["Best", "Depth", "Breadth"])
     whistles = ["Satisfice", "BestNext", "ProbBetter", "ProbBest"]
     if EXPAND_ONLY
         push!(whistles, "DepthLimit", "Prune")
@@ -221,7 +213,6 @@ function all_fancy_heuristic_models()
     end
     
     models = map(Iterators.product(base, powerset(whistles))) do (b, ws)
-        "Satisfice" in ws || "BestNext" in ws || return missing
         spec = Symbol(join([b, ws...], "_"))
         FancyHeuristic{spec}
     end[:] |> skipmissing |> collect
