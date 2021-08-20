@@ -33,8 +33,9 @@ function logp(L::Likelihood, model::M)::T where M <: AbstractModel{T} where T <:
     total
 end
 
-function bfgs_random_restarts(loss, hard_lower, soft_lower, soft_upper, hard_upper, n_restart; 
-                              time_limit=30, max_err=10, max_timeout=50, max_finite=10, id="null")
+function random_restarts(loss, hard_lower, soft_lower, soft_upper, hard_upper, n_restart; 
+                         algorithm=LBFGS(), iterations=500, g_tol=1e-5,
+                         max_err=10, max_timeout=50, max_finite=10, id="null")
     #algorithms = [
     #    Fminbox(LBFGS()),
     #    Fminbox(LBFGS(linesearch=Optim.LineSearches.BackTracking())),
@@ -52,15 +53,16 @@ function bfgs_random_restarts(loss, hard_lower, soft_lower, soft_upper, hard_upp
             n_finite += 1
             @debug "nonfinite loss" n_finite
             if n_finite > max_finite
-                @error "$id: Too many timeouts while optimizing"
-                error("Optimization timeouts")
+                @error "$id: Too many non-finite losses while optimizing"
+                error("Optimization non-finite")
             end
             return missing
         end
         try
             # >~30s indicates that the optimizer is stuck, which means it's not likely to find a good minimum anyway
-            res = optimize(wrap_loss, unsquash!(box, copy(x0)), Optim.Options(;time_limit); autodiff=:forward)
-            if !(res.f_converged || res.g_converged) && res.time_run > res.time_limit
+            res = optimize(wrap_loss, unsquash!(box, copy(x0)), algorithm,
+                Optim.Options(;g_tol, iterations); autodiff=:forward)
+            if !(res.f_converged || res.g_converged) && res.iterations > iterations
                 n_time += 1
                 @debug "timeout" n_time
                 if n_time > max_timeout
@@ -96,15 +98,18 @@ function bfgs_random_restarts(loss, hard_lower, soft_lower, soft_upper, hard_upp
         @warn "$id: Difficulty optimizing" n_err n_time n_finite
     end
     losses = getfield.(results, :minimum)
-    very_good = minimum(losses) * 1.01
+    very_good = minimum(losses) * 1.05
     n_good = sum(losses .< very_good)
+    @info n_good
     if n_good < 5
-        @warn "$id: Only $n_good random restarts produced a very good minimum"
+        best_losses = partialsort(losses, 1:5)
+        @warn "$id: Only $n_good random restarts produced a very good minimum" best_losses
     end
     partialsort(results, 1; by=o->o.minimum)  # best result
 end
 
-function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_restart=100) where M <: AbstractModel
+function Distributions.fit(::Type{M}, trials::Vector{Trial}; 
+        method=:bfgs, n_restart=100, algorithm=LBFGS(), g_tol=1e-3) where M <: AbstractModel
     space = default_space(M)
     hard_lower, soft_lower, soft_upper, hard_upper = all_bounds = bounds(space)
     L = Likelihood(trials)
@@ -132,7 +137,7 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial}; method=:bfgs, n_res
             elseif method == :bfgs
                 t = trials[1]
                 id = "$(name(M))-$(t.wid)-$(t.i)"
-                bfgs_random_restarts(loss, all_bounds..., n_restart; id)
+                random_restarts(loss, all_bounds..., n_restart; id, algorithm, g_tol)
             end
         end
         ismissing(opt) && return missing
