@@ -12,6 +12,5 @@ include("features.jl")
 
 include("random.jl")
 include("heuristic.jl")
-include("fancy_heuristic.jl")
 include("optimal.jl")
 include("metagreedy.jl")
