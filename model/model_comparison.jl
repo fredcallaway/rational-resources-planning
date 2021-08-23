@@ -6,8 +6,6 @@ using DataFrames
 using ProgressMeter
 using Random: seed!, randperm, MersenneTwister
 
-
-
 include("conf.jl")
 println("Running model comparison for ", ARGS[1])
 
@@ -21,10 +19,6 @@ mkpath("$base_path/fits/cv")
 mkpath("$base_path/fits/group")
 
 redirect_worker_stderr("workerlog")
-
-
-
-
 
 # %% ==================== LOAD DATA ====================
 
