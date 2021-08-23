@@ -33,8 +33,9 @@ function logp(L::Likelihood, model::M)::T where M <: AbstractModel{T} where T <:
     total
 end
 
-function random_restarts(loss, hard_lower, soft_lower, soft_upper, hard_upper, n_restart; 
+function random_restarts(loss, hard_lower, soft_lower, soft_upper, hard_upper; 
                          algorithm=LBFGS(), iterations=500, g_tol=1e-5,
+                         replications=20, max_restart=20,
                          max_err=10, max_timeout=50, max_finite=10, id="null")
     #algorithms = [
     #    Fminbox(LBFGS()),
@@ -43,6 +44,9 @@ function random_restarts(loss, hard_lower, soft_lower, soft_upper, hard_upper, n
     n_err = 0
     n_time = 0
     n_finite = 0
+    n_close = -1
+    n_restart = 0
+
     box = Box(hard_lower, hard_upper)
     function wrap_loss(x)
         loss(squash!(box, copy(x)))
@@ -88,28 +92,31 @@ function random_restarts(loss, hard_lower, soft_lower, soft_upper, hard_upper, n
 
     x0s = SobolSeq(soft_lower, soft_upper)
     results = Any[]
-    while length(results) < n_restart
+    losses = Float64[]
+    while n_restart < max_restart
+        n_restart += 1
         res = do_opt(next!(x0s))
-        if !ismissing(res)
-            push!(results, res)
+        ismissing(res) && continue
+        push!(results, res)
+        push!(losses, res.minimum)
+        n_close = sum(losses .< 1.01 * minimum(losses))
+        if n_close >= replications
+            break  # success!
         end
     end
     if n_err > max_err/2 || n_time > max_timeout/2 || n_finite > max_finite/2
         @warn "$id: Difficulty optimizing" n_err n_time n_finite
     end
-    losses = getfield.(results, :minimum)
-    very_good = minimum(losses) * 1.05
-    n_good = sum(losses .< very_good)
-    @info n_good
-    if n_good < 5
+
+    if n_close < replications
         best_losses = partialsort(losses, 1:5)
-        @warn "$id: Only $n_good random restarts produced a very good minimum" best_losses
+        @warn "$id: Only $n_close random restarts produced a very good minimum" best_losses
     end
-    partialsort(results, 1; by=o->o.minimum)  # best result
+    results[argmin(losses)]
 end
 
 function Distributions.fit(::Type{M}, trials::Vector{Trial}; 
-        method=:bfgs, n_restart=100, algorithm=LBFGS(), g_tol=1e-3) where M <: AbstractModel
+        method=:restarts, opt_kws...) where M <: AbstractModel
     space = default_space(M)
     hard_lower, soft_lower, soft_upper, hard_upper = all_bounds = bounds(space)
     L = Likelihood(trials)
@@ -134,10 +141,10 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial};
             if method == :samin
                 x0 = soft_lower .+ rand(length(lower)) .* (soft_upper .- soft_lower)
                 optimize(loss, hard_lower, hard_upper, x0, SAMIN(verbosity=0), Optim.Options(iterations=10^6))
-            elseif method == :bfgs
+            elseif method == :restarts
                 t = trials[1]
                 id = "$(name(M))-$(t.wid)-$(t.i)"
-                random_restarts(loss, all_bounds..., n_restart; id, algorithm, g_tol)
+                random_restarts(loss, all_bounds...; id, opt_kws...)
             end
         end
         ismissing(opt) && return missing
