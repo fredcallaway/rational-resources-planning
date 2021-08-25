@@ -10,7 +10,7 @@ MAX_DEPTH = 3.
 # this quote thing allows us to refer to types that aren't defined yet
 QUOTE_MODELS = quote 
     [
-        all_fancy_heuristic_models(["Best"])...,
+        all_heuristic_models()...,
     ] 
 end
 

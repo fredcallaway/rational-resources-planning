@@ -308,7 +308,7 @@ function all_heuristic_models(base = ["Best", "Depth", "Breadth"])
     map(Iterators.product(base, powerset(whistles))) do (b, ws)
         spec = Symbol(join([b, ws...], "_"))
         Heuristic{spec}
-    end[:]
+    end[:] |> skipmissing |> collect
 end
 
 function has_component(::Type{<:Heuristic{H}}, ex) where H
