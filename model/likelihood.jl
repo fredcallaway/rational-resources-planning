@@ -118,6 +118,7 @@ function Distributions.fit(::Type{M}, trials::Vector{Trial};
     space = default_space(M)
     hard_lower, soft_lower, soft_upper, hard_upper = all_bounds = bounds(space)
     L = Likelihood(trials)
+    empty!(memoize_cache(memo_map))
     
     if isempty(hard_lower)  # no free parameters
         model = create_model(M, hard_lower, (), space)

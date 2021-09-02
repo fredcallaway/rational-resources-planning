@@ -1,6 +1,6 @@
 EXPERIMENT = "exp1"
-EXPAND_ONLY = true
 MAX_VALUE = 30.
+EXPAND_ONLY = true
 MAX_DEPTH = 3.
 
 #SKIP_GROUP = true
@@ -10,7 +10,11 @@ MAX_DEPTH = 3.
 # this quote thing allows us to refer to types that aren't defined yet
 QUOTE_MODELS = quote 
     [
-        all_heuristic_models()...,
+        OptimalPlus{:Default},
+        #MetaGreedy{:Default},
+        #Heuristic{:Random},
+        
+        #all_heuristic_models()...,
     ] 
 end
 

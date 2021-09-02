@@ -1,6 +1,9 @@
 EXPERIMENT = "exp3"
 EXPAND_ONLY = false
 
+MAX_VALUE = 30.
+MAX_DEPTH = 3
+
 MDP_IDS = [
     "6oCv6ld5V89",
     "IXcheAhOWH7",

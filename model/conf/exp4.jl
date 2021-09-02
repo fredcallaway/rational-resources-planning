@@ -2,15 +2,21 @@ EXPERIMENT = "exp4"
 EXPAND_ONLY = false
 FOLDS = 7
 
+MAX_VALUE = 30. # this value is the result of pre-scaling before I used MAX_VALUE
+MAX_DEPTH = 5
+
 QUOTE_MODELS = quote 
     [
-        OptimalPlus{:Default},
-        MetaGreedy{:Default},
-        Heuristic{:Random},
+        #OptimalPlus{:Default},
+        #MetaGreedy{:Default},
+        #Heuristic{:Random},
 
-        OptimalPlus{:Expand},
-        MetaGreedy{:Expand},
-        Heuristic{:Expand},
+        #OptimalPlus{:Expand},
+        #MetaGreedy{:Expand},
+        #Heuristic{:Expand},
+
+        all_heuristic_models()...
+
     ]
 end
 

@@ -180,8 +180,6 @@ end
 
 "Distributions of value of all paths with maximal expected value"
 function best_paths_value_dists(m, b)
-    rewards = [-10, -5, 5, 10]
-    @assert EXPERIMENT == "exp1"
     pvals = path_values(m, b)
     max_pval = maximum(pvals)
 
@@ -192,8 +190,6 @@ end
 
 "How likely is the best path actually the best (maximize over ties)"
 function prob_best_maximal(m, b)
-    rewards = [-10, -5, 5, 10]
-    @assert EXPERIMENT == "exp1"
     pvals = path_values(m, b)
     max_pval = maximum(pvals)
     # if multiple best paths, take the maximum probability of any of them
@@ -201,7 +197,8 @@ function prob_best_maximal(m, b)
         val != max_pval && return -Inf
         unobs = filter(i->!observed(b, i), pth)
         b1 = copy(b)
-        possible_unobs_vals = Iterators.product(fill(rewards, length(unobs))...)
+
+        possible_unobs_vals = Iterators.product((support(m.rewards[i]) for i in unobs)...)
         sum(possible_unobs_vals) do z
             b1[unobs] .= z
             own_value = sum(b1[pth])  # same as path_value(m, b1, pth) because pth is fully observed

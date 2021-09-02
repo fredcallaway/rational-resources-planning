@@ -1,11 +1,14 @@
 EXPERIMENT = "exp2"
 EXPAND_ONLY = true
 
+MAX_VALUE = 50.
+MAX_DEPTH = 5.
+
 QUOTE_MODELS = quote 
     [
-        OptimalPlus{:Default},
-        MetaGreedy{:Default},
-        Heuristic{:Random},
+        #OptimalPlus{:Default},
+        #MetaGreedy{:Default},
+        #Heuristic{:Random},
 
         all_heuristic_models()...
     ] 

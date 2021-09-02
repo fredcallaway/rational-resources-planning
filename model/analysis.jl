@@ -108,9 +108,9 @@ function click_features(d)
         max_competing=max_competing,
         best_next=best_vs_next_value(m, b),
         prob_maximal=prob_best_maximal(m, b),
+        min_depth=minimum(node_depths(m)[get_frontier(m, b)]; init=100)
     )
 end
-
 
 println("Computing click features")
 mkpath("$results_path/click_features")

@@ -31,7 +31,9 @@ m = flat_trials[1].m
         end |> skipmissing |> (x -> isempty(x) ? NaN : mean(x))
     end
 end
+
 # %% --------
+
 println("Computing best-first rate under optimal policy")
 res = @showprogress map(glob("$base_path/sims/Optimal-cost*")) do f
     cost, mid = match(r"cost(.*)-(.*)", f).captures
