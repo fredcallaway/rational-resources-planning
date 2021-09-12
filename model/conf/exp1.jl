@@ -11,10 +11,10 @@ MAX_DEPTH = 3.
 QUOTE_MODELS = quote 
     [
         OptimalPlus{:Default},
-        #MetaGreedy{:Default},
-        #Heuristic{:Random},
+        MetaGreedy{:Default},
+        Heuristic{:Random},
         
-        #all_heuristic_models()...,
+        all_heuristic_models()...,
     ] 
 end
 
@@ -22,6 +22,14 @@ QUOTE_PARETO_MODELS = quote
     [
         RandomSelection,
         MetaGreedy,
-        Heuristic{:Best_Full},
+        Heuristic{:Best_Satisfice_BestNext_DepthLimit_Prune},
     ]
 end
+
+SIM_MODELS = [
+    "Random",
+    "OptimalPlus",
+    "Best",
+    "Breadth",
+    "Depth",
+]

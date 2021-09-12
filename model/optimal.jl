@@ -72,10 +72,10 @@ name(::OptimalPlus{H,T}) where {H,T} = _optname(H)
 
 default_space(::Type{OptimalPlus{:Default}}) = Space(
     :cost => COSTS,
-    :β_select => (1e-6, 50),
-    :β_term => (1e-6, 50),
+    :β_select => (0, 0, 50, Inf),
+    :β_term => (0, 0, 20, Inf),
     :β_expand => 0.,
-    :ε => (1e-3, 1)
+    :ε => (.01, .1, .5, 1.)
 )
 
 default_space(::Type{OptimalPlus{:Expand}}) = 

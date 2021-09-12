@@ -1,21 +1,18 @@
+if isempty(ARGS)
+    push!(ARGS, "exp1")
+elseif ARGS[1] != "exp1"
+    println("Nothing to do for this experiment")
+end
+
 using JSON
 using Glob
 using ProgressMeter
 
-@everywhere begin
-    include("utils.jl")
-    include("mdp.jl")
-    include("data.jl")
-    include("models.jl")
-    include("simulation.jl")
-
-end
 include("conf.jl")
+@everywhere include("base.jl")
+@everywhere include("models.jl")
 
-@assert EXPERIMENT == 1
-all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
-flat_trials = flatten(values(all_trials));
-m = flat_trials[1].m
+m = (load_trials(EXPERIMENT) |> values |> first |> first).m
 
 @everywhere begin
     m = $m
@@ -49,10 +46,6 @@ end
 res |> json |> write("$results_path/bestfirst_optimal.json")
 
 println("Computing best-first rate under random policy")
-@everywhere begin
-    include("simulation.jl")
-    m = $flat_trials[1].m
-end
 res = @showprogress pmap(range(0, 1, length=201)) do p_term
     model = RandomSelection(p_term)
     trials = [simulate(model, m) for i in 1:100000]
