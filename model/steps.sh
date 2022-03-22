@@ -17,4 +17,4 @@ julia -p auto model_comparison.jl $exp
 julia -p auto simulate.jl $exp
 julia analysis.jl $exp
 
-julia best_first.jl $exp  # only needed for exp1
+julia best_first_rate.jl $exp  # only needed for exp1
