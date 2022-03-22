@@ -4,12 +4,6 @@ EXPAND_ONLY = false
 MAX_VALUE = 30.
 MAX_DEPTH = 3
 
-MDP_IDS = [
-    "6oCv6ld5V89",
-    "IXcheAhOWH7",
-    "95YVmaymRm9",
-]
-
 QUOTE_MODELS = quote 
     [
         OptimalPlus{:Default},
@@ -37,3 +31,11 @@ QUOTE_PARETO_MODELS = quote
         Heuristic{:Breadth_Satisfice_BestNext},
     ]
 end
+
+QUOTE_SIM_MODELS = quote [
+    OptimalPlus{:Default},
+    OptimalPlus{:Expand},
+    MetaGreedy{:Default},
+    Heuristic{:Random},
+    all_heuristic_models(whistles=pick_whistles(exclude=["ProbBetter", "ProbBest"]))...
+] end

@@ -7,13 +7,13 @@ MAX_DEPTH = 5
 
 QUOTE_MODELS = quote 
     [
-        #OptimalPlus{:Default},
-        #MetaGreedy{:Default},
-        #Heuristic{:Random},
+        OptimalPlus{:Default},
+        MetaGreedy{:Default},
+        Heuristic{:Random},
 
-        #OptimalPlus{:Expand},
-        #MetaGreedy{:Expand},
-        #Heuristic{:Expand},
+        OptimalPlus{:Expand},
+        MetaGreedy{:Expand},
+        Heuristic{:Expand},
 
         all_heuristic_models()...
 
@@ -30,3 +30,11 @@ QUOTE_PARETO_MODELS = quote
         Heuristic{:Breadth_Satisfice_BestNext},
     ]
 end
+
+QUOTE_SIM_MODELS = quote [
+    OptimalPlus{:Default},
+    OptimalPlus{:Expand},
+    MetaGreedy{:Default},
+    Heuristic{:Random},
+    all_heuristic_models(whistles=pick_whistles(exclude=["ProbBetter", "ProbBest"]))...
+] end

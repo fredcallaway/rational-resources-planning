@@ -15,6 +15,9 @@ mkpath("$base_path/sims/")
 @everywhere function purify(model::OptimalPlus)
     OptimalPlus{:Pure,Float64}(model.cost, 1e5, 1e5, 0., 0.)
 end
+SIM_MODELS = eval(QUOTE_SIM_MODELS)
+
+# %% --------
 
 @everywhere function run_simulation(model, wid, mdps; n_repeat=10)
     try
@@ -23,7 +26,6 @@ end
         if isfile(file) && !FORCE
             println(file, " already exists. Skipping.")
         end
-        GC.gc()  # minimize risk of memory overload
         sims = map(repeat(mdps, n_repeat)) do m
             simulate(model, m; wid=model_wid)
         end
@@ -39,22 +41,28 @@ end
     catch err
         @error "Error in run_simulation" err model wid mdps
     end
+    if model isa OptimalPlus
+        # clear the value function from memory
+        empty!(memoize_cache(load_V)); GC.gc()
+    end
 end
 
 function pick_models(flag)
     if flag == :optimal
         println("Only simulating optimal model")
-        ["OptimalPlus"]
+        filter(M -> M <: OptimalPlus, SIM_MODELS)
     elseif flag == :nonoptimal
         println("Only simulating non-optimal models")
-        filter(!isequal("OptimalPlus"), SIM_MODELS)
+        filter(M -> !(M <: OptimalPlus), SIM_MODELS)
+    else
+        SIM_MODELS
     end
 end
 
 function do_simulate(flag=:null)
     all_trials = load_trials(EXPERIMENT) |> OrderedDict |> sort!
 
-    if flag != :nonoptimal
+    if flag != :nonoptimal && EXPERIMENT == "exp1"
         mdps = unique(t.m for t in flatten(values(all_trials)))
         println("Optimal simulations for each cost")
         @showprogress pmap(Iterators.product(mdps, COSTS)) do (m, cost)
@@ -63,8 +71,8 @@ function do_simulate(flag=:null)
         end
     end
 
-    jobs = product(collect(pairs(all_trials)), pick_models(flag)) do (wid, trials), mname
-        model = deserialize("$base_path/fits/full/$mname-$wid").model
+    jobs = product(collect(pairs(all_trials)), pick_models(flag)) do (wid, trials), model_class
+        model = deserialize("$base_path/fits/full/$(name(model_class))-$wid").model
         mdps = [t.m for t in trials]
         model, wid, mdps
     end

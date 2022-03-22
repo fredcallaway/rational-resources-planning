@@ -1,5 +1,5 @@
 using Distributed
-
+using ProgressMeter
 @everywhere include("utils.jl")
 @everywhere include("mdp.jl")
 @everywhere include("data.jl")
@@ -29,7 +29,7 @@ end
 
 function write_mdps(ids)
     base_mdps = map(ids) do i
-        deserialize("mdps/base/$i")
+        deserialize("mdps/base/$i")c
     end
     all_mdps = [mutate(m, cost=c) for m in base_mdps, c in COSTS]
     
@@ -98,7 +98,7 @@ if basename(PROGRAM_FILE) == basename(@__FILE__)
             all_ids = map(Iterators.product(mdps, COSTS)) do (m, cost)
                 id(mutate(m, cost=cost))
             end
-            pmap(solve_mdp, all_ids)
+            @showprogress pmap(solve_mdp, all_ids)
         else
             do_job(eval(Meta.parse(ARGS[1])))
         end

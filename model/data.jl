@@ -12,7 +12,7 @@ struct Trial
     bs::Vector{Belief}
     cs::Vector{Int}
     score::Float64
-    rts::Vector
+    rts::Vector  # these are not actually used
     path::Vector{Int}
 end
 StableHashes.shash(t::Trial, h::UInt64) = shash(t.wid, shash(t.i, h))
@@ -64,7 +64,8 @@ function Trial(wid::String, i::Int, t::Dict{String,Any})
     push!(bs, b)
     push!(cs, TERM)
     path = Int.(t["route"] .+ 1)[2:end]
-    rts = [x == nothing ? NaN : float(x) for x in t["rts"]]
+    # rts = [x == nothing ? NaN : float(x) for x in t["rts"]]
+    rts = Float64[]
     Trial(m, wid, i, bs, cs, get(t, "score", NaN), rts, path)
 end
 

@@ -6,9 +6,9 @@ MAX_DEPTH = 5.
 
 QUOTE_MODELS = quote 
     [
-        #OptimalPlus{:Default},
-        #MetaGreedy{:Default},
-        #Heuristic{:Random},
+        OptimalPlus{:Default},
+        MetaGreedy{:Default},
+        Heuristic{:Random},
 
         all_heuristic_models()...
     ] 
@@ -19,9 +19,9 @@ QUOTE_PARETO_MODELS = quote
         RandomSelection,
         MetaGreedy,
         
-        Heuristic{:Best_Full},
-        Heuristic{:Depth_Full},
-        Heuristic{:Breadth_Full},
+        Heuristic{:Best_Satisfice_BestNext_DepthLimit_Prune},
+        Heuristic{:Depth_Satisfice_BestNext_DepthLimit_Prune},
+        Heuristic{:Breadth_Satisfice_BestNext_DepthLimit_Prune},
         
         # Heuristic{:Best_Satisfice_BestNext_Prune},
         # Heuristic{:Depth_Satisfice_BestNext_Prune},
@@ -32,3 +32,11 @@ QUOTE_PARETO_MODELS = quote
         # Heuristic{:Breadth_Satisfice_BestNext},
     ]
 end
+
+QUOTE_SIM_MODELS = quote [
+    OptimalPlus{:Default},
+    MetaGreedy{:Default},
+    Heuristic{:Random},
+    all_heuristic_models(whistles=pick_whistles(exclude=["DepthLimit", "ProbBetter", "ProbBest"]))...
+] end
+

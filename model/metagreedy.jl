@@ -23,7 +23,7 @@ default_space(::Type{MetaGreedy{:Default}}) = Space(
 )
 
 default_space(::Type{MetaGreedy{:Expand}}) = 
-    change_space(MetaGreedy{:Default}, β_expand=(1e-6, 50))
+    change_space(MetaGreedy{:Default}, β_expand=(0, 0, 50, Inf))
 
 function voi1(m, b, c)
     mapreduce(+, results(m, b, c)) do (p, b, r)

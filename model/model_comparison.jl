@@ -49,7 +49,7 @@ if !(@isdefined(SKIP_GROUP) && SKIP_GROUP)
             serialize(file, result)
             return result
         end
-        #serialize("$base_path/group_fits", group_fits)
+        serialize("$base_path/group_fits", group_fits)
         println("Wrote $base_path/group_fits")
     end
 end
@@ -63,7 +63,7 @@ if !(@isdefined(SKIP_FULL) && SKIP_FULL)
             wid = trials[1].wid; mname = name(M)
             file = "$base_path/fits/full/$mname-$wid"
             if isfile(file)
-                println("$file already exists, skipping.")
+                #println("$file already exists, skipping.")
                 return deserialize(file)
             end
             try
@@ -77,7 +77,7 @@ if !(@isdefined(SKIP_FULL) && SKIP_FULL)
             end
 
         end;
-        #serialize("$base_path/full_fits", full_fits)
+        serialize("$base_path/full_fits", full_fits)
 
         function mle_table(M)
             i = findfirst(MODELS .== M)
@@ -150,7 +150,7 @@ cv_fits = let
             # (model=model, nll=NaN)
         end
     end
-    #serialize("$base_path/cv_fits", cv_fits)
+    serialize("$base_path/cv_fits", cv_fits)
 
     function cv_table(M)
         mi = findfirst(MODELS .== M)

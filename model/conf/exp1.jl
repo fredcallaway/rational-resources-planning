@@ -23,13 +23,12 @@ QUOTE_PARETO_MODELS = quote
         RandomSelection,
         MetaGreedy,
         Heuristic{:Best_Satisfice_BestNext_DepthLimit_Prune},
+        #Heuristic{:Best_ProbBest},  # too slow :(
     ]
 end
 
-SIM_MODELS = [
-    "Random",
-    "OptimalPlus",
-    "Best",
-    "Breadth",
-    "Depth",
-]
+QUOTE_SIM_MODELS = quote [
+    OptimalPlus{:Default},
+    MetaGreedy{:Default},
+    Heuristic{:Random},
+] end

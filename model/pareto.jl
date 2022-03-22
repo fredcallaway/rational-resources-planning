@@ -37,7 +37,7 @@ function sample_models(M, n)
     space = default_space(M)
     space[:ε] = 0.
     space[:β_click] = 100.
-    lower, upper = bounds(space)
+    _, lower, upper, _ = bounds(space)
     seq = SobolSeq(lower, upper)
     skip(seq, n)
     map(1:n) do i
@@ -59,6 +59,12 @@ function sample_models(::Type{MetaGreedy}, n)
 end
 
 function pareto_front(M, m; n_candidate=N_CANDIDATE, n_eval=N_SIM)
+    #if has_component(M, "ProbBest")
+    #    # this one is slow so we have to turn down the compute
+    #    println("CONFIRMED")
+    #    n_eval = 10000
+    #    n_candidate = 10000
+    #end
     candidates = @showprogress pmap(sample_models(M, n_candidate)) do model
         mrc = mean_reward_clicks(Simulator(model, m), N=n_eval)
         (model=name(M), mdp=id(m), namedtuple(model)..., mrc...)
@@ -101,6 +107,34 @@ function write_optimal_pareto(;force=false)
         end
     end
 end
+
+# %% --------
+function write_optimal_pareto(;force=false)
+    @showprogress pmap(all_ids) do i
+        f = "mdps/pareto/$i-Optimal.csv"
+        if !force && isfile(f)
+            println("$f already exists")
+        else
+            println("Generating $f...")
+            V = load_V_nomem(i)
+            m = mutate(V.m, cost=0)
+            pol = OptimalPolicy(m, V)
+            res = (model="Optimal", mdp=id(m), cost=V.m.cost, mean_reward_clicks(pol)...)
+            ress = [res]
+
+            if !EXPAND_ONLY
+                pol2 = OptimalPolicyExpandOnly(m, V)
+                res2 = (model="OptimalPlusExpand", mdp=id(m), cost=V.m.cost, mean_reward_clicks(pol2)...)
+                push!(ress, res2)
+            end
+
+            CSV.write(f, ress)  # one/two line csv
+            # println("Wrote $f")
+        end
+    end
+end
+
+# %% --------
 
 function write_heuristic_pareto(;force=false)
     # Hs = [:BestFirst, :BreadthFirst, :DepthFirst, :BestPlusDepth, :BestPlusBreadth

@@ -4,6 +4,8 @@ using StatsFuns: logistic
 
 # ---------- Base code for  heuristic models ---------- #
 
+# Note: I am horribly abusing parametric types (the H parameter)
+# and this makes the considerably slower due to constant compiling ... oh well
 struct Heuristic{H,T} <: AbstractModel{T}
     # Selection rule weights
     β_best::T
@@ -244,7 +246,7 @@ default_space(::Type{Heuristic{:Random}}) = Space(
     :θ_depthlim => 1e10,  # Inf breaks gradient
     :β_prune => 1e5,
     :θ_prune => -1e10,
-    :ε => 0,
+    :ε => .01,
 )
 
 function default_space(::Type{Heuristic{H}}) where H
@@ -294,14 +296,20 @@ function default_space(::Type{Heuristic{H}}) where H
     space
 end
 
-function all_heuristic_models(base = ["Best", "Depth", "Breadth"])
+function pick_whistles(;exclude=String[])
     whistles = ["Satisfice", "BestNext", "ProbBetter", "ProbBest"]
     if EXPAND_ONLY
         push!(whistles, "DepthLimit", "Prune")
     else
         push!(whistles, "Expand")
     end
-    
+    filter(whistles) do x
+        !(x in exclude)
+    end
+end
+
+
+function all_heuristic_models(base = ["Best", "Depth", "Breadth"]; whistles=pick_whistles())    
     map(Iterators.product(base, powerset(whistles))) do (b, ws)
         spec = Symbol(join([b, ws...], "_"))
         Heuristic{spec}

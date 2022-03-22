@@ -16,12 +16,12 @@ struct Optimal{T} <: AbstractModel{T}
     β::T
     ε::T
 end
+name(::Optimal) = "Optimal"
 
 default_space(::Type{M}) where M <: Optimal = Space(
     :cost => COSTS,
     :β => (1e-6, 50),
-    # :β_expansion => # TODO
-    :ε => (1e-3, 1)
+    :ε => (.01, 1)
 )
 
 features(::Type{M}, d::Datum) where M <: Optimal = (
@@ -79,7 +79,7 @@ default_space(::Type{OptimalPlus{:Default}}) = Space(
 )
 
 default_space(::Type{OptimalPlus{:Expand}}) = 
-    change_space(OptimalPlus{:Default}, β_expand=(1e-6, 50))
+    change_space(OptimalPlus{:Default}, β_expand=(0, 0, 50, Inf))
 
 function features(::Type{OptimalPlus{H,T}}, d::Datum) where {H,T}
     qs = get_qs(d)
