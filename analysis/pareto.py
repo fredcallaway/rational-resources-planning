@@ -4,11 +4,12 @@ mdp2var = {}
 for x in tdf[['variance', 'mdp']].itertuples():
     mdp2var[x.mdp] = x.variance
 
-full_model_pareto = pd.concat((pd.read_csv(f) for f in glob('../model/mdps/pareto/*')), sort=True)
+full_model_pareto = pd.concat((pd.read_csv(f) for f in glob('../model/mdps/pareto/*.csv')), sort=True)
 # model_pareto.model = model_pareto.model.str.replace('RandomSelection', 'Random')
 
 def load_pareto(mdps):
     model_pareto = full_model_pareto.set_index('mdp').loc[mdps].reset_index()
+    model_pareto.model.unique()
     model_pareto['variance'] = model_pareto.mdp.apply(mdp2var.get)
     model_pareto.set_index(['variance', 'model'], inplace=True)
     model_pareto.sort_values('cost', inplace=True)
@@ -90,6 +91,7 @@ def plot_pareto(axes=None, legend=True, fit_reg=False, models=PARETO_MODELS):
             plt.ylabel('')
 
 # %% --------
+import scipy
 
 # This is like "if EXPERIMENT == 1:" except it doesn't pollute the global namespace
 @do_if(EXPERIMENT == 1)
@@ -135,8 +137,12 @@ def compute_pareto_scores():
 
     relative = (df.score - df.random) / (df.optimal - df.random)
 
-    write_tex(f'pareto_loss', f'{loss.mean():.2f} ({pct_loss.mean()*100:.0f}\%)')
+    write_tex(f'pareto_loss', f'{loss.mean():.2f}')  #  ({pct_loss.mean()*100:.0f}\%)
     write_tex(f'pareto_gain', f'{gain.mean():.2f}')
     write_tex(f'pareto_relative', f'{100*relative.mean():.1f}\%')
-    W = wilcoxon(gain)
-    write_tex(f'pareto_gain_wilcoxon', f'$Z = {W.statistic:.2f}, {pval(W.pvalue)}$')
+
+    lo, hi = bootstrap_confint(gain)
+    p = wilcoxon(gain).pvalue
+    z = abs(scipy.stats.norm.ppf(p/2)) 
+    write_tex(f'pareto_gain_ci', f'95\\% CI [{lo:.2f}, {hi:.2f}]')
+    write_tex(f'pareto_gain_wilcoxon', f'$z = {z:.2f}, {pval(p)}$')

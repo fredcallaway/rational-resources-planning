@@ -3,14 +3,15 @@
 
 def breadth_depth_data(models, noclick='drop'):
     dfs = []
-    d = tdf.set_index('variance').copy()
+    d = tdf.reset_index().set_index('variance').copy()
     d['agent'] = 'Human'
     dfs.append(d)
     for k in models:
         d = model_trial_features(k)
+        d['wid'] = k
         dfs.append(d)
     data = pd.concat(dfs, sort=False)
-    data = data[['agent', 'first_revealed', 'second_same']].copy()
+    data = data[['agent', 'wid', 'first_revealed', 'second_same']].copy()
     data = data.loc[~data.first_revealed.isna()]  # no first click
 
     data.first_revealed = data.first_revealed.astype(int)
@@ -30,7 +31,10 @@ def plot_second_click(axes=None, models=['OptimalPlus', 'Best', 'Breadth', 'Dept
     for i, v in enumerate(VARIANCES):
         plt.sca(axes.flat[i])
         agents = [*reversed(models), 'Human']
-        data = bdd.loc[v].query('agent == @agents').set_index('agent')
+        data = bdd.loc[v].query('agent == @agents')
+
+        grouped = data.groupby(['agent', 'wid', 'first_revealed']).mean().reset_index()
+        print(grouped.query('agent == "Human"').first_revealed.value_counts())
 
         # for m in reversed(models):
         #     highlight = {'decreasing': 'Breadth', 'constant': 'Best', 'increasing': 'Depth'}[v]
@@ -44,7 +48,7 @@ def plot_second_click(axes=None, models=['OptimalPlus', 'Best', 'Breadth', 'Dept
         #     data=data.loc['Human'], legend=False)
         
         sns.pointplot('first_revealed', 'second_same', hue='agent', hue_order=agents,
-            palette=palette, data=data.reset_index(), legend=None)
+            palette=palette, data=grouped, legend=None)
         plt.legend().remove()
 
         plt.xlabel('First Revealed Value')
@@ -97,6 +101,7 @@ def first_click_depth(axes=None):
             rot=0, ax=ax, legend=i==0)
         ax.set_ylim(0, 1)
         ax.set_xlabel('First Clicked Depth')
+        ax.set_xticklabels([1,2,3])
         if i == 0:
             ax.set_ylabel('Proportion of Trials')
             print('hello')

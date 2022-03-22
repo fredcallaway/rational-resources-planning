@@ -1,6 +1,7 @@
 %reset -f
 %run -i setup 2
 figs.nosave = True
+%run -i termination
 %run -i pareto
 %run -i model_comparison
 figs.nosave = False

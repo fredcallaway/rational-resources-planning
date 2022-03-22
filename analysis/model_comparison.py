@@ -1,44 +1,33 @@
 # %% ==================== Load predictions ====================
-def get_logp():
-    preds = pd.DataFrame(get_result(VERSION, 'predictions.json')).set_index('wid')
-    res = preds.apply(lambda d: {k: p[d.c] for k, p in d.predictions.items()}, axis=1)
-    logp = np.log(pd.DataFrame(list(res.values)))
-    logp.set_index(preds.index, inplace=True)
-    logp['variance'] = pdf.variance
-    logp = logp.loc[list(pdf.index)].reset_index()
-    assert set(logp.wid) == set(pdf.index)
-    return logp.set_index(['variance', 'wid'])
 
-logp = get_logp()
-total = logp.sum()
+def get_fits():
+    models = get_result(VERSION, "param_counts.json").keys()
+    fits = load_fits(VERSION, models).set_index('wid')
+    fits['variance'] = pdf.variance
+    # fits['n_act'] = load_cf('Human').index.value_counts()
+    # fits['geometric_like'] = np.exp(fits.cv_nll / fits.n_act)
+    assert set(fits.index) == set(pdf.index)
+    return fits.reset_index().set_index(['variance', 'wid'])
 
-# %% --------
+fits = get_fits()
+n_act = load_cf('Human').variance.value_counts()
+totals = fits.groupby(['variance', 'model']).cv_nll.sum().reset_index('model')
+assert np.isfinite(totals.cv_nll).all()
 
-logp.Fancy_Best_Satisfice_BestNext.sum()
-logp.Fancy_Best_Satisfice.sum()
+if len(n_act) == 1:
+    # Pandas can't figure this out for some reason...
+    avg_nll = totals.cv_nll / float(n_act)
+else:
+    avg_nll = totals.cv_nll / n_act
 
-total.loc[['Fancy_Best_Satisfice', 'Best_Satisfice', 'Fancy_Best_BestNext', 'Best_BestNext']]
+totals['geometric_like'] = list(np.exp(-avg_nll))
+geometric_like = totals.reset_index().set_index(['variance', 'model']).geometric_like
 
-# %% --------
-base = total.filter(regex='^Best')
-fancy = total.filter(regex='^Fancy_Best')
-fancy.index = fancy.index.str.strip('Fancy_')
-X = pd.DataFrame({'value': base, 'probability': fancy})
-X.plot()
-show()
-# %% --------
-# plt.scatter(X.value, X.probability)
-show()
-# %% --------
-plt.plot(X.values.T, color='k')
-plt.xticks([0, 1], ["Value", "Probability"])
-plt.xlim(-0.2, 1.2)
-show()
-
+totals.query('model != "OptimalPlus"').reset_index().set_index('model').groupby('variance').geometric_like.idxmax()
 # %% ==================== Choose models to plot ====================
 
 BASIC = ['Random', 'MetaGreedy', 'OptimalPlus']
-HEURISTICS = ['Fancy_Breadth', 'Fancy_Depth', 'Fancy_Best']
+HEURISTICS = ['Breadth', 'Depth', 'Best']
 MECHANISMS = ['Satisfice', 'BestNext']
 
 if EXPERIMENT >= 3:
@@ -48,62 +37,64 @@ else:
 
 COMPARISON_MODELS = list(BASIC)
 
+
+avg_across_variance = geometric_like.groupby(['model']).mean()
 best_heuristic = [
-    total.filter(regex=f'^{model_class}*').idxmax()
+    avg_across_variance.filter(regex=f'^{model_class}(_Satisfice)?(_BestNext)?(_DepthLimit)?(_Prune)?(_Expand)?$').idxmax()
+    for model_class in HEURISTICS
+]
+best_heuristic_no_expand = [
+    avg_across_variance.filter(regex=f'^{model_class}(_Satisfice)?(_BestNext)?(_DepthLimit)?(_Prune)?$').idxmax()
     for model_class in HEURISTICS
 ]
 best_heuristic_no_depthlimit = [
-    total.filter(regex=f'^{model_class}(_Satisfice)?(_BestNext)?(_Prune)?$').idxmax()
+    avg_across_variance.filter(regex=f'^{model_class}(_Satisfice)?(_BestNext)?(_Prune)?$').idxmax()
     for model_class in ['Breadth', 'Depth', 'Best']
 ]
 best_heuristic_no_depthlimit_noprune = [
-    total.filter(regex=f'^{model_class}(_Satisfice)?(_BestNext)?$').idxmax()
+    avg_across_variance.filter(regex=f'^{model_class}(_Satisfice)?(_BestNext)?$').idxmax()
     for model_class in ['Breadth', 'Depth', 'Best']
 ]
 
 if EXPERIMENT == 1:
     COMPARISON_MODELS.extend(best_heuristic)
     COMPARISON_MODELS.extend([
-        'Fancy_Best_BestNext_DepthLimit',
-        'Fancy_Best_Satisfice_BestNext_DepthLimit_Prune',
-        'Fancy_Best_BestNext',
-        'Fancy_Best_Satisfice',
+        # 'Best_BestNext_DepthLimit',
+        'Best_Satisfice_BestNext_DepthLimit_Prune',
+        'Best_BestNext',
+        'Best_Satisfice',
         'Best_DepthLimit',
         'Best_Prune',
         'Best'
     ])
-
 elif EXPERIMENT == 2:
     COMPARISON_MODELS.extend(best_heuristic_no_depthlimit)
 else: # 3 and 4
     COMPARISON_MODELS.extend(['Expand', 'MetaGreedyExpand', 'OptimalPlusExpand'])
-    no_expand = [m.replace('_Expand', '') for m in best_heuristic]
-    COMPARISON_MODELS.extend(no_expand)
-    COMPARISON_MODELS.extend(m + '_Expand' for m in no_expand)
-
-print(COMPARISON_MODELS)
+    COMPARISON_MODELS.extend(best_heuristic)
+    COMPARISON_MODELS.extend(best_heuristic_no_expand)
+    # no_expand = [m.replace('_Expand', '') for m in best_heuristic]
+    # COMPARISON_MODELS.extend(no_expand)
+    # COMPARISON_MODELS.extend(m + '_Expand' for m in no_expand)
 
 # %% ==================== Plots ====================
+label = 'Geometric Mean\nLikelihood'
 
-def plot_model_performance(L, label, axes=None):
-    if EXPERIMENT == 1:
-        return plot_model_performance_vertical(L, label, axes)
-    if EXPERIMENT >= 3:
-        return plot_model_performance_expansion(L, label, axes)
+def plot_like_horizontal(axes=None):
     if axes is None:
-        L = L.groupby('variance').mean()
         fig, axes = setup_variance_plot()
     for i, v in enumerate(VARIANCES):
         plt.sca(axes.flat[i])
         pal = [palette[m] for m in COMPARISON_MODELS]
-        L.loc[v].loc[COMPARISON_MODELS].plot.barh(color=pal)
+        geometric_like.loc[v].loc[COMPARISON_MODELS].plot.barh(color=pal)
 
         plt.xlabel(label.replace('\n', ' '))
+        plt.ylabel('')
         if i != 0:
             plt.yticks(())
     figs.reformat_ticks(yaxis=True, ax=axes.flat[0])
 
-def plot_model_performance_vertical(L, label, ax=None):
+def plot_like_vertical(ax=None):
     if ax is None:
         plt.figure(figsize=(8,4))
         ax = plt.gca()
@@ -113,28 +104,14 @@ def plot_model_performance_vertical(L, label, ax=None):
     for i in range(6, len(pal)):
         pal[i] = lg
 
-    print(L.shape)
-    x = L.groupby('variance').mean().loc['constant'].loc[COMPARISON_MODELS]
-    x.plot.bar(color=pal)
-    
-    # def geometric_mean(x):
-        # return np.exp(np.log(x).mean())
-    # sns.barplot(data=np.exp(logp[COMPARISON_MODELS]), palette=pal, estimator=geometric_mean)
-
-    # up = [i for i, model in enumerate(x.index) if def_better[model]]
-    # plt.scatter(up, x.iloc[up] + 0.03, marker='^', c='k', alpha=0.8, s=15)
-
-    # all_better_or_worse = (def_better | def_worse).drop('OptimalPlus').all()
-    # if not all_better_or_worse:
-    #     down = [i for i, model in enumerate(x.index) if def_worse[model]]
-    #     plt.scatter(down, x.iloc[down] + 0.03, marker='_', c='k', alpha=0.8, s=15)
+    geometric_like.loc['constant'].loc[COMPARISON_MODELS].plot.bar(color=pal)
 
     plt.xticks(rotation=35, ha="right")
     figs.reformat_ticks()
     plt.ylabel(label)
+    plt.xlabel('')
 
-
-def plot_model_performance_expansion(L, label, axes=None):
+def plot_like_expansion(axes=None):
     # L = L.groupby('variance').mean()
     if axes is None:
         if EXPERIMENT == 4:
@@ -151,8 +128,9 @@ def plot_model_performance_expansion(L, label, axes=None):
 
         for models in [bottom_models, top_models]:
             pal = [palette[m] for m in models]
-            ax = L.loc[v].loc[models].plot.barh(color=pal)
+            ax = geometric_like.loc[v].loc[models].plot.barh(color=pal)
 
+        plt.ylabel('')
         plt.xlabel(label.replace('\n', ' '))
         if i == 0:
             figs.reformat_ticks(yaxis=True)
@@ -161,12 +139,13 @@ def plot_model_performance_expansion(L, label, axes=None):
 
 @figure()
 def plot_geometric_mean_likelihood(axes=None):
-    plot_model_performance(
-        np.exp(logp.groupby('variance').mean()),
-        'Perplexity',
-        # 'Predictive Accuracy',
-        axes
-    )
+    if EXPERIMENT == 1:
+        return plot_like_vertical(axes)
+    elif EXPERIMENT == 2:
+        return plot_like_horizontal(axes)
+    if EXPERIMENT >= 3:
+        return plot_like_expansion(axes)
+
 
 # %% ==================== Stats ====================
 
@@ -181,81 +160,114 @@ def fmt_min_delta(x):
 # This is like "if EXPERIMENT == 1:" except it doesn't pollute the global namespace
 @do_if(EXPERIMENT == 1)
 def this():
-    opt = total.OptimalPlus
-    no_opt = total.drop('OptimalPlus')
-    no_best = no_opt.loc[~no_opt.index.str.startswith('Best')]
+    ll = -totals.set_index('model').cv_nll # total log likelihood for each model
+    opt = ll.OptimalPlus
+    no_opt = ll.drop('OptimalPlus')
+    no_fancy = no_opt.loc[~no_opt.index.str.contains('Prob')]
+
+    no_best = no_fancy.loc[~no_fancy.index.str.startswith('Best')]
     write_tex('dnll_no_best', fmt_min_delta(opt - no_best.max()))
 
-    no_best_next = total.loc[~total.index.str.contains('BestNext')]
-    best_no_best_next = no_best_next.drop('OptimalPlus').max()
-    write_tex('dnll_no_bestnext', fmt_min_delta(opt - best_no_best_next.max()))
+    no_best_next = no_fancy.loc[~no_fancy.index.str.contains('BestNext')]
+    write_tex('dnll_no_bestnext', fmt_min_delta(opt - no_best_next.max()))
 
-    write_tex('dnll_best', rf'$\dnll = {opt - total.drop("OptimalPlus").max():.0f}$')
+    write_tex('dnll_no_fancy', fmt_min_delta(opt - no_fancy.max()))
 
-    assert total.drop('OptimalPlus').idxmax() == 'Best_Satisfice_BestNext_DepthLimit'
-    delta = total.Best_Satisfice_BestNext_DepthLimit_Prune - total.Best_Satisfice_BestNext_DepthLimit
+    write_tex('dnll_full', rf'$\dnll = {opt - no_opt.max():.0f}$')
+
+    write_tex('dnll_fancy', rf'$\dnll = {no_opt.max() - no_fancy.max():.0f}$')
+
+    no_probbest = no_opt.loc[~no_opt.index.str.contains('ProbBest')]
+    
+    assert no_fancy.idxmax() == 'Best_Satisfice_BestNext_DepthLimit'
+    delta = ll.Best_Satisfice_BestNext_DepthLimit_Prune - ll.Best_Satisfice_BestNext_DepthLimit
     write_tex('dnll_prune', rf'$\dnll = {delta:.0f}$')
 
     THRESHOLD = np.log(100)
-    def_better = total - total.OptimalPlus > THRESHOLD
-    def_worse = total - total.OptimalPlus < -THRESHOLD
+    def_better = ll - ll.OptimalPlus > THRESHOLD
+    def_worse = ll - ll.OptimalPlus < -THRESHOLD
 
-    # write_tex('min_dnll_plot', f'{total[COMPARISON_MODELS].sort_values().diff().min():.0f}')
-    total[COMPARISON_MODELS].sort_values().diff()
-    if total[COMPARISON_MODELS].sort_values().diff().min() < THRESHOLD:
+    # write_tex('min_dnll_plot', f'{ll[COMPARISON_MODELS].sort_values().diff().min():.0f}')
+    if ll[COMPARISON_MODELS].sort_values().diff().min() < THRESHOLD:
         print("ERROR: warn_small_dnll")
         write_tex('warn_small_dnll', r'\red{WARNING: SMALL DIFFERENCE IN LIKELIHOOD}')
     else:
         write_tex('warn_small_dnll', '')
 
-    best_fit = logp.groupby('wid').sum().T.idxmax()
-    pdf['best_fit'] = best_fit
-    pdf['best_fit_class'] = best_fit.apply(lambda x: x.split('_')[0])
-    pdf.groupby('variance').best_fit_class.value_counts()
-    nbf = best_fit.apply(lambda x: x.split('_')[0]).value_counts()
+    all_fits = {
+        'no_fancy': fits.loc[~fits.model.str.contains('Prob')],
+        'no_probbest': fits.loc[~fits.model.str.contains('ProbBest')],
+        'full': fits
+    }
+    for key, the_fits in all_fits.items():
+        best_fit = the_fits.reset_index().pivot('model', 'wid', 'cv_nll').idxmin()
+        pdf['best_fit'] = best_fit
+        pdf['best_fit_class'] = best_fit.apply(lambda x: x.split('_')[0])
+        pdf.groupby('variance').best_fit_class.value_counts()
+        nbf = best_fit.apply(lambda x: x.split('_')[0]).value_counts()
 
-    write_tex(f'nfit_best', nbf.Best)
-    write_tex(f'nfit_optimal', nbf.OptimalPlus)
-    write_tex(f'nfit_other', nbf.drop(['Best', 'OptimalPlus']).sum())
+        write_tex(f'nfit_best_{key}', nbf.Best)
+        write_tex(f'nfit_optimal_{key}', nbf.OptimalPlus)
+        write_tex(f'nfit_other_{key}', nbf.drop(['Best', 'OptimalPlus']).sum())
+
+    all_models = all_fits['full'].model.unique()
+    x = the_fits.reset_index().set_index(['model', 'wid']).cv_nll
+    better = (x.loc['OptimalPlus'] - x) > 0
+    better.groupby('model').sum().sort_values()
+    n_better = int(better.groupby('model').sum().max())
+    write_tex(f'nfit_beat_opt', f'{n_better} vs. {len(pdf) - n_better}')
+
 
 @do_if(EXPERIMENT == 2)
 def this():
-    # heuristics only
+    # ll = totals.reset_index().set_index(['model', 'variance']).sort_index().cv_nll
+    # L = fits.reset_index().groupby(['variance', 'model']).cv_nll.sum()
+    L = -fits.pivot_table('cv_nll', 'variance', 'model', 'sum')
     deltas = []
-    total = logp.groupby('variance').sum()
     for v in VARIANCES:
         predicted = {'decreasing': 'Breadth', 'constant': 'Best', 'increasing': 'Depth'}[v]
-        non_opt = total[COMPARISON_MODELS].drop('OptimalPlus', axis=1).T
-        lp = non_opt[v]
-        top2 = lp.sort_values(ascending=False).iloc[:2]
-        assert top2.index[0].startswith(predicted)
-        deltas.append(top2.iloc[0] - top2.iloc[1])
+
+        top = L[best_heuristic].loc[v].sort_values(ascending=False)
+        assert top.index[0].startswith(predicted)
+        deltas.append(top.iloc[0] - top.iloc[1])
 
     write_tex('heuristic_min_dnll', fmt_min_delta(min(deltas)))
 
-    # best fit without restrictions
-    reported_best = dict(zip(VARIANCES, ['OptimalPlus', 'Best_BestNext', 'OptimalPlus']))
-    for v in VARIANCES:
-        lp = total.loc[v]
-        best_model, delta = get_best_with_delta(lp)
-        assert best_model == reported_best[v]
-        if best_model != 'OptimalPlus':
-            delta = lp[best_model] - lp['OptimalPlus']
-        write_tex(f'total_dnll_{v}', rf'$\dnll = {delta:.0f}$')
+    all_fits = {
+        'no_fancy': fits.loc[~fits.model.str.contains('Prob')],
+        'full': fits
+    }
+    reported_best = {
+        'no_fancy': dict(zip(VARIANCES, ['OptimalPlus', 'Best_BestNext_DepthLimit', 'OptimalPlus'])),
+        'full': dict(zip(VARIANCES, ['OptimalPlus', 'Best_Satisfice_ProbBetter_ProbBest_DepthLimit', 'OptimalPlus']))
+    }
+    for key, the_fits in all_fits.items():
+        L = -the_fits.pivot_table('cv_nll', 'variance', 'model', 'sum')
 
-    x = total.loc['constant'].sort_values()
-    delta = x.iloc[-1] - x.iloc[-2]
-    write_tex('top2', rf'$\dnll = {delta:.0f}$')
-    delta = x.iloc[-1] - x.loc[~x.index.str.startswith('Best')][-1]
-    write_tex('top2_class', rf'$\dnll = {delta:.0f}$')
+        for v in VARIANCES:
+            lp = L.loc[v]
+            best_model, delta = get_best_with_delta(lp)
 
+            assert best_model == reported_best[key][v]
+            if best_model != 'OptimalPlus':
+                delta = lp[best_model] - lp['OptimalPlus']
+            write_tex(f'dnll_{v}_{key}', rf'$\dnll = {delta:.0f}$')
+
+        x = L.loc['constant'].sort_values()
+        # delta = x.iloc[-1] - x.iloc[-2]
+        # write_tex(f'top2_{key}', rf'$\dnll = {delta:.0f}$')
+        x.loc[~x.index.str.startswith('Best')]
+        delta = x.iloc[-1] - x.loc[~x.index.str.startswith('Best')][-1]
+
+        write_tex(f'top2_class_{key}', rf'$\dnll = {delta:.0f}$')
 
 @do_if(EXPERIMENT == 3)
 def this():
     deltas = []
-    total = logp.groupby('variance').sum()
+    x = totals.loc[~totals.model.str.contains('Prob')]  # exclude fancy
+    ll = -x.groupby(['variance', 'model']).cv_nll.sum()
     for v in VARIANCES:
-        model, delta = get_best_with_delta(total.loc[v])
+        model, delta = get_best_with_delta(ll.loc[v])
         assert model == 'OptimalPlusExpand'
         deltas.append(delta)
 
@@ -263,63 +275,159 @@ def this():
 
 @do_if(EXPERIMENT == 4)
 def this():
-    model, delta = get_best_with_delta(total)
+    x = totals.loc[~totals.model.str.contains('Prob')]  # exclude fancy
+    ll = -x.groupby(['model']).cv_nll.sum()
+    model, delta = get_best_with_delta(ll)
     assert model == 'OptimalPlusExpand'
     write_tex('dnll', rf'$\dnll = {delta:.0f}$')
 
 
+# %% ==================== Stopping rules across experiments ====================
+
+os.makedirs('tmp', exist_ok=True)
+for v in VARIANCES:
+    T = totals.loc[v].set_index('model')
+    rows = []
+
+    def add_row(name, exclude):
+        X = T.filter(regex='^(Breadth|Depth|Best)', axis='index')
+        if exclude:
+            X = X.loc[~X.index.str.contains(exclude)]
+        i = X.cv_nll.idxmin()
+        x = dict(X.loc[i])
+        x['name'] = name
+        rows.append(x)
+
+    for m in MECHANISMS:
+        add_row(f'Basic -{m}', f'ProbBetter|ProbBest|{m}')
+
+    add_row(f'Basic', f'ProbBetter|ProbBest')
+    add_row(f'Basic +ProbBetter', f'ProbBest')
+    add_row(f'Basic +ProbBest', f'ProbBetter')
+    add_row(f'Basic +Both', None)
+    rows.append({'name': 'Optimal', **T.loc['OptimalPlus']})
+    if 'Expand' in MECHANISMS:
+        rows.append({'name': 'Optimal +Forward', **T.loc['OptimalPlusExpand']})
+
+    pd.DataFrame(rows).set_index('name').to_pickle(f'tmp/table-{EXPERIMENT}{v}')
+# %% --------
+
+@do_if(EXPERIMENT == 4)
+def this():
+    keys = {
+        '1constant' : '1 Constant',
+        '2decreasing' : '2 Decreasing',
+        '2constant' : '2 Constant',
+        '2increasing' : '2 Increasing',
+        '3decreasing' : '3 Decreasing',
+        '3constant' : '3 Constant',
+        '3increasing' : '3 Increasing',
+        '4constant' : '4 Constant',
+        # '1constant' : '1 Const',
+        # '2constant' : '2 Const',
+        # '2decreasing' : '2 Dec',
+        # '2increasing' : '2 Inc',
+        # '3constant' : '3 Const',
+        # '3decreasing' : '3 Dec',
+        # '3increasing' : '3 Inc',
+        # '4constant' : '4 Const',
+    }
+
+    cols = {}
+    for k, name in keys.items():
+        cols[name] = pd.read_pickle(f'tmp/table-{k}').cv_nll
+    tbl = pd.DataFrame(cols).round()
+    tbl = tbl.reindex(pd.read_pickle(f'tmp/table-{k}').index)  # unsort (thanks Pandas)
+    tbl.index.name = 'Model Class'
+    tbl.index = tbl.index.str.replace('-Expand', '-Forward')
+    write_tex(f'mechanism_table', tbl.to_latex(na_rep='', float_format="%d"))
+    
+    # cols = {}
+    # for k, name in keys.items():
+    #     cols[name] = pd.read_pickle(f'tmp/table-{k}').geometric_like
+    # tbl = pd.DataFrame(cols).round(3)
+    # tbl = tbl.reindex(pd.read_pickle(f'tmp/table-{k}').index)  # unsort (thanks Pandas)
+    # tbl.index.name = 'Model Class'
+    # tbl.index = tbl.index.str.replace('-Expand', '-Forward')
+    # write_tex(f'mechanism_table_geometric', tbl.to_latex(na_rep='', float_format="%.3f"))
+
+# %% ==================== Search order table ====================
+
+if EXPERIMENT < 3:
+    basic = list(BASIC)
+else:
+    basic = ['Expand', 'MetaGreedyExpand', 'OptimalPlusExpand']
+
+x = totals.reset_index().pivot('model', 'variance', 'cv_nll').loc[basic + best_heuristic]
+x.columns = [f'{EXPERIMENT} {c.title()}' for c in x.columns]
+x.index = x.index.map(lambda x: figs.nice_name(x).split()[0])
+x.index = x.index.str.replace('MetaGreedyExpand', 'Myopic').str.replace('Expand', 'Random')
+x.to_pickle(f'tmp/order_table-{EXPERIMENT}')
+
+# %% --------
+@do_if(EXPERIMENT == 4)
+def this():
+    tbl = pd.concat((pd.read_pickle(f'tmp/order_table-{exp}') for exp in [1,2,3,4]), axis=1)
+    tbl = tbl.round()
+    tbl.index.name = 'Model Class'
+    tbl = tbl.loc[::-1]
+    write_tex(f'order_table', tbl.to_latex(na_rep='', float_format="%d"))
+
+
+
 # %% ==================== Build table ====================
 
-param_counts = get_result(VERSION, 'param_counts.json')
-param_counts['Random_Expand'] = param_counts.get('Expand', None)
-param_counts['MetaGreedy_Expand'] = param_counts.get('MetaGreedyExpand', None)
-param_counts['OptimalPlus_Expand'] = param_counts.get('OptimalPlusExpand', None)
+# param_counts = get_result(VERSION, 'param_counts.json')
+# param_counts['Random_Expand'] = param_counts.get('Expand', None)
+# param_counts['MetaGreedy_Expand'] = param_counts.get('MetaGreedyExpand', None)
+# param_counts['OptimalPlus_Expand'] = param_counts.get('OptimalPlusExpand', None)
 
-def write_table(logp, postfix=''):
-    logp = logp.rename(columns={
-        'Expand': 'Random_Expand',
-        'MetaGreedyExpand': 'MetaGreedy_Expand',
-        'OptimalPlusExpand': 'OptimalPlus_Expand',
-        }) 
+# def write_table(logp, postfix=''):
+    
+#     logp = logp.rename(columns={
+#         'Expand': 'Random_Expand',
+#         'MetaGreedyExpand': 'MetaGreedy_Expand',
+#         'OptimalPlusExpand': 'OptimalPlus_Expand',
+#         }) 
 
-    total = logp.sum()
-    best_fit = logp.groupby('wid').sum().T.idxmax()
-    nbf = best_fit.value_counts()
+#     total = logp.sum()
+#     best_fit = logp.groupby('wid').sum().T.idxmax()
+#     nbf = best_fit.value_counts()
 
-    def make_row(model):
-        row = {'Class': model.split('_')[0].replace('Plus', '')}
-        for mech in MECHANISMS:
-            row[mech] = mech in model
-        row['# Param'] = param_counts[model]
-        row['# Subj'] = nbf.get(model, 0)
-        row['Total NLL'] = -int(round(total[model]))
-        return row
+#     def make_row(model):
+#         row = {'Class': model.split('_')[0].replace('Plus', '')}
+#         for mech in MECHANISMS:
+#             row[mech] = mech in model
+#         row['# Param'] = param_counts[model]
+#         row['# Subj'] = nbf.get(model, 0)
+#         row['Total NLL'] = -int(round(total[model]))
+#         return row
 
-    models = total.index.unique()
-    t = pd.DataFrame(make_row(model) for model in models)
-    t.Class.replace('MetaGreedy', 'Myopic', inplace=True)
+#     models = total.index.unique()
+#     t = pd.DataFrame(make_row(model) for model in models)
+#     t.Class.replace('MetaGreedy', 'Myopic', inplace=True)
 
-    t.Class = pd.Categorical(t.Class, ['Random', 'Myopic', 'Optimal', *HEURISTICS])
-    t = t.sort_values(['Class'] + MECHANISMS)
-    rename = {
-        'Satisfice': 'S',
-        'BestNext': 'BN',
-        'DepthLimit': 'DL',
-        'Prune': 'P',
-        'Expand': 'F'
+#     t.Class = pd.Categorical(t.Class, ['Random', 'Myopic', 'Optimal', *HEURISTICS])
+#     t = t.sort_values(['Class'] + MECHANISMS)
+#     rename = {
+#         'Satisfice': 'S',
+#         'BestNext': 'BN',
+#         'DepthLimit': 'DL',
+#         'Prune': 'P',
+#         'Expand': 'F'
 
-        }
-    t.rename(columns=rename, inplace=True)
+#         }
+#     t.rename(columns=rename, inplace=True)
 
-    write_tex(f'modelcomp_table_{postfix}', t.to_latex(index=False, 
-        formatters={
-            rename[mech]: lambda x: {False: '', True: 'X'}[x]
-        for mech in MECHANISMS}))
+#     write_tex(f'modelcomp_table_{postfix}', t.to_latex(index=False, 
+#         formatters={
+#             rename[mech]: lambda x: {False: '', True: 'X'}[x]
+#         for mech in MECHANISMS}))
 
-@do_if(True)
-def this():
-    for v, d in logp.groupby('variance'):
-        write_table(d, v)
+# @do_if(True)
+# def this():
+#     for v, d in logp.groupby('variance'):
+#         write_table(d, v)
 
 # %% ==================== Old figures ====================
 

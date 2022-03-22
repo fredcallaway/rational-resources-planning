@@ -35,6 +35,21 @@ if EXPERIMENT < 4:
     write_tex("incomplete", len(full_pdf) - len(pdf) - failed)
     write_tex("final", len(pdf))
     
+if EXPERIENT == 4:
+    demo = pd.read_csv('experiment4_demographics.csv').set_index('participant_id')
+
+    full_pdf = full_pdf.reset_index().set_index('worker_id')
+    full_pdf['age'] = demo.age
+    full_pdf['sex'] = demo.Sex
+    full_pdf = full_pdf.set_index('wid')
+
+
+agem, ages = full_pdf.age.agg(['mean', 'std'])
+sc = full_pdf.sex.value_counts()
+not_provided = len(full_pdf) - (sc.Male + sc.Female)
+write_tex("demographics", f'{agem:.1f} $\\pm$ {ages:.1f} years; {sc.Female} female, {not_provided} not specified')
+
+
     # write_tex("recruited", final + failed)
 
 
@@ -42,12 +57,14 @@ if EXPERIMENT < 4:
 
 tdf['i'] = list(tdf.trial_index - tdf.trial_index.groupby('wid').min() + 1)
 assert all(tdf.groupby(['wid', 'i']).apply(len) == 1)
-tf = pd.DataFrame(get_result(VERSION, 'trial_features/Human.json'))
-n_click = tdf.pop('n_click')  # this is already in tf, we check that it's the same below
 
-assert set(pdf.index) <= set(tf.wid)
-tdf = tdf.join(tf.set_index(['wid', 'i']), on=['wid', 'i'])
-assert all(tdf.n_click == n_click)
+if EXPERIMENT < 5:
+    tf = pd.DataFrame(get_result(VERSION, 'trial_features/Human.json'))
+    n_click = tdf.pop('n_click')  # this is already in tf, we check that it's the same below
+
+    assert set(pdf.index) <= set(tf.wid)
+    tdf = tdf.join(tf.set_index(['wid', 'i']), on=['wid', 'i'])
+    assert all(tdf.n_click == n_click)
 
 pdf['total_time'] = (pdf.time_end - pdf.time_start) / 1000 / 60
 pdf['instruct_time'] = (pdf.time_instruct - pdf.time_start) / 60000
@@ -94,17 +111,17 @@ def load_cf(k):
 
 figs = Figures(f'figs/{EXPERIMENT}', pdf=True)
 figure = figs.figure; show = figs.show; figs.watch()
-model_names = get_result(VERSION, 'param_counts.json').keys()
+if EXPERIMENT == 5:
+    model_names = []
+else:
+    model_names = get_result(VERSION, 'param_counts.json').keys()
 
 all_extra = ['Satisfice', 'BestNext', 'DepthLimit', 'Prune']
 
 def prettify_name(name):
-    fancy = ''
-    if name.startswith('Fancy_'):
-        fancy = 'Fancy '
-        name = name[len('Fancy_'):]
-
     spec = base, *extra = name.split('_')
+    if 'ProbBetter' in name or 'ProbBest' in name:
+        return name
     if EXPERIMENT > 1:
         return base
     if len(extra) == len(all_extra):
@@ -184,6 +201,7 @@ for m in model_names:
 
 plt.rc('legend', fontsize=10, handlelength=2)
 sns.set_style('ticks')
+os.makedirs(f'tmp4r/{EXPERIMENT}/', exist_ok=True)
 
 def setup_variance_plot(nrow=1, title=True, label=True, label_offset=-0.3, height=4, width=4, **kws):
     titlesize = kws.pop('titlesize', 20)

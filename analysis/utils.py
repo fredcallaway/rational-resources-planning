@@ -13,6 +13,12 @@ matplotlib.use('Agg')
 sns.set_context('notebook', font_scale=1.3)
 sns.set_style('white')
 
+def bootstrap_confint(x, f=np.mean, ci=.95, N=10000):
+    lo = (1-ci)/2
+    hi = 1 - lo
+    vals = [f(x.sample(frac=1, replace=True)) for i in range(N)]
+    return np.quantile(vals, [0.025, 0.975])
+
 def str_join(args, sep=' '):
     return sep.join(map(str, args))
 
@@ -118,6 +124,7 @@ class Figures(object):
             ax = plt.gca()
         if ax.legend_:
             handles, labels = ax.get_legend_handles_labels()
+            print(labels)
             names = {**self.names, **kws}
             new_labels = [names.get(l, l.title()).replace('\n', ' ') for l in labels]
             ax.legend(handles=handles, labels=new_labels, frameon=False, prop={'size': 12}, **legend_kws)

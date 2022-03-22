@@ -7,17 +7,23 @@ figs.nosave = True
 %run -i expansion
 figs.nosave = False
 
-@figure(tight=False)
-def exp3_main():
-    fig, axes = plt.subplots(2, 3, figsize=(11.9, 0.9 * 6), 
-        constrained_layout=True,
-        gridspec_kw=dict(height_ratios=[1, 1.2]))
-    for v, ax in zip(VARIANCES, axes[0, :]):
-        ax.set_title(f'{v.title()} Variance', fontdict=dict(fontsize=20), pad=20)
+# # %% --------
+# @figure(tight=False, reformat_legend=False)
+# def exp3_main():
+#     fig, axes = plt.subplots(2, 3, figsize=(11.9, 0.9 * 6), 
+#         constrained_layout=True,
+#         gridspec_kw=dict(height_ratios=[1, 1.2]))
+#     for v, ax in zip(VARIANCES, axes[0, :]):
+#         ax.set_title(f'{v.title()} Variance', fontdict=dict(fontsize=20), pad=20)
 
-    first_click_depth(axes[0])
-    fig.set_constrained_layout_pads(h_pad=0.1)
-    plot_geometric_mean_likelihood(axes[1])
+#     first_click_depth(axes[0])
+#     # ax = axes[0,0]
+#     # handles, labels = ax.get_legend_handles_labels()
+#     # ax.legend(handles=handles, labels=['Human', , frameon=False, prop={'size': 12}, **legend_kws)
+
+#     fig.set_constrained_layout_pads(h_pad=0.1)
+#     plot_geometric_mean_likelihood(axes[1])
+
 
 # %% --------
 
@@ -44,7 +50,7 @@ def exp3_main():
     
     plot_pareto(axes[1, :], legend=True, fit_reg=False)
     handles, labels = axes[1, 0].get_legend_handles_labels()
-    axes[1, 0].legend(handles=handles[0:-1], labels=["Optimal", "Optimal +Forward", "Random"], 
+    axes[1, 0].legend(handles=handles[0:-1], labels=["Optimal", "Forward-only Optimal", "Random"], 
                       frameon=False, prop={'size': 12})
 
     plot_geometric_mean_likelihood(axes[2, :])

@@ -1,6 +1,7 @@
-from statsmodels.stats.proportion import proportion_confint
-from statsmodels.stats.proportion import proportions_ztest
+# from statsmodels.stats.proportion import proportion_confint
+# from statsmodels.stats.proportion import proportions_ztest
 from statsmodels.formula.api import logit 
+import scipy
 
 expansion = pd.DataFrame(get_result(VERSION, 'expansion.json')).set_index('wid')
 expansion['gain'] = (expansion.q_jump - expansion.q_expand) * 10  # undo previous rescaling
@@ -17,8 +18,16 @@ def expansion_stats():
 
     write_tex('expansion_optimal', f'{100*model.mean():.1f}\\%')
 
-    z, p = proportions_ztest([human.sum(), model.sum()], [len(human), len(model)])
-    write_tex("expansion_test", rf"$z={z:.1f},\ {pval(p)}$")
+
+    h = human.groupby('wid').mean()
+    m = model.mean()
+
+    lo, hi = bootstrap_confint(100*h)
+    write_tex(f'expansion_ci', f'95\\% CI [{lo:.1f}, {hi:.1f}]')
+    
+    p = wilcoxon(h - m).pvalue
+    z = abs(scipy.stats.norm.ppf(p/2))
+    write_tex(f'expansion_wilcoxon', f'$z = {z:.2f}, {pval(p)}$')
 
     write_tex("jump", f'{expansion.jump.mean()*100:.1f}\%')
     # write_tex("jump", mean_std(expansion.groupby('wid').jump.mean()*100, fmt='pct'))
@@ -26,7 +35,15 @@ def expansion_stats():
     m = logit(f'jump.astype(int) ~ gain_z', data=expansion).fit()
 
     lo, hi = m.conf_int().loc['gain_z']
-    write_tex(f'expansion_logistic', rf'$\beta = {m.params.gain_z:.3f}$, 95\% CI [{lo:.3f} {hi:.3f}], ${pval(m.pvalues.gain_z)}$')
+
+    write_tex(f'expansion_logistic', 
+        f'$z = {m.tvalues.gain_z:.1f}$, ${pval(m.pvalues.gain_z)}$, '
+        f'$\\beta = {m.params.gain_z:.3f}$, 95\\% CI [{lo:.3f}, {hi:.3f}]'
+    )
+
+    expansion.jump = expansion.jump.astype(int)
+    expansion[['gain_z', 'jump']].to_csv(f'tmp4r/{EXPERIMENT}/expansion.csv')
+    # write_tex(f'expansion_logistic', rf'$\beta = {m.params.gain_z:.3f}$, 95\% CI [{lo:.3f} {hi:.3f}], ${pval(m.pvalues.gain_z)}$')
 
 # @do_if(True)
 # def expansion_stats_increasing():
