@@ -95,7 +95,7 @@ foreach(pairs(group(x->variance_structure(x[2][1].m), collect(all_trials)))) do 
     end |> sorter |> JSON.json |> writev("$results_path/demo/human/table-$v.json")
 end
 
-# %% ==================== Models ====================
+# %% ==================== Optimal ====================
 
 function model_demo_trial(t, info)
     (
@@ -135,43 +135,3 @@ foreach(mdps) do m
         info
     end |> sorter |> JSON.json |> writev("$results_path/demo/optimal/table-$v.json")
 end
-
-
-
-# %% --------
-
-# res = map(glob("$base_path/sims/Optimal-cost*")) do f
-#     cost, mid = match(r"cost(.*)-(.*)", f).captures
-#     cost = parse(Float64, cost)
-#     trials = deserialize(f);
-#     (
-#         mdp = mid,
-#         cost = cost,
-#         n_click = mean(length(t.cs) for t in trials) - 1,
-#         best_first = best_first_rate(trials),
-#     )
-# end
-
-# glob("$base_path/sims/Optimal-cost*")[1]
-
-# map(COSTS[1:end-1]) do cost
-#     deserialize("$base_path/sims/Optimal-cost$cost")
-
-
-# mkpath("$results_path/viz")
-# map(collect(all_trials)) do (wid, trials)
-#     (
-#         wid = wid,
-#         # variance = variance_structure(trials[1].m),
-#         score = mean(t.score for t in trials),
-#         clicks = mean(length(t.cs)-1 for t in trials),
-#     )
-# end |> sorter |> JSON.json |> write("$results_path/viz/table.json")
-
-# foreach(collect(all_trials)) do (wid, trials)
-#     demo_trial.(trials) |> JSON.json |> write("$results_path/viz/$wid.json")
-# end
-
-
-
-
