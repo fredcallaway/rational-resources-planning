@@ -1,3 +1,9 @@
+# OUTDATED REPO DO NOT USE
+
+Go to https://github.com/fredcallaway/optimal-planning-algorithms for a working version with better documentation.
+
+
+
 # Code and data for "Rational use of cognitive resources in human planning"
 
 ## Data
